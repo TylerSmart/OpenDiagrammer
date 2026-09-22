@@ -1,0 +1,17 @@
+[
+  {
+    "Name": "Full Debug",
+    "Projects": [
+      {
+        "Path": "OpenDiagrammer.API\\OpenDiagrammer.API.csproj",
+        "Action": "Start",
+        "DebugTarget": "http"
+      },
+      {
+        "Path": "OpenDiagrammer.Client\\OpenDiagrammer.Client.esproj",
+        "Action": "Start",
+        "DebugTarget": "launch"
+      }
+    ]
+  }
+]

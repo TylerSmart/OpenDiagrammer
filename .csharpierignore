@@ -1,0 +1,5 @@
+# Frontend is formatted with Prettier / ESLint.
+OpenDiagrammer.Client/
+
+# Generated WCF proxies — do not reformat.
+**/Wcf/**/Reference.cs

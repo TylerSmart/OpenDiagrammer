@@ -1,0 +1,48 @@
+#!/bin/sh
+set -e
+
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT"
+
+# Prefer node.exe: inside Git's bundled sh on Windows, "node" alone may not resolve.
+if command -v node.exe >/dev/null 2>&1; then
+	NODE=node.exe
+elif command -v node >/dev/null 2>&1; then
+	NODE=node
+else
+	WANTED="$(cat .nvmrc 2>/dev/null || echo 24)"
+	echo "" >&2
+	echo "pre-commit stopped: Node.js is not on PATH." >&2
+	echo "" >&2
+	echo "  nvm install $WANTED" >&2
+	echo "  nvm use $WANTED" >&2
+	echo "" >&2
+	exit 1
+fi
+
+"$NODE" .husky/require-node.js
+
+# Angular: ESLint + Prettier on staged Client files
+cd OpenDiagrammer.Client
+
+if [ ! -f node_modules/lint-staged/bin/lint-staged.js ]; then
+	echo "" >&2
+	echo "pre-commit stopped: lint-staged is not installed." >&2
+	echo "Run 'npm install' in OpenDiagrammer.Client." >&2
+	echo "" >&2
+	exit 1
+fi
+
+"$NODE" node_modules/lint-staged/bin/lint-staged.js
+
+cd "$ROOT"
+
+# Backend: CSharpier on staged C# / project XML files
+if [ -f .config/dotnet-tools.json ]; then
+	dotnet tool restore >/dev/null
+	staged_cs="$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(cs|csx|csproj|props|targets|slnx|xml|config)$' || true)"
+	if [ -n "$staged_cs" ]; then
+		echo "$staged_cs" | tr '\n' '\0' | xargs -0 dotnet csharpier format
+		echo "$staged_cs" | tr '\n' '\0' | xargs -0 git add --
+	fi
+fi

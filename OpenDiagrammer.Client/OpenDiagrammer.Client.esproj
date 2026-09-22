@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.VisualStudio.JavaScript.Sdk/1.0.6578810">
+  <PropertyGroup>
+    <!-- Allows you to right-click -> "Start" from VS if you ever want to -->
+    <StartupCommand>npm start</StartupCommand>
+    
+    <!-- Prevents VS from trying to build the Angular app during standard solution builds -->
+    <ShouldRunBuildScript>false</ShouldRunBuildScript>
+    <BuildCommand></BuildCommand>
+    <CleanCommand></CleanCommand>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,20 @@
+# CSharpier reads these C# / XML settings. Visual Studio uses the same file for
+# non-formatting IDE behavior. Angular keeps its own editorconfig under OpenDiagrammer.Client.
+root = true
+
+[*]
+charset = utf-8
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{cs,csx}]
+indent_style = space
+indent_size = 4
+max_line_length = 100
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+[*.{config,csproj,props,slnx,targets,xml}]
+indent_style = space
+indent_size = 2
+max_line_length = 100

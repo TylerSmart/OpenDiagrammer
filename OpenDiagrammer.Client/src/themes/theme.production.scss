@@ -1,0 +1,160 @@
+@use 'sass:map';
+@use '@angular/material' as mat;
+
+$_palettes: (
+  american-sapphire: (
+    0: #000000,
+    10: #01006e,
+    20: #0f129e,
+    25: #2025a7,
+    30: #2e34b2,
+    35: #3b42be,
+    40: #484fcb,
+    50: #6169e6,
+    60: #7c84ff,
+    70: #9ea3ff,
+    80: #bfc2ff,
+    90: #e0e0ff,
+    95: #f1efff,
+    98: #fbf8ff,
+    99: #fffbff,
+    100: #ffffff,
+  ),
+  lava-orange: (
+    0: #000000,
+    10: #341100,
+    20: #552100,
+    25: #662900,
+    30: #783100,
+    35: #8b3a00,
+    40: #9e4300,
+    50: #c55500,
+    60: #ee6900,
+    70: #ff8d4c,
+    80: #ffb690,
+    90: #ffdbcb,
+    95: #ffede6,
+    98: #fff8f6,
+    99: #fffbff,
+    100: #ffffff,
+  ),
+  beauty-gold: (
+    0: #000000,
+    10: #251a00,
+    20: #3f2e00,
+    25: #4c3800,
+    30: #5a4300,
+    35: #694e00,
+    40: #785a00,
+    50: #967200,
+    60: #b58a0a,
+    70: #d3a52c,
+    80: #f1c046,
+    90: #ffdf9a,
+    95: #ffefd3,
+    98: #fff8f2,
+    99: #fffbff,
+    100: #ffffff,
+  ),
+  neutral: (
+    0: #000000,
+    10: #1a1c1c,
+    20: #2f3131,
+    25: #3a3c3c,
+    30: #454747,
+    35: #515353,
+    40: #5d5f5f,
+    50: #767777,
+    60: #909191,
+    70: #aaabab,
+    80: #c6c6c7,
+    90: #e2e2e2,
+    95: #f0f1f1,
+    98: #f9f9f9,
+    99: #fcfcfc,
+    100: #ffffff,
+    4: #0c0f0f,
+    6: #121414,
+    12: #1e2020,
+    17: #282a2b,
+    22: #333535,
+    24: #37393a,
+    87: #dadada,
+    92: #e8e8e8,
+    94: #eeeeee,
+    96: #f3f3f4,
+  ),
+  neutral-variant: (
+    0: #000000,
+    10: #111d23,
+    20: #263239,
+    25: #313d44,
+    30: #3c4850,
+    35: #48545c,
+    40: #546068,
+    50: #6c7981,
+    60: #86939b,
+    70: #a0adb5,
+    80: #bbc8d1,
+    90: #d7e4ed,
+    95: #e6f3fc,
+    98: #f4faff,
+    99: #fbfcff,
+    100: #ffffff,
+  ),
+  error: (
+    0: #000000,
+    10: #410002,
+    20: #690005,
+    25: #7e0007,
+    30: #93000a,
+    35: #a80710,
+    40: #ba1a1a,
+    50: #de3730,
+    60: #ff5449,
+    70: #ff897d,
+    80: #ffb4ab,
+    90: #ffdad6,
+    95: #ffedea,
+    98: #fff8f7,
+    99: #fffbff,
+    100: #ffffff,
+  ),
+);
+
+$_rest: (
+  secondary: map.get($_palettes, lava-orange),
+  neutral: map.get($_palettes, neutral),
+  neutral-variant: map.get($_palettes, neutral-variant),
+  error: map.get($_palettes, error),
+);
+
+$american-sapphire-palette: map.merge(map.get($_palettes, american-sapphire), $_rest);
+$lava-orange-palette: map.merge(map.get($_palettes, lava-orange), $_rest);
+$beauty-gold-palette: map.merge(map.get($_palettes, beauty-gold), $_rest);
+$neutral-palette: map.merge(map.get($_palettes, neutral), $_rest);
+$neutral-variant-palette: map.merge(map.get($_palettes, neutral-variant), $_rest);
+$error-palette: map.merge(map.get($_palettes, error), $_rest);
+
+html {
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: $american-sapphire-palette,
+        secondary: $lava-orange-palette,
+        tertiary: $beauty-gold-palette,
+        neutral: $neutral-palette,
+        'neutral-variant': $neutral-variant-palette,
+        error: $error-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
+  --mat-sys-secondary: #{map.get($lava-orange-palette, 60)};
+  --mat-sys-on-secondary: #{map.get($neutral-palette, 100)};
+  --mat-sys-tertiary: #{map.get($beauty-gold-palette, 80)};
+  --mat-sys-on-tertiary: #{map.get($neutral-palette, 100)};
+}

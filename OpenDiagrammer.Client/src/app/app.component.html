@@ -1,0 +1,23 @@
+<button
+  matIconButton
+  [matMenuTriggerFor]="themeMenu"
+  [attr.aria-label]="'Theme: ' + themeLabel()"
+  [matTooltip]="'Theme: ' + themeLabel()"
+  matTooltipPosition="right"
+>
+  <mat-icon>{{ themeIcon() }}</mat-icon>
+</button>
+<mat-menu #themeMenu="matMenu">
+  <button mat-menu-item (click)="themeService.setMode('light')">
+    <mat-icon>light_mode</mat-icon>
+    <span>Light</span>
+  </button>
+  <button mat-menu-item (click)="themeService.setMode('dark')">
+    <mat-icon>dark_mode</mat-icon>
+    <span>Dark</span>
+  </button>
+  <button mat-menu-item (click)="themeService.setMode('system')">
+    <mat-icon>brightness_auto</mat-icon>
+    <span>System</span>
+  </button>
+</mat-menu>
