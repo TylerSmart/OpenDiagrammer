@@ -99,7 +99,7 @@ All commands below are from the repository root.
 dotnet ef migrations add <MigrationName> --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
 ```
 
-**Apply migrations** to the database in `appsettings.Local.json` (or the current environment):
+**Apply migrations** to the database in `appsettings.Development.json` (or the current environment):
 
 ```powershell
 dotnet ef database update --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
