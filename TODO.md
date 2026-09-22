@@ -1,0 +1,9 @@
+- [ ] Add standard open source documentation for the repo:
+    - [ ] README
+        - [ ] Summary
+        - [ ] Versioning, Test Statuses, Test Coverage 
+        - [ ] Installation/Deployment
+        - [ ] Screenshots
+        - [ ] Licenses
+    - [ ] LICENSING
+    - [ ] CONTRIBUTING
