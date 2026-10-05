@@ -20,7 +20,6 @@ This skill is used to identify and implement the next task in the project's impl
 4. **Report the Task**:
     - State clearly what the next task is.
     - Provide a brief plan of action for implementing it.
-    - Ask the user for confirmation before proceeding with the implementation.
 5. **Implement the Confirmed Task**: After the user confirms, implement the task in the repository, following its existing conventions and keeping changes scoped to the task.
 6. **Add and Run Relevant Tests**:
     - Add or update tests for the new or changed behavior when applicable, using the repository's existing test patterns.
@@ -45,6 +44,4 @@ This skill is used to identify and implement the next task in the project's impl
 I will need to:
 1. Create a `Dockerfile` for the `OpenDiagrammer.API` project.
 2. Create a `Dockerfile` for the `OpenDiagrammer.Client` project.
-3. Create a `docker-compose.yml` file to orchestrate both containers and the database.
-
-Should I proceed with creating these files?"
+3. Create a `docker-compose.yml` file to orchestrate both containers and the database."
