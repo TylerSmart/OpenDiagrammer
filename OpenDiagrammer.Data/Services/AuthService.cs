@@ -176,6 +176,23 @@ public sealed class AuthService(
             return null;
         }
 
+        var userSummary = await ProvisionOrGetExternalUserAsync(principal, cancellationToken);
+        var token = jwtTokenService.GenerateToken(userSummary);
+
+        return new AuthResponse(
+            Token: token,
+            Id: userSummary.Id,
+            Email: userSummary.Email,
+            Username: userSummary.Username,
+            ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
+        );
+    }
+
+    public async Task<UserSummary> ProvisionOrGetExternalUserAsync(
+        ExternalUserPrincipal principal,
+        CancellationToken cancellationToken = default
+    )
+    {
         var normalizedEmail = principal.Email.Trim().ToUpperInvariant();
 
         // 1. Find by external subject
@@ -241,15 +258,6 @@ public sealed class AuthService(
             await dbContext.SaveChangesAsync(cancellationToken);
         }
 
-        var userSummary = new UserSummary(user.Id, user.Email, user.Username);
-        var token = jwtTokenService.GenerateToken(userSummary);
-
-        return new AuthResponse(
-            Token: token,
-            Id: user.Id,
-            Email: user.Email,
-            Username: user.Username,
-            ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-        );
+        return new UserSummary(user.Id, user.Email, user.Username);
     }
 }

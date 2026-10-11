@@ -1,6 +1,5 @@
-using System.Text;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.IdentityModel.Tokens;
 using OpenDiagrammer.Core.Authentication;
 using OpenDiagrammer.Core.Interfaces;
 
@@ -20,12 +19,9 @@ public static class AuthenticationServiceCollectionExtensions
 
         services.AddHttpContextAccessor();
         services.AddScoped<IUserContext, HttpContextUserContext>();
+        services.AddMemoryCache();
 
-        var jwtOptions =
-            configuration.GetSection(JwtOptions.SectionName).Get<JwtOptions>() ?? new JwtOptions();
-        var secretKey = string.IsNullOrWhiteSpace(jwtOptions.Secret)
-            ? "OpenDiagrammer_Development_Super_Secret_Jwt_Key_2026!#*$"
-            : jwtOptions.Secret;
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
 
         services
             .AddAuthentication(options =>
@@ -33,24 +29,9 @@ public static class AuthenticationServiceCollectionExtensions
                 options.DefaultAuthenticateScheme = LocalJwtScheme;
                 options.DefaultChallengeScheme = LocalJwtScheme;
             })
-            .AddJwtBearer(
+            .AddScheme<AuthenticationSchemeOptions, DualBearerAuthenticationHandler>(
                 LocalJwtScheme,
-                options =>
-                {
-                    options.TokenValidationParameters = new TokenValidationParameters
-                    {
-                        ValidateIssuer = true,
-                        ValidIssuer = jwtOptions.Issuer,
-                        ValidateAudience = true,
-                        ValidAudience = jwtOptions.Audience,
-                        ValidateIssuerSigningKey = true,
-                        IssuerSigningKey = new SymmetricSecurityKey(
-                            Encoding.UTF8.GetBytes(secretKey)
-                        ),
-                        ValidateLifetime = true,
-                        ClockSkew = TimeSpan.FromMinutes(1),
-                    };
-                }
+                _ => { }
             );
 
         services.AddAuthorization();
