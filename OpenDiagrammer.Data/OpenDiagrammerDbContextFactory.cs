@@ -4,7 +4,8 @@ using Microsoft.Extensions.Configuration;
 
 namespace OpenDiagrammer.Data;
 
-public sealed class OpenDiagrammerDbContextFactory : IDesignTimeDbContextFactory<OpenDiagrammerDbContext>
+public sealed class OpenDiagrammerDbContextFactory
+    : IDesignTimeDbContextFactory<OpenDiagrammerDbContext>
 {
     public OpenDiagrammerDbContext CreateDbContext(string[] args)
     {

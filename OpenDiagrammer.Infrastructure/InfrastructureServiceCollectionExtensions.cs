@@ -1,5 +1,7 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenDiagrammer.Core.Authentication;
+using OpenDiagrammer.Infrastructure.Authentication;
 
 namespace OpenDiagrammer.Infrastructure;
 
@@ -13,6 +15,8 @@ public static class InfrastructureServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
         ArgumentNullException.ThrowIfNull(configuration);
 
+        services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
+        services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
         return services;
     }

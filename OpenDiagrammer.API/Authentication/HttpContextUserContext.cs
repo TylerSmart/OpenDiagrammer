@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using OpenDiagrammer.Core.Interfaces;
 
 namespace OpenDiagrammer.API.Authentication;
@@ -6,6 +7,13 @@ public sealed class HttpContextUserContext(IHttpContextAccessor httpContextAcces
 {
     public string UserId
     {
-        get { throw new NotImplementedException(); }
+        get
+        {
+            var user = httpContextAccessor.HttpContext?.User;
+            var userId =
+                user?.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? user?.FindFirst("sub")?.Value;
+
+            return userId ?? throw new InvalidOperationException("User is not authenticated.");
+        }
     }
 }
