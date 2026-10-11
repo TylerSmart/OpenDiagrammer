@@ -1,4 +1,4 @@
-name: open-diagrammer
+name: open-diagrammer-dev
 
 services:
   sqlserver:

@@ -7,11 +7,11 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Create `README.md` (Summary, Versioning, Test Statuses, Installation, Screenshots, Licenses)
 - [x] Create `LICENSING.md`
 - [x] Create `CONTRIBUTING.md`
-- [x] Setup production Docker configuration (`Dockerfile` for UI/API, `docker-compose.yml`)
+- [x] Setup production Docker configuration (`Dockerfile` for UI/API, `docker-compose.prod.yml`)
 - [x] Initialize .NET 10 Web API project in the `.slnx` solution
 - [x] Configure Database & EF Core inside the API
 - [x] Scaffold Angular v22 workspace (Zoneless, Signals, Material M3, PWA)
-- [x] Setup development Docker configuration (SQL Server only, API and Client run manually)
+- [x] Setup development Docker configuration (SQL Server only via `docker-compose.yml`, API and Client run manually)
 
 ## Phase 2: Backend Architecture & Auth API
 *Establish the data models and authentication mechanisms.*

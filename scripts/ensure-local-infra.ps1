@@ -30,7 +30,7 @@ Docker is not available. Start Docker Desktop for Windows with Linux containers 
 docker compose version | Out-Null
 Assert-LastExitCode 'Docker Compose is not available. Update Docker Desktop and retry.'
 
-docker compose -f docker-compose.dev.yml up -d --wait sqlserver
+docker compose up -d --wait sqlserver
 Assert-LastExitCode 'Failed to start local Docker services (SQL Server). See the output above.'
 
 docker exec open-diagrammer-sqlserver /opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P OpenDiagrammer_Local_Dev_1 -C -Q "IF DB_ID(N'OpenDiagrammer') IS NULL CREATE DATABASE [OpenDiagrammer];"
