@@ -29,13 +29,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     )
     {
         var result = await authService.ExternalCallbackAsync(request, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return this.ToActionResult(result);
-        }
-
-        SetAuthCookie(result.Value!.Token);
-        return Ok(result.Value);
+        return this.ToActionResult(result);
     }
 
     [HttpPost("register")]
@@ -49,13 +43,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     )
     {
         var result = await authService.RegisterAsync(request, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return this.ToActionResult(result);
-        }
-
-        SetAuthCookie(result.Value!.Token);
-        return Ok(result.Value);
+        return this.ToActionResult(result);
     }
 
     [HttpPost("login")]
@@ -68,13 +56,7 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     )
     {
         var result = await authService.LoginAsync(request, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return this.ToActionResult(result);
-        }
-
-        SetAuthCookie(result.Value!.Token);
-        return Ok(result.Value);
+        return this.ToActionResult(result);
     }
 
     [HttpPost("logout")]
@@ -82,17 +64,6 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
     [ProducesResponseType(StatusCodes.Status200OK)]
     public IActionResult Logout()
     {
-        Response.Cookies.Delete(
-            "access_token",
-            new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = Request.IsHttps,
-                SameSite = SameSiteMode.Lax,
-                Path = "/",
-            }
-        );
-
         return Ok(new { message = "Logged out successfully" });
     }
 
@@ -113,21 +84,5 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
 
         var result = await authService.GetCurrentUserAsync(userId, cancellationToken);
         return this.ToActionResult(result);
-    }
-
-    private void SetAuthCookie(string token)
-    {
-        Response.Cookies.Append(
-            "access_token",
-            token,
-            new CookieOptions
-            {
-                HttpOnly = true,
-                Secure = Request.IsHttps,
-                SameSite = SameSiteMode.Lax,
-                Path = "/",
-                Expires = DateTimeOffset.UtcNow.AddHours(24),
-            }
-        );
     }
 }

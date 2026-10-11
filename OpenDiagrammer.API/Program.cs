@@ -5,6 +5,7 @@ using OpenDiagrammer.API.Authentication;
 using OpenDiagrammer.API.Hosting;
 using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core;
+using OpenDiagrammer.Core.Authentication;
 using OpenDiagrammer.Data;
 using OpenDiagrammer.Infrastructure;
 using Scalar.AspNetCore;
@@ -45,9 +46,57 @@ builder.Services.AddOpenApi(
                         Scheme = "bearer",
                         BearerFormat = "JWT",
                         Description =
-                            "JWT Authorization header using the Bearer scheme. Enter your token (or execute POST /api/auth/login in Scalar to automatically authenticate via session cookies).",
+                            "JWT Authorization header using the Bearer scheme. Enter your JWT token to authorize requests across all endpoints.",
                     },
                 };
+
+                var oidcOptions = builder
+                    .Configuration.GetSection(OidcOptions.SectionName)
+                    .Get<OidcOptions>();
+                if (oidcOptions?.Enabled == true)
+                {
+                    var authEndpoint = !string.IsNullOrWhiteSpace(oidcOptions.AuthorizationEndpoint)
+                        ? oidcOptions.AuthorizationEndpoint
+                        : (
+                            !string.IsNullOrWhiteSpace(oidcOptions.Authority)
+                                ? $"{oidcOptions.Authority}/o/oauth2/v2/auth"
+                                : null
+                        );
+                    var tokenEndpoint = !string.IsNullOrWhiteSpace(oidcOptions.TokenEndpoint)
+                        ? oidcOptions.TokenEndpoint
+                        : (
+                            !string.IsNullOrWhiteSpace(oidcOptions.Authority)
+                                ? $"{oidcOptions.Authority}/token"
+                                : null
+                        );
+
+                    if (
+                        Uri.TryCreate(authEndpoint, UriKind.Absolute, out var authUri)
+                        && Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var tokenUri)
+                    )
+                    {
+                        document.Components.SecuritySchemes["OAuth2"] = new OpenApiSecurityScheme
+                        {
+                            Type = SecuritySchemeType.OAuth2,
+                            Description =
+                                $"{oidcOptions.ProviderName} OAuth2 / OIDC authentication flow.",
+                            Flows = new OpenApiOAuthFlows
+                            {
+                                AuthorizationCode = new OpenApiOAuthFlow
+                                {
+                                    AuthorizationUrl = authUri,
+                                    TokenUrl = tokenUri,
+                                    Scopes = new Dictionary<string, string>
+                                    {
+                                        ["openid"] = "OpenID Connect",
+                                        ["profile"] = "User Profile",
+                                        ["email"] = "User Email",
+                                    },
+                                },
+                            },
+                        };
+                    }
+                }
 
                 return Task.CompletedTask;
             }
@@ -160,6 +209,10 @@ app.MapScalarApiReference(
             options.WithOpenApiRoutePattern("/api/openapi/{documentName}.json");
             options.WithTitle("OpenDiagrammer");
             options.PersistentAuthentication = true;
+            options.Authentication = new ScalarAuthenticationOptions
+            {
+                PreferredSecuritySchemes = ["Bearer"],
+            };
         }
     )
     .AllowAnonymous();

@@ -268,50 +268,43 @@ public sealed class AuthIntegrationTests
     }
 
     [TestMethod]
-    public async Task Login_SetsAuthCookie_AndCanAuthenticateWithoutHeader()
+    public async Task Login_ReturnsValidToken_AndCanAuthenticateWithBearerHeader()
     {
         var registerRequest = new RegisterRequest(
-            "cookieuser@example.com",
-            "cookieuser",
+            "beareruser@example.com",
+            "beareruser",
             "Password123!"
         );
         var regResponse = await _client.PostAsJsonAsync("/api/auth/register", registerRequest);
         Assert.AreEqual(HttpStatusCode.OK, regResponse.StatusCode);
 
-        // Verify Set-Cookie header is sent
-        Assert.IsTrue(regResponse.Headers.Contains("Set-Cookie"));
-        var setCookie = regResponse
-            .Headers.GetValues("Set-Cookie")
-            .FirstOrDefault(c => c.Contains("access_token"));
-        Assert.IsNotNull(setCookie);
+        var auth = await regResponse.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.IsNotNull(auth);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(auth.Token));
 
-        // Extract cookie value
-        var cookieValue = setCookie.Split(';')[0]; // "access_token=..."
+        // Create a new client with NO Authorization header -> 401 Unauthorized
+        using var unauthClient = _factory.CreateClient();
+        var unauthResponse = await unauthClient.GetAsync("/api/auth/me");
+        Assert.AreEqual(HttpStatusCode.Unauthorized, unauthResponse.StatusCode);
 
-        // Create a new client with NO Authorization header, only Cookie header
-        using var cookieClient = _factory.CreateClient();
-        cookieClient.DefaultRequestHeaders.Add("Cookie", cookieValue);
-
-        var meResponse = await cookieClient.GetAsync("/api/auth/me");
+        // Client with standard Bearer header -> 200 OK
+        using var bearerClient = _factory.CreateClient();
+        bearerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            auth.Token
+        );
+        var meResponse = await bearerClient.GetAsync("/api/auth/me");
         Assert.AreEqual(HttpStatusCode.OK, meResponse.StatusCode);
 
         var user = await meResponse.Content.ReadFromJsonAsync<CurrentUserDto>();
         Assert.IsNotNull(user);
-        Assert.AreEqual("cookieuser@example.com", user.Email);
+        Assert.AreEqual("beareruser@example.com", user.Email);
     }
 
     [TestMethod]
-    public async Task Logout_ClearsAuthCookie()
+    public async Task Logout_ReturnsOk()
     {
         var response = await _client.PostAsync("/api/auth/logout", null);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
-
-        Assert.IsTrue(response.Headers.Contains("Set-Cookie"));
-        var setCookie = response
-            .Headers.GetValues("Set-Cookie")
-            .FirstOrDefault(c => c.Contains("access_token"));
-        Assert.IsNotNull(setCookie);
-        // Deleting cookie sets expires in past or empty value
-        StringAssert.Contains(setCookie, "access_token=");
     }
 }
