@@ -1,47 +1,21 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using OpenDiagrammer.API.Dtos;
+using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core.Authentication;
-using OpenDiagrammer.Data;
-using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.API.Controllers;
 
 [ApiController]
 [Route("auth")]
-public sealed class AuthController(
-    OpenDiagrammerDbContext dbContext,
-    IPasswordHasher passwordHasher,
-    IJwtTokenService jwtTokenService,
-    IOidcService oidcService
-) : ControllerBase
+public sealed class AuthController(IAuthService authService) : ControllerBase
 {
     [HttpGet("providers")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(IReadOnlyList<AuthProviderDto>), StatusCodes.Status200OK)]
     public IActionResult GetAuthProviders()
     {
-        var providers = new List<AuthProviderDto>
-        {
-            new(Id: "local", Name: "Local Account", IsExternal: false),
-        };
-
-        var oidcConfig = oidcService.GetConfiguration();
-        if (oidcConfig.Enabled)
-        {
-            providers.Add(
-                new(
-                    Id: "oidc",
-                    Name: oidcConfig.ProviderName,
-                    IsExternal: true,
-                    OidcConfig: oidcConfig
-                )
-            );
-        }
-
-        return Ok(providers);
+        return Ok(authService.GetAuthProviders());
     }
 
     [HttpPost("external-callback")]
@@ -54,111 +28,14 @@ public sealed class AuthController(
         CancellationToken cancellationToken
     )
     {
-        ExternalUserPrincipal? principal = null;
-
-        if (!string.IsNullOrWhiteSpace(request.IdToken))
+        var result = await authService.ExternalCallbackAsync(request, cancellationToken);
+        if (!result.IsSuccess)
         {
-            principal = await oidcService.ValidateIdTokenAsync(request.IdToken, cancellationToken);
-        }
-        else if (!string.IsNullOrWhiteSpace(request.Code))
-        {
-            principal = await oidcService.ExchangeCodeAsync(
-                request.Code,
-                request.RedirectUri ?? string.Empty,
-                cancellationToken
-            );
+            return this.ToActionResult(result);
         }
 
-        if (principal is null)
-        {
-            return Unauthorized(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status401Unauthorized,
-                    Title = "External authentication failed",
-                    Detail = "Could not validate credentials with the external provider.",
-                }
-            );
-        }
-
-        var normalizedEmail = principal.Email.Trim().ToUpperInvariant();
-
-        // 1. Find by external subject
-        var user = await dbContext.Users.FirstOrDefaultAsync(
-            u =>
-                u.ExternalProvider == principal.Provider
-                && u.ExternalSubjectId == principal.SubjectId,
-            cancellationToken
-        );
-
-        // 2. If not found by external subject, find by email to link account
-        if (user is null)
-        {
-            user = await dbContext.Users.FirstOrDefaultAsync(
-                u => u.NormalizedEmail == normalizedEmail,
-                cancellationToken
-            );
-
-            if (user is not null)
-            {
-                user.ExternalProvider = principal.Provider;
-                user.ExternalSubjectId = principal.SubjectId;
-                await dbContext.SaveChangesAsync(cancellationToken);
-            }
-        }
-
-        // 3. If still not found, create new user
-        if (user is null)
-        {
-            var baseUsername = !string.IsNullOrWhiteSpace(principal.Name)
-                ? principal.Name.Trim()
-                : principal.Email.Split('@')[0];
-
-            var username = baseUsername;
-            var suffix = 1;
-            while (
-                await dbContext.Users.AnyAsync(
-                    u => u.NormalizedUsername == username.ToUpperInvariant(),
-                    cancellationToken
-                )
-            )
-            {
-                username = $"{baseUsername}{suffix++}";
-            }
-
-            user = new User
-            {
-                Id = Guid.NewGuid(),
-                Email = principal.Email.Trim(),
-                NormalizedEmail = normalizedEmail,
-                Username = username,
-                NormalizedUsername = username.ToUpperInvariant(),
-                ExternalProvider = principal.Provider,
-                ExternalSubjectId = principal.SubjectId,
-                PasswordHash = string.Empty,
-                CreatedAt = DateTimeOffset.UtcNow,
-                CreatedBy = principal.Provider,
-                ModifiedAt = DateTimeOffset.UtcNow,
-                ModifiedBy = principal.Provider,
-            };
-
-            dbContext.Users.Add(user);
-            await dbContext.SaveChangesAsync(cancellationToken);
-        }
-
-        var userSummary = new UserSummary(user.Id, user.Email, user.Username);
-        var token = jwtTokenService.GenerateToken(userSummary);
-        SetAuthCookie(token);
-
-        return Ok(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
-        );
+        SetAuthCookie(result.Value!.Token);
+        return Ok(result.Value);
     }
 
     [HttpPost("register")]
@@ -171,72 +48,14 @@ public sealed class AuthController(
         CancellationToken cancellationToken
     )
     {
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-        var normalizedUsername = request.Username.Trim().ToUpperInvariant();
-
-        var emailExists = await dbContext.Users.AnyAsync(
-            u => u.NormalizedEmail == normalizedEmail,
-            cancellationToken
-        );
-        if (emailExists)
+        var result = await authService.RegisterAsync(request, cancellationToken);
+        if (!result.IsSuccess)
         {
-            return Conflict(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "Email already registered",
-                    Detail = "An account with this email address already exists.",
-                }
-            );
+            return this.ToActionResult(result);
         }
 
-        var usernameExists = await dbContext.Users.AnyAsync(
-            u => u.NormalizedUsername == normalizedUsername,
-            cancellationToken
-        );
-        if (usernameExists)
-        {
-            return Conflict(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "Username taken",
-                    Detail = "The specified username is already in use.",
-                }
-            );
-        }
-
-        var passwordHash = passwordHasher.HashPassword(request.Password);
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = request.Email.Trim(),
-            NormalizedEmail = normalizedEmail,
-            Username = request.Username.Trim(),
-            NormalizedUsername = normalizedUsername,
-            PasswordHash = passwordHash,
-            CreatedAt = DateTimeOffset.UtcNow,
-            CreatedBy = "System",
-            ModifiedAt = DateTimeOffset.UtcNow,
-            ModifiedBy = "System",
-        };
-
-        dbContext.Users.Add(user);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var userSummary = new UserSummary(user.Id, user.Email, user.Username);
-        var token = jwtTokenService.GenerateToken(userSummary);
-        SetAuthCookie(token);
-
-        return Ok(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
-        );
+        SetAuthCookie(result.Value!.Token);
+        return Ok(result.Value);
     }
 
     [HttpPost("login")]
@@ -248,42 +67,14 @@ public sealed class AuthController(
         CancellationToken cancellationToken
     )
     {
-        var normalizedEmail = request.Email.Trim().ToUpperInvariant();
-
-        var user = await dbContext.Users.FirstOrDefaultAsync(
-            u => u.NormalizedEmail == normalizedEmail,
-            cancellationToken
-        );
-
-        if (
-            user is null
-            || string.IsNullOrEmpty(user.PasswordHash)
-            || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash)
-        )
+        var result = await authService.LoginAsync(request, cancellationToken);
+        if (!result.IsSuccess)
         {
-            return Unauthorized(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status401Unauthorized,
-                    Title = "Invalid credentials",
-                    Detail = "The provided email or password is incorrect.",
-                }
-            );
+            return this.ToActionResult(result);
         }
 
-        var userSummary = new UserSummary(user.Id, user.Email, user.Username);
-        var token = jwtTokenService.GenerateToken(userSummary);
-        SetAuthCookie(token);
-
-        return Ok(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
-        );
+        SetAuthCookie(result.Value!.Token);
+        return Ok(result.Value);
     }
 
     [HttpPost("logout")]
@@ -320,23 +111,8 @@ public sealed class AuthController(
             return Unauthorized();
         }
 
-        var user = await dbContext
-            .Users.AsNoTracking()
-            .FirstOrDefaultAsync(u => u.Id == userId, cancellationToken);
-
-        if (user is null)
-        {
-            return NotFound(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status404NotFound,
-                    Title = "User not found",
-                    Detail = "The authenticated user could not be found.",
-                }
-            );
-        }
-
-        return Ok(new CurrentUserDto(user.Id, user.Email, user.Username));
+        var result = await authService.GetCurrentUserAsync(userId, cancellationToken);
+        return this.ToActionResult(result);
     }
 
     private void SetAuthCookie(string token)

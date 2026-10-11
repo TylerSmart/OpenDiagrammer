@@ -1,7 +1,10 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using OpenDiagrammer.Core.Authentication;
+using OpenDiagrammer.Core.Boards;
 using OpenDiagrammer.Data.Auditing;
+using OpenDiagrammer.Data.Services;
 
 namespace OpenDiagrammer.Data;
 
@@ -16,6 +19,9 @@ public static class DataServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(configuration);
 
         services.AddScoped<AuditSaveChangesInterceptor>();
+        services.AddScoped<IAuthService, AuthService>();
+        services.AddScoped<IBoardService, BoardService>();
+        services.AddScoped<IBoardMemberService, BoardMemberService>();
 
         if (
             string.Equals(

@@ -1,18 +1,15 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
-using OpenDiagrammer.API.Dtos;
+using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core.Boards;
-using OpenDiagrammer.Data;
-using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.API.Controllers;
 
 [ApiController]
 [Route("boards/{boardId:guid}/members")]
 [Authorize]
-public sealed class BoardMembersController(OpenDiagrammerDbContext dbContext) : ControllerBase
+public sealed class BoardMembersController(IBoardMemberService memberService) : ControllerBase
 {
     private Guid CurrentUserId =>
         Guid.TryParse(
@@ -28,40 +25,8 @@ public sealed class BoardMembersController(OpenDiagrammerDbContext dbContext) : 
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMembers(Guid boardId, CancellationToken cancellationToken)
     {
-        var userId = CurrentUserId;
-
-        var board = await dbContext
-            .Boards.AsNoTracking()
-            .Include(b => b.Members)
-                .ThenInclude(m => m.User)
-            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
-
-        if (board is null)
-        {
-            return NotFound();
-        }
-
-        var isOwner = board.OwnerId == userId;
-        var isMember = board.Members.Any(m => m.UserId == userId);
-
-        if (!isOwner && !isMember)
-        {
-            return Forbid();
-        }
-
-        var result = board
-            .Members.Select(m => new BoardMemberDto(
-                Id: m.Id,
-                BoardId: m.BoardId,
-                UserId: m.UserId,
-                Username: m.User.Username,
-                Email: m.User.Email,
-                Role: m.Role,
-                CreatedAt: m.CreatedAt
-            ))
-            .ToList();
-
-        return Ok(result);
+        var result = await memberService.GetMembersAsync(CurrentUserId, boardId, cancellationToken);
+        return this.ToActionResult(result);
     }
 
     [HttpPost]
@@ -75,84 +40,18 @@ public sealed class BoardMembersController(OpenDiagrammerDbContext dbContext) : 
         CancellationToken cancellationToken
     )
     {
-        var currentUserId = CurrentUserId;
-
-        var board = await dbContext
-            .Boards.Include(b => b.Members)
-            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
-
-        if (board is null)
-        {
-            return NotFound();
-        }
-
-        var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
-        var actorRole = board.OwnerId == currentUserId ? BoardRole.Owner : actorMember?.Role;
-
-        if (actorRole is null || !actorRole.Value.CanShareBoard())
-        {
-            return Forbid();
-        }
-
-        if (!actorRole.Value.CanAssignRole(request.Role))
-        {
-            return Forbid();
-        }
-
-        var targetSearch = request.EmailOrUsername.Trim();
-        var normalized = targetSearch.ToUpperInvariant();
-
-        var targetUser = await dbContext.Users.FirstOrDefaultAsync(
-            u => u.NormalizedEmail == normalized || u.NormalizedUsername == normalized,
+        var result = await memberService.AddMemberAsync(
+            CurrentUserId,
+            boardId,
+            request,
             cancellationToken
         );
-
-        if (targetUser is null)
+        if (!result.IsSuccess)
         {
-            return NotFound(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status404NotFound,
-                    Title = "User not found",
-                    Detail = $"No user found matching '{request.EmailOrUsername}'.",
-                }
-            );
+            return this.ToActionResult(result);
         }
 
-        if (board.Members.Any(m => m.UserId == targetUser.Id))
-        {
-            return Conflict(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status409Conflict,
-                    Title = "User already a member",
-                    Detail = "The specified user is already a member of this board.",
-                }
-            );
-        }
-
-        var newMember = new BoardMember
-        {
-            Id = Guid.NewGuid(),
-            BoardId = board.Id,
-            UserId = targetUser.Id,
-            Role = request.Role,
-        };
-
-        dbContext.BoardMembers.Add(newMember);
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var dto = new BoardMemberDto(
-            Id: newMember.Id,
-            BoardId: board.Id,
-            UserId: targetUser.Id,
-            Username: targetUser.Username,
-            Email: targetUser.Email,
-            Role: newMember.Role,
-            CreatedAt: newMember.CreatedAt
-        );
-
-        return CreatedAtAction(nameof(GetMembers), new { boardId = board.Id }, dto);
+        return CreatedAtAction(nameof(GetMembers), new { boardId }, result.Value);
     }
 
     [HttpPut("{userId:guid}")]
@@ -167,77 +66,14 @@ public sealed class BoardMembersController(OpenDiagrammerDbContext dbContext) : 
         CancellationToken cancellationToken
     )
     {
-        var currentUserId = CurrentUserId;
-
-        var board = await dbContext
-            .Boards.Include(b => b.Members)
-                .ThenInclude(m => m.User)
-            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
-
-        if (board is null)
-        {
-            return NotFound();
-        }
-
-        var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
-        var actorRole = board.OwnerId == currentUserId ? BoardRole.Owner : actorMember?.Role;
-
-        if (actorRole is null || !actorRole.Value.CanShareBoard())
-        {
-            return Forbid();
-        }
-
-        var targetMember = board.Members.FirstOrDefault(m => m.UserId == userId);
-        if (targetMember is null)
-        {
-            return NotFound(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status404NotFound,
-                    Title = "Member not found",
-                    Detail = "The user is not a member of this board.",
-                }
-            );
-        }
-
-        if (targetMember.UserId == board.OwnerId)
-        {
-            return BadRequest(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status400BadRequest,
-                    Title = "Cannot modify owner role",
-                    Detail =
-                        "The board owner's role cannot be modified. Use the transfer ownership endpoint instead.",
-                }
-            );
-        }
-
-        if (!actorRole.Value.CanAssignRole(request.Role))
-        {
-            return Forbid();
-        }
-
-        // Admins cannot alter another Admin's role
-        if (actorRole == BoardRole.Admin && targetMember.Role == BoardRole.Admin)
-        {
-            return Forbid();
-        }
-
-        targetMember.Role = request.Role;
-        await dbContext.SaveChangesAsync(cancellationToken);
-
-        var dto = new BoardMemberDto(
-            Id: targetMember.Id,
-            BoardId: board.Id,
-            UserId: targetMember.UserId,
-            Username: targetMember.User.Username,
-            Email: targetMember.User.Email,
-            Role: targetMember.Role,
-            CreatedAt: targetMember.CreatedAt
+        var result = await memberService.UpdateMemberRoleAsync(
+            CurrentUserId,
+            boardId,
+            userId,
+            request,
+            cancellationToken
         );
-
-        return Ok(dto);
+        return this.ToActionResult(result);
     }
 
     [HttpDelete("{userId:guid}")]
@@ -251,54 +87,16 @@ public sealed class BoardMembersController(OpenDiagrammerDbContext dbContext) : 
         CancellationToken cancellationToken
     )
     {
-        var currentUserId = CurrentUserId;
-
-        var board = await dbContext
-            .Boards.Include(b => b.Members)
-            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
-
-        if (board is null)
+        var result = await memberService.RemoveMemberAsync(
+            CurrentUserId,
+            boardId,
+            userId,
+            cancellationToken
+        );
+        if (!result.IsSuccess)
         {
-            return NotFound();
+            return this.ToActionResult(result);
         }
-
-        var targetMember = board.Members.FirstOrDefault(m => m.UserId == userId);
-        if (targetMember is null)
-        {
-            return NotFound();
-        }
-
-        if (targetMember.UserId == board.OwnerId)
-        {
-            return BadRequest(
-                new ProblemDetails
-                {
-                    Status = StatusCodes.Status400BadRequest,
-                    Title = "Cannot remove owner",
-                    Detail =
-                        "The board owner cannot be removed. Transfer ownership or delete the board.",
-                }
-            );
-        }
-
-        // Self-removal (leaving board)
-        if (userId == currentUserId)
-        {
-            dbContext.BoardMembers.Remove(targetMember);
-            await dbContext.SaveChangesAsync(cancellationToken);
-            return NoContent();
-        }
-
-        var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
-        var actorRole = board.OwnerId == currentUserId ? BoardRole.Owner : actorMember?.Role;
-
-        if (actorRole is null || !actorRole.Value.CanRemoveMember(targetMember.Role))
-        {
-            return Forbid();
-        }
-
-        dbContext.BoardMembers.Remove(targetMember);
-        await dbContext.SaveChangesAsync(cancellationToken);
 
         return NoContent();
     }

@@ -3,6 +3,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using OpenDiagrammer.API.Dtos;
+using OpenDiagrammer.Core.Authentication;
 using OpenDiagrammer.Core.Boards;
 
 namespace OpenDiagrammer.API.IntegrationTests;
