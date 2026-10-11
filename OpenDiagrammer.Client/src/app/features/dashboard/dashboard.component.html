@@ -1,0 +1,201 @@
+<div class="dashboard-layout">
+  <!-- Top Navigation Bar -->
+  <header class="top-bar">
+    <div class="brand-section">
+      <mat-icon aria-hidden="true">account_tree</mat-icon>
+      <span>OpenDiagrammer</span>
+    </div>
+
+    <div class="top-actions">
+      <!-- Theme Switcher -->
+      <button
+        mat-icon-button
+        [matMenuTriggerFor]="themeMenu"
+        [attr.aria-label]="'Theme: ' + themeLabel()"
+        [matTooltip]="'Theme: ' + themeLabel()"
+      >
+        <mat-icon>{{ themeIcon() }}</mat-icon>
+      </button>
+      <mat-menu #themeMenu="matMenu">
+        <button mat-menu-item (click)="themeService.setMode('light')">
+          <mat-icon>light_mode</mat-icon>
+          <span>Light</span>
+        </button>
+        <button mat-menu-item (click)="themeService.setMode('dark')">
+          <mat-icon>dark_mode</mat-icon>
+          <span>Dark</span>
+        </button>
+        <button mat-menu-item (click)="themeService.setMode('system')">
+          <mat-icon>brightness_auto</mat-icon>
+          <span>System</span>
+        </button>
+      </mat-menu>
+
+      <!-- User Menu -->
+      <button
+        mat-button
+        class="user-profile-btn"
+        [matMenuTriggerFor]="userMenu"
+        aria-label="User profile and account options"
+      >
+        <div class="avatar" aria-hidden="true">
+          {{ userInitial() }}
+        </div>
+        <span>{{ authService.currentUser()?.username || 'User' }}</span>
+        <mat-icon>arrow_drop_down</mat-icon>
+      </button>
+      <mat-menu #userMenu="matMenu">
+        <div class="user-menu-header">
+          <span class="user-menu-name">{{ authService.currentUser()?.username }}</span>
+          <span class="user-menu-email">{{ authService.currentUser()?.email }}</span>
+        </div>
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="onLogout()">
+          <mat-icon>logout</mat-icon>
+          <span>Log Out</span>
+        </button>
+      </mat-menu>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <main class="dashboard-main">
+    <div class="dashboard-header">
+      <div class="header-title-area">
+        <h1>My Boards</h1>
+        <p>Manage and collaborate on your diagram boards</p>
+      </div>
+
+      <div class="header-controls">
+        <mat-form-field appearance="outline" class="search-field">
+          <mat-icon matPrefix aria-hidden="true">search</mat-icon>
+          <mat-label>Search boards</mat-label>
+          <input
+            matInput
+            type="search"
+            [value]="searchQuery()"
+            (input)="onSearchChange($event)"
+            placeholder="Filter by name..."
+          />
+        </mat-form-field>
+
+        <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
+          <mat-icon>add</mat-icon>
+          <span>New Board</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Error State -->
+    @if (errorMessage()) {
+      <div class="error-banner" role="alert">
+        <div class="error-message">
+          <mat-icon aria-hidden="true">error</mat-icon>
+          <span>{{ errorMessage() }}</span>
+        </div>
+        <button mat-button (click)="loadBoards()">Retry</button>
+      </div>
+    }
+
+    <!-- Loading State -->
+    @if (isLoading()) {
+      <div class="loading-container">
+        <mat-spinner diameter="40"></mat-spinner>
+        <span>Loading your boards...</span>
+      </div>
+    } @else {
+      <!-- Empty State -->
+      @if (filteredBoards().length === 0) {
+        <div class="empty-state">
+          <mat-icon aria-hidden="true">space_dashboard</mat-icon>
+          @if (searchQuery()) {
+            <h2>No matching boards</h2>
+            <p>No boards match your search query "{{ searchQuery() }}".</p>
+          } @else {
+            <h2>No boards yet</h2>
+            <p>
+              Create your first board to start drawing diagrams and collaborating with team members.
+            </p>
+            <button mat-flat-button color="primary" (click)="openCreateBoardDialog()">
+              <mat-icon>add</mat-icon>
+              <span>Create Board</span>
+            </button>
+          }
+        </div>
+      } @else {
+        <!-- Boards Grid -->
+        <div class="boards-grid">
+          @for (board of filteredBoards(); track board.id) {
+            <mat-card
+              class="board-card"
+              (click)="navigateToBoard(board.id)"
+              tabindex="0"
+              (keydown.enter)="navigateToBoard(board.id)"
+              [attr.aria-label]="'Board ' + board.name + ', role ' + getRoleName(board.userRole)"
+            >
+              <mat-card-content>
+                <div class="board-card-header">
+                  <h2 class="board-card-title">{{ board.name }}</h2>
+                  <button
+                    mat-icon-button
+                    [matMenuTriggerFor]="boardMenu"
+                    (click)="$event.stopPropagation()"
+                    [attr.aria-label]="'Options for ' + board.name"
+                  >
+                    <mat-icon>more_vert</mat-icon>
+                  </button>
+                  <mat-menu #boardMenu="matMenu">
+                    <button mat-menu-item (click)="navigateToBoard(board.id)">
+                      <mat-icon>open_in_new</mat-icon>
+                      <span>Open</span>
+                    </button>
+                    @if (canManageSettings(board.userRole)) {
+                      <button mat-menu-item (click)="openSettingsDialog(board)">
+                        <mat-icon>settings</mat-icon>
+                        <span>Settings</span>
+                      </button>
+                    }
+                    @if (canManageMembers(board.userRole)) {
+                      <button mat-menu-item (click)="openMembersDialog(board)">
+                        <mat-icon>group</mat-icon>
+                        <span>Manage Members</span>
+                      </button>
+                    }
+                    @if (canDelete(board.userRole)) {
+                      <mat-divider></mat-divider>
+                      <button mat-menu-item (click)="deleteBoard(board)">
+                        <mat-icon color="warn">delete</mat-icon>
+                        <span>Delete</span>
+                      </button>
+                    }
+                  </mat-menu>
+                </div>
+
+                <p class="board-card-desc">
+                  {{ board.description || 'No description provided.' }}
+                </p>
+
+                <div class="board-card-footer">
+                  <div class="board-meta">
+                    <span
+                      class="role-badge"
+                      [class]="'role-' + getRoleName(board.userRole).toLowerCase()"
+                    >
+                      {{ getRoleName(board.userRole) }}
+                    </span>
+                    <span class="meta-item">
+                      <mat-icon aria-hidden="true">group</mat-icon>
+                      <span>{{ board.memberCount }}</span>
+                    </span>
+                  </div>
+
+                  <span> Updated {{ board.modifiedAt | date: 'mediumDate' }} </span>
+                </div>
+              </mat-card-content>
+            </mat-card>
+          }
+        </div>
+      }
+    }
+  </main>
+</div>
