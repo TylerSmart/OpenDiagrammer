@@ -213,6 +213,23 @@ app.MapScalarApiReference(
             {
                 PreferredSecuritySchemes = ["Bearer"],
             };
+
+            var oidcConfig = builder
+                .Configuration.GetSection(OidcOptions.SectionName)
+                .Get<OidcOptions>();
+            if (oidcConfig?.Enabled == true)
+            {
+                options.AddAuthorizationCodeFlow(
+                    "OAuth2",
+                    flow =>
+                    {
+                        flow.ClientId = oidcConfig.ClientId;
+                        flow.ClientSecret = oidcConfig.ClientSecret;
+                        flow.SelectedScopes = ["openid", "profile", "email"];
+                        flow.Pkce = Pkce.Sha256;
+                    }
+                );
+            }
         }
     )
     .AllowAnonymous();
