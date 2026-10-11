@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
     <SpaDist>..\OpenDiagrammer.Client\dist\OpenDiagrammer.Client\browser\</SpaDist>
+    <UserSecretsId>cc25ef0a-583f-4af9-867c-082e0534c235</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>

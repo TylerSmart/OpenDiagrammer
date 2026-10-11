@@ -1,9 +1,11 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using OpenDiagrammer.API.Authentication;
 using OpenDiagrammer.API.Hosting;
 using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core;
+using OpenDiagrammer.Core.Authentication;
 using OpenDiagrammer.Data;
 using OpenDiagrammer.Infrastructure;
 using Scalar.AspNetCore;
@@ -36,6 +38,87 @@ builder.Services.AddOpenApi(
                 document.Servers = [new OpenApiServer { Url = "/api" }];
 
                 document.Components ??= new OpenApiComponents();
+                document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+                {
+                    ["Bearer"] = new OpenApiSecurityScheme
+                    {
+                        Type = SecuritySchemeType.Http,
+                        Scheme = "bearer",
+                        BearerFormat = "JWT",
+                        Description =
+                            "JWT Authorization header using the Bearer scheme. Enter your JWT token to authorize requests across all endpoints.",
+                    },
+                };
+
+                var oidcOptions = builder
+                    .Configuration.GetSection(OidcOptions.SectionName)
+                    .Get<OidcOptions>();
+                if (oidcOptions?.Enabled == true)
+                {
+                    var authEndpoint = !string.IsNullOrWhiteSpace(oidcOptions.AuthorizationEndpoint)
+                        ? oidcOptions.AuthorizationEndpoint
+                        : (
+                            !string.IsNullOrWhiteSpace(oidcOptions.Authority)
+                                ? $"{oidcOptions.Authority}/o/oauth2/v2/auth"
+                                : null
+                        );
+                    var tokenEndpoint = !string.IsNullOrWhiteSpace(oidcOptions.TokenEndpoint)
+                        ? oidcOptions.TokenEndpoint
+                        : (
+                            !string.IsNullOrWhiteSpace(oidcOptions.Authority)
+                                ? $"{oidcOptions.Authority}/token"
+                                : null
+                        );
+
+                    if (
+                        Uri.TryCreate(authEndpoint, UriKind.Absolute, out var authUri)
+                        && Uri.TryCreate(tokenEndpoint, UriKind.Absolute, out var tokenUri)
+                    )
+                    {
+                        document.Components.SecuritySchemes["OAuth2"] = new OpenApiSecurityScheme
+                        {
+                            Type = SecuritySchemeType.OAuth2,
+                            Description =
+                                $"{oidcOptions.ProviderName} OAuth2 / OIDC authentication flow.",
+                            Flows = new OpenApiOAuthFlows
+                            {
+                                AuthorizationCode = new OpenApiOAuthFlow
+                                {
+                                    AuthorizationUrl = authUri,
+                                    TokenUrl = tokenUri,
+                                    Scopes = new Dictionary<string, string>
+                                    {
+                                        ["openid"] = "OpenID Connect",
+                                        ["profile"] = "User Profile",
+                                        ["email"] = "User Email",
+                                    },
+                                },
+                            },
+                        };
+                    }
+                }
+
+                return Task.CompletedTask;
+            }
+        );
+
+        options.AddOperationTransformer(
+            (operation, context, cancellationToken) =>
+            {
+                var metadata = context.Description.ActionDescriptor.EndpointMetadata;
+                var hasAuthorize = metadata.OfType<AuthorizeAttribute>().Any();
+                var allowAnonymous = metadata.OfType<AllowAnonymousAttribute>().Any();
+
+                if (hasAuthorize && !allowAnonymous)
+                {
+                    operation.Security ??= [];
+                    operation.Security.Add(
+                        new OpenApiSecurityRequirement
+                        {
+                            [new OpenApiSecuritySchemeReference("Bearer", null, null)] = [],
+                        }
+                    );
+                }
 
                 return Task.CompletedTask;
             }
@@ -50,7 +133,6 @@ builder.Services.AddInfrastructureServices(builder.Configuration);
 builder.Services.AddDataServices(builder.Configuration);
 
 builder.Services.AddOpenDiagrammerAuthentication(builder.Configuration);
-
 
 // Every other Angular asset is content-hashed and safe to cache forever, but index.html keeps its
 // name across deploys. Without this it can be served from cache and reference a previous deploy's
@@ -68,11 +150,13 @@ builder.Services.Configure<StaticFileOptions>(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsEnvironment("Local"))
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<OpenDiagrammerDbContext>();
-    db.Database.Migrate();
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
 }
 
 app.UseSerilogRequestLogging(options =>
@@ -124,9 +208,34 @@ app.MapScalarApiReference(
         {
             options.WithOpenApiRoutePattern("/api/openapi/{documentName}.json");
             options.WithTitle("OpenDiagrammer");
+            options.PersistentAuthentication = true;
+            options.Authentication = new ScalarAuthenticationOptions
+            {
+                PreferredSecuritySchemes = ["Bearer"],
+            };
+
+            var oidcConfig = builder
+                .Configuration.GetSection(OidcOptions.SectionName)
+                .Get<OidcOptions>();
+            if (oidcConfig?.Enabled == true)
+            {
+                options.AddAuthorizationCodeFlow(
+                    "OAuth2",
+                    flow =>
+                    {
+                        flow.ClientId = oidcConfig.ClientId;
+                        flow.ClientSecret = oidcConfig.ClientSecret;
+                        flow.SelectedScopes = ["openid", "profile", "email"];
+                        flow.Pkce = Pkce.Sha256;
+                    }
+                );
+            }
         }
     )
     .AllowAnonymous();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapGroup("/api").MapControllers();
 

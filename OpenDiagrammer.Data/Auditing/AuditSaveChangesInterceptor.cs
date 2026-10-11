@@ -1,7 +1,7 @@
-using OpenDiagrammer.Core.Interfaces;
-using OpenDiagrammer.Data.Entities;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using OpenDiagrammer.Core.Interfaces;
+using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.Data.Auditing;
 

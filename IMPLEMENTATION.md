@@ -7,19 +7,19 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Create `README.md` (Summary, Versioning, Test Statuses, Installation, Screenshots, Licenses)
 - [x] Create `LICENSING.md`
 - [x] Create `CONTRIBUTING.md`
-- [x] Setup production Docker configuration (`Dockerfile` for UI/API, `docker-compose.yml`)
+- [x] Setup production Docker configuration (`Dockerfile` for UI/API, `docker-compose.prod.yml`)
 - [x] Initialize .NET 10 Web API project in the `.slnx` solution
 - [x] Configure Database & EF Core inside the API
 - [x] Scaffold Angular v22 workspace (Zoneless, Signals, Material M3, PWA)
-- [x] Setup development Docker configuration (SQL Server only, API and Client run manually)
+- [x] Setup development Docker configuration (SQL Server only via `docker-compose.yml`, API and Client run manually)
 
 ## Phase 2: Backend Architecture & Auth API
 *Establish the data models and authentication mechanisms.*
-- [ ] Implement local JWT authentication
-- [ ] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
-- [ ] Define Board, Member, and Role entity models (Owner, Admin, Editor, Viewer)
-- [ ] Implement CRUD APIs for Boards and Board Members
-- [ ] Setup basic test coverage for APIs
+- [x] Implement local JWT authentication
+- [x] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
+- [x] Define Board, Member, and Role entity models (Owner, Admin, Editor, Viewer)
+- [x] Implement CRUD APIs for Boards and Board Members
+- [x] Setup basic test coverage for APIs
 
 ## Phase 3: Frontend Foundation & Board Management
 *Build out the initial UI and connect it to the backend.*

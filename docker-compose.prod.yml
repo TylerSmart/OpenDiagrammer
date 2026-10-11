@@ -10,6 +10,18 @@ services:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=OpenDiagrammer_Prod_Password123!;TrustServerCertificate=True;"
+      # Optional: JWT Secret (override in production)
+      # Authentication__Jwt__Secret: "ReplaceWithStrongSecretKeyAtLeast32CharsLong!"
+      # Optional: External OIDC / OAuth2 (e.g. Google, Authentik, Keycloak)
+      # Authentication__Oidc__Enabled: "true"
+      # Authentication__Oidc__ProviderName: "Google"
+      # Authentication__Oidc__Authority: "https://accounts.google.com"
+      # Authentication__Oidc__ClientId: "your-client-id.apps.googleusercontent.com"
+      # Authentication__Oidc__ClientSecret: "your-client-secret"
+      # Authentication__Oidc__Scope: "openid profile email"
+      # Authentication__Oidc__AuthorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      # Authentication__Oidc__TokenEndpoint: "https://oauth2.googleapis.com/token"
+      # Authentication__Oidc__UserInfoEndpoint: "https://openidconnect.googleapis.com/v1/userinfo"
     ports:
       - "8080:8080"
     depends_on:

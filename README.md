@@ -27,6 +27,12 @@ OpenDiagrammer is designed to be easily deployed anywhere using Docker, includin
 
 *(Deployment commands and `docker-compose` instructions will be provided here once the Docker image is finalized)*
 
+### Authentication & Single Sign-On (OIDC / OAuth2)
+
+OpenDiagrammer supports external OpenID Connect (OIDC) and OAuth 2.0 authentication providers (such as **Google**, **Authentik**, **Keycloak**, and **Microsoft Entra ID**) alongside built-in local accounts.
+
+For full step-by-step instructions on creating a Google Cloud OAuth client, configuring environment variables, and deploying with Docker Compose, see the **[OIDC & OAuth2 Authentication Guide](docs/deployment/oidc-authentication.md)**.
+
 ## Local development
 
 The API and Angular client run **on your machine** (Visual Studio F5 with hot reload). Docker is used only for SQL Server.
