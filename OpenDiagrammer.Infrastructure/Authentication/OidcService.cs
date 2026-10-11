@@ -1,4 +1,5 @@
 using System.IdentityModel.Tokens.Jwt;
+using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Claims;
 using System.Text.Json;
@@ -38,56 +39,101 @@ public sealed class OidcService(
         );
     }
 
-    public Task<ExternalUserPrincipal?> ValidateIdTokenAsync(
+    public async Task<ExternalUserPrincipal?> ValidateIdTokenAsync(
         string idToken,
         CancellationToken cancellationToken = default
     )
     {
         if (string.IsNullOrWhiteSpace(idToken) || !_options.Enabled)
         {
-            return Task.FromResult<ExternalUserPrincipal?>(null);
+            return null;
         }
 
         try
         {
-            if (!_tokenHandler.CanReadToken(idToken))
+            if (_tokenHandler.CanReadToken(idToken))
             {
-                logger.LogWarning("Provided ID token is not a readable JWT.");
-                return Task.FromResult<ExternalUserPrincipal?>(null);
+                var jwt = _tokenHandler.ReadJwtToken(idToken);
+
+                var sub = jwt
+                    .Claims.FirstOrDefault(c =>
+                        c.Type == JwtRegisteredClaimNames.Sub || c.Type == ClaimTypes.NameIdentifier
+                    )
+                    ?.Value;
+                var email = jwt
+                    .Claims.FirstOrDefault(c =>
+                        c.Type == JwtRegisteredClaimNames.Email || c.Type == ClaimTypes.Email
+                    )
+                    ?.Value;
+                var name = jwt
+                    .Claims.FirstOrDefault(c =>
+                        c.Type == "name"
+                        || c.Type == ClaimTypes.Name
+                        || c.Type == "preferred_username"
+                    )
+                    ?.Value;
+
+                if (!string.IsNullOrWhiteSpace(sub) && !string.IsNullOrWhiteSpace(email))
+                {
+                    return new ExternalUserPrincipal(sub, email, name, _options.ProviderName);
+                }
             }
 
-            var jwt = _tokenHandler.ReadJwtToken(idToken);
-
-            var sub = jwt
-                .Claims.FirstOrDefault(c =>
-                    c.Type == JwtRegisteredClaimNames.Sub || c.Type == ClaimTypes.NameIdentifier
-                )
-                ?.Value;
-            var email = jwt
-                .Claims.FirstOrDefault(c =>
-                    c.Type == JwtRegisteredClaimNames.Email || c.Type == ClaimTypes.Email
-                )
-                ?.Value;
-            var name = jwt
-                .Claims.FirstOrDefault(c =>
-                    c.Type == "name" || c.Type == ClaimTypes.Name || c.Type == "preferred_username"
-                )
-                ?.Value;
-
-            if (string.IsNullOrWhiteSpace(sub) || string.IsNullOrWhiteSpace(email))
+            // Fallback for OAuth2 access tokens (e.g. Google ya29... tokens) or when claims are fetched via UserInfo endpoint
+            var userInfoEndpoint = _options.UserInfoEndpoint;
+            if (
+                string.IsNullOrWhiteSpace(userInfoEndpoint)
+                && !string.IsNullOrWhiteSpace(_options.Authority)
+            )
             {
-                logger.LogWarning("ID token missing required subject or email claims.");
-                return Task.FromResult<ExternalUserPrincipal?>(null);
+                userInfoEndpoint = $"{_options.Authority.TrimEnd('/')}/userinfo";
             }
 
-            return Task.FromResult<ExternalUserPrincipal?>(
-                new ExternalUserPrincipal(sub, email, name, _options.ProviderName)
+            if (!string.IsNullOrWhiteSpace(userInfoEndpoint))
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, userInfoEndpoint);
+                request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", idToken);
+
+                var response = await httpClient.SendAsync(request, cancellationToken);
+                if (response.IsSuccessStatusCode)
+                {
+                    var userInfo = await response.Content.ReadFromJsonAsync<JsonElement>(
+                        cancellationToken: cancellationToken
+                    );
+
+                    var sub = userInfo.TryGetProperty("sub", out var subProp)
+                        ? subProp.GetString()
+                        : null;
+                    var email = userInfo.TryGetProperty("email", out var emailProp)
+                        ? emailProp.GetString()
+                        : null;
+                    var name = userInfo.TryGetProperty("name", out var nameProp)
+                        ? nameProp.GetString()
+                        : null;
+
+                    if (!string.IsNullOrWhiteSpace(sub) && !string.IsNullOrWhiteSpace(email))
+                    {
+                        return new ExternalUserPrincipal(sub, email, name, _options.ProviderName);
+                    }
+                }
+                else
+                {
+                    logger.LogWarning(
+                        "OIDC UserInfo endpoint returned {StatusCode} when validating token.",
+                        response.StatusCode
+                    );
+                }
+            }
+
+            logger.LogWarning(
+                "Provided token could not be validated via JWT or UserInfo endpoint."
             );
+            return null;
         }
         catch (Exception ex)
         {
-            logger.LogError(ex, "Failed to validate external ID token.");
-            return Task.FromResult<ExternalUserPrincipal?>(null);
+            logger.LogError(ex, "Failed to validate external ID or access token.");
+            return null;
         }
     }
 

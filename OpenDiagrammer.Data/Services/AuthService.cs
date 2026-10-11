@@ -154,9 +154,13 @@ public sealed class AuthService(
     {
         ExternalUserPrincipal? principal = null;
 
-        if (!string.IsNullOrWhiteSpace(request.IdToken))
+        var externalToken = !string.IsNullOrWhiteSpace(request.IdToken)
+            ? request.IdToken
+            : request.AccessToken;
+
+        if (!string.IsNullOrWhiteSpace(externalToken))
         {
-            principal = await oidcService.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+            principal = await oidcService.ValidateIdTokenAsync(externalToken, cancellationToken);
         }
         else if (!string.IsNullOrWhiteSpace(request.Code))
         {

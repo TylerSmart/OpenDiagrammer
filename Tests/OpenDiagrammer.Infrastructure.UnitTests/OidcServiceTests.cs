@@ -83,4 +83,69 @@ public sealed class OidcServiceTests
         Assert.AreEqual("External User", principal.Name);
         Assert.AreEqual("Keycloak", principal.Provider);
     }
+
+    [TestMethod]
+    public async Task ValidateIdTokenAsync_WithOpaqueAccessToken_FetchesClaimsFromUserInfoEndpoint()
+    {
+        var options = new OidcOptions
+        {
+            Enabled = true,
+            ProviderName = "Google",
+            UserInfoEndpoint = "https://openidconnect.googleapis.com/v1/userinfo",
+        };
+
+        var mockHandler = new TestHttpMessageHandler(
+            (request, _) =>
+            {
+                Assert.AreEqual(
+                    "https://openidconnect.googleapis.com/v1/userinfo",
+                    request.RequestUri?.ToString()
+                );
+                Assert.AreEqual(
+                    "Bearer ya29.test-token",
+                    request.Headers.Authorization?.ToString()
+                );
+
+                var json = """
+                    {
+                        "sub": "google-user-123",
+                        "email": "test@gmail.com",
+                        "name": "Test User"
+                    }
+                    """;
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(
+                        json,
+                        System.Text.Encoding.UTF8,
+                        "application/json"
+                    ),
+                };
+            }
+        );
+
+        var service = new OidcService(
+            Options.Create(options),
+            new HttpClient(mockHandler),
+            NullLogger<OidcService>.Instance
+        );
+
+        var principal = await service.ValidateIdTokenAsync("ya29.test-token");
+
+        Assert.IsNotNull(principal);
+        Assert.AreEqual("google-user-123", principal.SubjectId);
+        Assert.AreEqual("test@gmail.com", principal.Email);
+        Assert.AreEqual("Test User", principal.Name);
+        Assert.AreEqual("Google", principal.Provider);
+    }
+
+    private sealed class TestHttpMessageHandler(
+        Func<HttpRequestMessage, CancellationToken, HttpResponseMessage> handler
+    ) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request,
+            CancellationToken cancellationToken
+        ) => Task.FromResult(handler(request, cancellationToken));
+    }
 }
