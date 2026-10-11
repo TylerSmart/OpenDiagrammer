@@ -111,4 +111,84 @@ public sealed class AuthIntegrationTests
         var response = await _client.GetAsync("/api/auth/me");
         Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
     }
+
+    [TestMethod]
+    public async Task GetAuthProviders_ReturnsConfiguredProviders()
+    {
+        var response = await _client.GetAsync("/api/auth/providers");
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        var providers = await response.Content.ReadFromJsonAsync<
+            List<OpenDiagrammer.Core.Authentication.AuthProviderDto>
+        >();
+        Assert.IsNotNull(providers);
+        Assert.IsTrue(providers.Any(p => p.Id == "local"));
+        Assert.IsTrue(providers.Any(p => p.Id == "oidc"));
+    }
+
+    [TestMethod]
+    public async Task ExternalCallback_WithValidIdToken_ProvisionsNewUser()
+    {
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var idToken = tokenHandler.WriteToken(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+                claims:
+                [
+                    new System.Security.Claims.Claim("sub", "oidc-sub-999"),
+                    new System.Security.Claims.Claim("email", "oidcuser@example.com"),
+                    new System.Security.Claims.Claim("name", "OidcUser"),
+                ]
+            )
+        );
+
+        var request = new ExternalAuthRequest(Code: null, IdToken: idToken, RedirectUri: null);
+        var response = await _client.PostAsJsonAsync("/api/auth/external-callback", request);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.IsNotNull(auth);
+        Assert.IsFalse(string.IsNullOrWhiteSpace(auth.Token));
+        Assert.AreEqual("oidcuser@example.com", auth.Email);
+
+        // Verify that the user can query /api/auth/me using the returned token
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            auth.Token
+        );
+        var meResponse = await _client.GetAsync("/api/auth/me");
+        Assert.AreEqual(HttpStatusCode.OK, meResponse.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExternalCallback_WithExistingLocalEmail_LinksAccount()
+    {
+        // First, register a local user
+        var localReg = new RegisterRequest("linkme@example.com", "localuser", "Password123!");
+        var localRegResponse = await _client.PostAsJsonAsync("/api/auth/register", localReg);
+        Assert.AreEqual(HttpStatusCode.OK, localRegResponse.StatusCode);
+
+        // Now perform external callback with same email
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var idToken = tokenHandler.WriteToken(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+                claims:
+                [
+                    new System.Security.Claims.Claim("sub", "ext-linked-sub"),
+                    new System.Security.Claims.Claim("email", "linkme@example.com"),
+                    new System.Security.Claims.Claim("name", "DifferentName"),
+                ]
+            )
+        );
+
+        var request = new ExternalAuthRequest(Code: null, IdToken: idToken, RedirectUri: null);
+        var response = await _client.PostAsJsonAsync("/api/auth/external-callback", request);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.IsNotNull(auth);
+        Assert.AreEqual("linkme@example.com", auth.Email);
+        Assert.AreEqual("localuser", auth.Username);
+    }
 }

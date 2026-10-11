@@ -18,6 +18,9 @@ public static class InfrastructureServiceCollectionExtensions
         services.Configure<JwtOptions>(configuration.GetSection(JwtOptions.SectionName));
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
 
+        services.Configure<OidcOptions>(configuration.GetSection(OidcOptions.SectionName));
+        services.AddHttpClient<IOidcService, OidcService>();
+
         return services;
     }
 }

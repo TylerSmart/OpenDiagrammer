@@ -22,3 +22,5 @@ public sealed record AuthResponse(
 );
 
 public sealed record CurrentUserDto(Guid Id, string Email, string Username);
+
+public sealed record ExternalAuthRequest(string? Code, string? IdToken, string? RedirectUri);

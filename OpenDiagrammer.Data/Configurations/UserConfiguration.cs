@@ -26,6 +26,12 @@ public sealed class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(u => u.PasswordHash).IsRequired();
 
+        builder.Property(u => u.ExternalProvider).HasMaxLength(100);
+
+        builder.Property(u => u.ExternalSubjectId).HasMaxLength(256);
+
+        builder.HasIndex(u => new { u.ExternalProvider, u.ExternalSubjectId });
+
         builder.Property(u => u.CreatedBy).IsRequired().HasMaxLength(256);
 
         builder.Property(u => u.ModifiedBy).IsRequired().HasMaxLength(256);

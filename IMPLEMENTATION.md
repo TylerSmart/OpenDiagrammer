@@ -16,7 +16,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 ## Phase 2: Backend Architecture & Auth API
 *Establish the data models and authentication mechanisms.*
 - [x] Implement local JWT authentication
-- [ ] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
+- [x] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
 - [ ] Define Board, Member, and Role entity models (Owner, Admin, Editor, Viewer)
 - [ ] Implement CRUD APIs for Boards and Board Members
 - [ ] Setup basic test coverage for APIs

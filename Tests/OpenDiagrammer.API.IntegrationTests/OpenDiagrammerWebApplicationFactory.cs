@@ -18,5 +18,7 @@ public class OpenDiagrammerWebApplicationFactory : WebApplicationFactory<Program
         );
         builder.UseSetting("Authentication:Jwt:Issuer", "OpenDiagrammer");
         builder.UseSetting("Authentication:Jwt:Audience", "OpenDiagrammer");
+        builder.UseSetting("Authentication:Oidc:Enabled", "true");
+        builder.UseSetting("Authentication:Oidc:ProviderName", "TestOIDC");
     }
 }

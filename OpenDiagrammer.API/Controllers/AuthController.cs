@@ -14,9 +14,152 @@ namespace OpenDiagrammer.API.Controllers;
 public sealed class AuthController(
     OpenDiagrammerDbContext dbContext,
     IPasswordHasher passwordHasher,
-    IJwtTokenService jwtTokenService
+    IJwtTokenService jwtTokenService,
+    IOidcService oidcService
 ) : ControllerBase
 {
+    [HttpGet("providers")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(IReadOnlyList<AuthProviderDto>), StatusCodes.Status200OK)]
+    public IActionResult GetAuthProviders()
+    {
+        var providers = new List<AuthProviderDto>
+        {
+            new(Id: "local", Name: "Local Account", IsExternal: false),
+        };
+
+        var oidcConfig = oidcService.GetConfiguration();
+        if (oidcConfig.Enabled)
+        {
+            providers.Add(
+                new(
+                    Id: "oidc",
+                    Name: oidcConfig.ProviderName,
+                    IsExternal: true,
+                    OidcConfig: oidcConfig
+                )
+            );
+        }
+
+        return Ok(providers);
+    }
+
+    [HttpPost("external-callback")]
+    [AllowAnonymous]
+    [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    public async Task<IActionResult> ExternalCallback(
+        [FromBody] ExternalAuthRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        ExternalUserPrincipal? principal = null;
+
+        if (!string.IsNullOrWhiteSpace(request.IdToken))
+        {
+            principal = await oidcService.ValidateIdTokenAsync(request.IdToken, cancellationToken);
+        }
+        else if (!string.IsNullOrWhiteSpace(request.Code))
+        {
+            principal = await oidcService.ExchangeCodeAsync(
+                request.Code,
+                request.RedirectUri ?? string.Empty,
+                cancellationToken
+            );
+        }
+
+        if (principal is null)
+        {
+            return Unauthorized(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "External authentication failed",
+                    Detail = "Could not validate credentials with the external provider.",
+                }
+            );
+        }
+
+        var normalizedEmail = principal.Email.Trim().ToUpperInvariant();
+
+        // 1. Find by external subject
+        var user = await dbContext.Users.FirstOrDefaultAsync(
+            u =>
+                u.ExternalProvider == principal.Provider
+                && u.ExternalSubjectId == principal.SubjectId,
+            cancellationToken
+        );
+
+        // 2. If not found by external subject, find by email to link account
+        if (user is null)
+        {
+            user = await dbContext.Users.FirstOrDefaultAsync(
+                u => u.NormalizedEmail == normalizedEmail,
+                cancellationToken
+            );
+
+            if (user is not null)
+            {
+                user.ExternalProvider = principal.Provider;
+                user.ExternalSubjectId = principal.SubjectId;
+                await dbContext.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        // 3. If still not found, create new user
+        if (user is null)
+        {
+            var baseUsername = !string.IsNullOrWhiteSpace(principal.Name)
+                ? principal.Name.Trim()
+                : principal.Email.Split('@')[0];
+
+            var username = baseUsername;
+            var suffix = 1;
+            while (
+                await dbContext.Users.AnyAsync(
+                    u => u.NormalizedUsername == username.ToUpperInvariant(),
+                    cancellationToken
+                )
+            )
+            {
+                username = $"{baseUsername}{suffix++}";
+            }
+
+            user = new User
+            {
+                Id = Guid.NewGuid(),
+                Email = principal.Email.Trim(),
+                NormalizedEmail = normalizedEmail,
+                Username = username,
+                NormalizedUsername = username.ToUpperInvariant(),
+                ExternalProvider = principal.Provider,
+                ExternalSubjectId = principal.SubjectId,
+                PasswordHash = string.Empty,
+                CreatedAt = DateTimeOffset.UtcNow,
+                CreatedBy = principal.Provider,
+                ModifiedAt = DateTimeOffset.UtcNow,
+                ModifiedBy = principal.Provider,
+            };
+
+            dbContext.Users.Add(user);
+            await dbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        var userSummary = new UserSummary(user.Id, user.Email, user.Username);
+        var token = jwtTokenService.GenerateToken(userSummary);
+
+        return Ok(
+            new AuthResponse(
+                Token: token,
+                Id: user.Id,
+                Email: user.Email,
+                Username: user.Username,
+                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
+            )
+        );
+    }
+
     [HttpPost("register")]
     [AllowAnonymous]
     [ProducesResponseType(typeof(AuthResponse), StatusCodes.Status200OK)]
@@ -110,7 +253,11 @@ public sealed class AuthController(
             cancellationToken
         );
 
-        if (user is null || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
+        if (
+            user is null
+            || string.IsNullOrEmpty(user.PasswordHash)
+            || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash)
+        )
         {
             return Unauthorized(
                 new ProblemDetails

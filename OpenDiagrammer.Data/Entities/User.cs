@@ -16,6 +16,10 @@ public sealed class User : IAuditable
 
     public string PasswordHash { get; set; } = string.Empty;
 
+    public string? ExternalProvider { get; set; }
+
+    public string? ExternalSubjectId { get; set; }
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public string CreatedBy { get; set; } = "System";
