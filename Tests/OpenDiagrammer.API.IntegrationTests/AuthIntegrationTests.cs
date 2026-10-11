@@ -191,4 +191,78 @@ public sealed class AuthIntegrationTests
         Assert.AreEqual("linkme@example.com", auth.Email);
         Assert.AreEqual("localuser", auth.Username);
     }
+
+    [TestMethod]
+    public async Task Register_WithDuplicateUsername_ReturnsConflict()
+    {
+        var request1 = new RegisterRequest("userA@example.com", "samename", "Password123!");
+        var request2 = new RegisterRequest("userB@example.com", "samename", "Password123!");
+
+        var first = await _client.PostAsJsonAsync("/api/auth/register", request1);
+        Assert.AreEqual(HttpStatusCode.OK, first.StatusCode);
+
+        var second = await _client.PostAsJsonAsync("/api/auth/register", request2);
+        Assert.AreEqual(HttpStatusCode.Conflict, second.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Register_WithInvalidEmail_ReturnsBadRequest()
+    {
+        var request = new RegisterRequest("not-an-email", "validuser", "Password123!");
+        var response = await _client.PostAsJsonAsync("/api/auth/register", request);
+
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task Login_WithNonExistentEmail_ReturnsUnauthorized()
+    {
+        var login = new LoginRequest("nosuchuser@example.com", "Password123!");
+        var response = await _client.PostAsJsonAsync("/api/auth/login", login);
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExternalCallback_WithInvalidToken_ReturnsUnauthorized()
+    {
+        var request = new ExternalAuthRequest(
+            Code: null,
+            IdToken: "invalid-token",
+            RedirectUri: null
+        );
+        var response = await _client.PostAsJsonAsync("/api/auth/external-callback", request);
+
+        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task ExternalCallback_WithUsernameCollision_AssignsUniqueUsername()
+    {
+        // First user
+        var localReg = new RegisterRequest("user1@example.com", "clashname", "Password123!");
+        await _client.PostAsJsonAsync("/api/auth/register", localReg);
+
+        // External user with same base name
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var idToken = tokenHandler.WriteToken(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+                claims:
+                [
+                    new System.Security.Claims.Claim("sub", "ext-clash-1"),
+                    new System.Security.Claims.Claim("email", "ext1@example.com"),
+                    new System.Security.Claims.Claim("name", "clashname"),
+                ]
+            )
+        );
+
+        var request = new ExternalAuthRequest(Code: null, IdToken: idToken, RedirectUri: null);
+        var response = await _client.PostAsJsonAsync("/api/auth/external-callback", request);
+
+        Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
+        var auth = await response.Content.ReadFromJsonAsync<AuthResponse>();
+        Assert.IsNotNull(auth);
+        Assert.AreNotEqual("clashname", auth.Username);
+        StringAssert.StartsWith(auth.Username, "clashname");
+    }
 }

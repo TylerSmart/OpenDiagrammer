@@ -69,7 +69,7 @@ public sealed class BoardIntegrationTests
         Assert.AreEqual("Architecture Diagram", board.Name);
         Assert.AreEqual(user.Id, board.OwnerId);
         Assert.AreEqual(BoardRole.Owner, board.UserRole);
-        Assert.AreEqual(1, board.Members.Count);
+        Assert.HasCount(1, board.Members);
     }
 
     [TestMethod]
@@ -95,7 +95,7 @@ public sealed class BoardIntegrationTests
 
         var boards = await response.Content.ReadFromJsonAsync<List<BoardSummaryDto>>();
         Assert.IsNotNull(boards);
-        Assert.AreEqual(1, boards.Count);
+        Assert.HasCount(1, boards);
         Assert.AreEqual("Board 2", boards[0].Name);
     }
 
@@ -296,7 +296,7 @@ public sealed class BoardIntegrationTests
         var membersListRes = await _client.GetAsync($"/api/boards/{board.Id}/members");
         var members = await membersListRes.Content.ReadFromJsonAsync<List<BoardMemberDto>>();
         Assert.IsNotNull(members);
-        Assert.AreEqual(3, members.Count); // Owner, Admin, Editor
+        Assert.HasCount(3, members); // Owner, Admin, Editor
 
         // Admin updates editor to Viewer -> OK
         var updateRoleRes = await _client.PutAsJsonAsync(
@@ -315,6 +315,259 @@ public sealed class BoardIntegrationTests
         var finalMembersRes = await _client.GetAsync($"/api/boards/{board.Id}/members");
         var finalMembers = await finalMembersRes.Content.ReadFromJsonAsync<List<BoardMemberDto>>();
         Assert.IsNotNull(finalMembers);
-        Assert.AreEqual(2, finalMembers.Count);
+        Assert.HasCount(2, finalMembers);
+    }
+
+    [TestMethod]
+    public async Task CreateBoard_WithEmptyName_ReturnsBadRequest()
+    {
+        var user = await RegisterUserAsync("bad_board_user", "bad_board@example.com");
+        SetAuthToken(user.Token);
+
+        var request = new CreateBoardRequest(
+            Name: "",
+            Description: null,
+            BackgroundType: null,
+            BackgroundColor: null,
+            BackgroundOpacity: null
+        );
+
+        var response = await _client.PostAsJsonAsync("/api/boards", request);
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task GetBoardById_WhenBoardDoesNotExist_ReturnsNotFound()
+    {
+        var user = await RegisterUserAsync("notfound_user", "notfound@example.com");
+        SetAuthToken(user.Token);
+
+        var response = await _client.GetAsync($"/api/boards/{Guid.NewGuid()}");
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task UpdateBoard_WhenBoardDoesNotExist_ReturnsNotFound()
+    {
+        var user = await RegisterUserAsync("update_notfound_user", "up_nf@example.com");
+        SetAuthToken(user.Token);
+
+        var response = await _client.PutAsJsonAsync(
+            $"/api/boards/{Guid.NewGuid()}",
+            new UpdateBoardRequest(
+                "Name",
+                null,
+                BoardBackgroundType.GridLines,
+                null,
+                1.0,
+                BoardMode.Normal,
+                null
+            )
+        );
+        Assert.AreEqual(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task TransferOwnership_ToSelf_ReturnsBadRequest()
+    {
+        var user = await RegisterUserAsync("self_transfer", "self_tr@example.com");
+        SetAuthToken(user.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Self Transfer Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/transfer-ownership",
+            new TransferOwnershipRequest(user.Id)
+        );
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task TransferOwnership_ToNonExistentUser_ReturnsBadRequest()
+    {
+        var user = await RegisterUserAsync("nonexist_transfer", "nonexist_tr@example.com");
+        SetAuthToken(user.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("NonExistent Transfer Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var response = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/transfer-ownership",
+            new TransferOwnershipRequest(Guid.NewGuid())
+        );
+        Assert.AreEqual(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task TransferOwnership_WhenNotOwner_ReturnsForbidden()
+    {
+        var owner = await RegisterUserAsync("tr_owner", "tr_owner@example.com");
+        var admin = await RegisterUserAsync("tr_admin", "tr_admin@example.com");
+        var third = await RegisterUserAsync("tr_third", "tr_third@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Tr Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(admin.Email, BoardRole.Admin)
+        );
+
+        // Admin tries to transfer ownership -> Forbidden
+        SetAuthToken(admin.Token);
+        var response = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/transfer-ownership",
+            new TransferOwnershipRequest(third.Id)
+        );
+        Assert.AreEqual(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_AddMember_ByUsername_Succeeds()
+    {
+        var owner = await RegisterUserAsync("bm_by_un_owner", "bm_un_o@example.com");
+        var target = await RegisterUserAsync("target_username", "target_un@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Username Add Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var addRes = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest("target_username", BoardRole.Editor)
+        );
+        Assert.AreEqual(HttpStatusCode.Created, addRes.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_AddMember_WhenUserNotFound_ReturnsNotFound()
+    {
+        var owner = await RegisterUserAsync("bm_nf_owner", "bm_nf_o@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("NF Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var addRes = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest("does_not_exist_user", BoardRole.Editor)
+        );
+        Assert.AreEqual(HttpStatusCode.NotFound, addRes.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_AddMember_WhenAlreadyMember_ReturnsConflict()
+    {
+        var owner = await RegisterUserAsync("bm_dup_owner", "bm_dup_o@example.com");
+        var target = await RegisterUserAsync("dup_target", "dup_target@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Dup Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var addRes1 = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(target.Email, BoardRole.Editor)
+        );
+        Assert.AreEqual(HttpStatusCode.Created, addRes1.StatusCode);
+
+        var addRes2 = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(target.Email, BoardRole.Editor)
+        );
+        Assert.AreEqual(HttpStatusCode.Conflict, addRes2.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_UpdateRole_CannotModifyOwner_ReturnsBadRequest()
+    {
+        var owner = await RegisterUserAsync("mod_owner_o", "mod_o@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Mod Owner Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var res = await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/members/{owner.Id}",
+            new UpdateBoardMemberRoleRequest(BoardRole.Admin)
+        );
+        Assert.AreEqual(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_RemoveMember_CannotRemoveOwner_ReturnsBadRequest()
+    {
+        var owner = await RegisterUserAsync("rm_owner_o", "rm_o@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("RM Owner Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var res = await _client.DeleteAsync($"/api/boards/{board.Id}/members/{owner.Id}");
+        Assert.AreEqual(HttpStatusCode.BadRequest, res.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task BoardMembers_RemoveMember_AdminCannotRemoveAdmin_ReturnsForbidden()
+    {
+        var owner = await RegisterUserAsync("rm_ad_owner", "rm_ad_o@example.com");
+        var admin1 = await RegisterUserAsync("rm_ad_1", "rm_ad_1@example.com");
+        var admin2 = await RegisterUserAsync("rm_ad_2", "rm_ad_2@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Admin Remove Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(admin1.Email, BoardRole.Admin)
+        );
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(admin2.Email, BoardRole.Admin)
+        );
+
+        // Admin 1 attempts to remove Admin 2 -> Forbidden
+        SetAuthToken(admin1.Token);
+        var res = await _client.DeleteAsync($"/api/boards/{board.Id}/members/{admin2.Id}");
+        Assert.AreEqual(HttpStatusCode.Forbidden, res.StatusCode);
     }
 }

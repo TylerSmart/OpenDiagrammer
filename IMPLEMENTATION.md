@@ -19,7 +19,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
 - [x] Define Board, Member, and Role entity models (Owner, Admin, Editor, Viewer)
 - [x] Implement CRUD APIs for Boards and Board Members
-- [ ] Setup basic test coverage for APIs
+- [x] Setup basic test coverage for APIs
 
 ## Phase 3: Frontend Foundation & Board Management
 *Build out the initial UI and connect it to the backend.*
