@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core.Boards;
+using OpenDiagrammer.Core.Exceptions;
 
 namespace OpenDiagrammer.API.Controllers;
 
@@ -25,8 +25,19 @@ public sealed class BoardMembersController(IBoardMemberService memberService) : 
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetMembers(Guid boardId, CancellationToken cancellationToken)
     {
-        var result = await memberService.GetMembersAsync(CurrentUserId, boardId, cancellationToken);
-        return this.ToActionResult(result);
+        try
+        {
+            var members = await memberService.GetMembersAsync(
+                CurrentUserId,
+                boardId,
+                cancellationToken
+            );
+            return members is not null ? Ok(members) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost]
@@ -40,18 +51,44 @@ public sealed class BoardMembersController(IBoardMemberService memberService) : 
         CancellationToken cancellationToken
     )
     {
-        var result = await memberService.AddMemberAsync(
-            CurrentUserId,
-            boardId,
-            request,
-            cancellationToken
-        );
-        if (!result.IsSuccess)
+        try
         {
-            return this.ToActionResult(result);
+            var member = await memberService.AddMemberAsync(
+                CurrentUserId,
+                boardId,
+                request,
+                cancellationToken
+            );
+            return member is not null
+                ? CreatedAtAction(nameof(GetMembers), new { boardId }, member)
+                : NotFound();
         }
-
-        return CreatedAtAction(nameof(GetMembers), new { boardId }, result.Value);
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "User not found",
+                    Detail = ex.Message,
+                }
+            );
+        }
+        catch (ConflictException ex)
+        {
+            return Conflict(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status409Conflict,
+                    Title = ex.Title,
+                    Detail = ex.Message,
+                }
+            );
+        }
     }
 
     [HttpPut("{userId:guid}")]
@@ -66,14 +103,43 @@ public sealed class BoardMembersController(IBoardMemberService memberService) : 
         CancellationToken cancellationToken
     )
     {
-        var result = await memberService.UpdateMemberRoleAsync(
-            CurrentUserId,
-            boardId,
-            userId,
-            request,
-            cancellationToken
-        );
-        return this.ToActionResult(result);
+        try
+        {
+            var member = await memberService.UpdateMemberRoleAsync(
+                CurrentUserId,
+                boardId,
+                userId,
+                request,
+                cancellationToken
+            );
+            return member is not null ? Ok(member) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (NotFoundException ex)
+        {
+            return NotFound(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "Member not found",
+                    Detail = ex.Message,
+                }
+            );
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Cannot modify owner role",
+                    Detail = ex.Message,
+                }
+            );
+        }
     }
 
     [HttpDelete("{userId:guid}")]
@@ -87,17 +153,30 @@ public sealed class BoardMembersController(IBoardMemberService memberService) : 
         CancellationToken cancellationToken
     )
     {
-        var result = await memberService.RemoveMemberAsync(
-            CurrentUserId,
-            boardId,
-            userId,
-            cancellationToken
-        );
-        if (!result.IsSuccess)
+        try
         {
-            return this.ToActionResult(result);
+            var removed = await memberService.RemoveMemberAsync(
+                CurrentUserId,
+                boardId,
+                userId,
+                cancellationToken
+            );
+            return removed ? NoContent() : NotFound();
         }
-
-        return NoContent();
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "Cannot remove owner",
+                    Detail = ex.Message,
+                }
+            );
+        }
     }
 }

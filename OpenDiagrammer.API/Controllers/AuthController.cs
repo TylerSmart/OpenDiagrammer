@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core.Authentication;
+using OpenDiagrammer.Core.Exceptions;
 
 namespace OpenDiagrammer.API.Controllers;
 
@@ -28,8 +28,20 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        var result = await authService.ExternalCallbackAsync(request, cancellationToken);
-        return this.ToActionResult(result);
+        var response = await authService.ExternalCallbackAsync(request, cancellationToken);
+        if (response is null)
+        {
+            return Unauthorized(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "External authentication failed",
+                    Detail = "Could not validate credentials with the external provider.",
+                }
+            );
+        }
+
+        return Ok(response);
     }
 
     [HttpPost("register")]
@@ -42,8 +54,22 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        var result = await authService.RegisterAsync(request, cancellationToken);
-        return this.ToActionResult(result);
+        try
+        {
+            var response = await authService.RegisterAsync(request, cancellationToken);
+            return Ok(response);
+        }
+        catch (ConflictException ex)
+        {
+            return Conflict(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status409Conflict,
+                    Title = ex.Title,
+                    Detail = ex.Message,
+                }
+            );
+        }
     }
 
     [HttpPost("login")]
@@ -55,8 +81,20 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
         CancellationToken cancellationToken
     )
     {
-        var result = await authService.LoginAsync(request, cancellationToken);
-        return this.ToActionResult(result);
+        var response = await authService.LoginAsync(request, cancellationToken);
+        if (response is null)
+        {
+            return Unauthorized(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status401Unauthorized,
+                    Title = "Invalid credentials",
+                    Detail = "The provided email or password is incorrect.",
+                }
+            );
+        }
+
+        return Ok(response);
     }
 
     [HttpPost("logout")]
@@ -82,7 +120,19 @@ public sealed class AuthController(IAuthService authService) : ControllerBase
             return Unauthorized();
         }
 
-        var result = await authService.GetCurrentUserAsync(userId, cancellationToken);
-        return this.ToActionResult(result);
+        var user = await authService.GetCurrentUserAsync(userId, cancellationToken);
+        if (user is null)
+        {
+            return NotFound(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status404NotFound,
+                    Title = "User not found",
+                    Detail = "The authenticated user could not be found.",
+                }
+            );
+        }
+
+        return Ok(user);
     }
 }

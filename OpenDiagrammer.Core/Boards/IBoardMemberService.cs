@@ -1,23 +1,21 @@
-using OpenDiagrammer.Core.Services;
-
 namespace OpenDiagrammer.Core.Boards;
 
 public interface IBoardMemberService
 {
-    Task<ServiceResult<IReadOnlyList<BoardMemberDto>>> GetMembersAsync(
+    Task<IReadOnlyList<BoardMemberDto>?> GetMembersAsync(
         Guid currentUserId,
         Guid boardId,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<BoardMemberDto>> AddMemberAsync(
+    Task<BoardMemberDto?> AddMemberAsync(
         Guid currentUserId,
         Guid boardId,
         AddBoardMemberRequest request,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<BoardMemberDto>> UpdateMemberRoleAsync(
+    Task<BoardMemberDto?> UpdateMemberRoleAsync(
         Guid currentUserId,
         Guid boardId,
         Guid targetUserId,
@@ -25,7 +23,7 @@ public interface IBoardMemberService
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult> RemoveMemberAsync(
+    Task<bool> RemoveMemberAsync(
         Guid currentUserId,
         Guid boardId,
         Guid targetUserId,

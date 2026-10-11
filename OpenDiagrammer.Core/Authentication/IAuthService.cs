@@ -1,27 +1,25 @@
-using OpenDiagrammer.Core.Services;
-
 namespace OpenDiagrammer.Core.Authentication;
 
 public interface IAuthService
 {
     IReadOnlyList<AuthProviderDto> GetAuthProviders();
 
-    Task<ServiceResult<AuthResponse>> RegisterAsync(
+    Task<AuthResponse> RegisterAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<AuthResponse>> LoginAsync(
+    Task<AuthResponse?> LoginAsync(
         LoginRequest request,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<CurrentUserDto>> GetCurrentUserAsync(
+    Task<CurrentUserDto?> GetCurrentUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<AuthResponse>> ExternalCallbackAsync(
+    Task<AuthResponse?> ExternalCallbackAsync(
         ExternalAuthRequest request,
         CancellationToken cancellationToken = default
     );

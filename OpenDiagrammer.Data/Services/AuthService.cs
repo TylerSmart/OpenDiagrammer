@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenDiagrammer.Core.Authentication;
-using OpenDiagrammer.Core.Services;
+using OpenDiagrammer.Core.Exceptions;
 using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.Data.Services;
@@ -35,7 +35,7 @@ public sealed class AuthService(
         return providers;
     }
 
-    public async Task<ServiceResult<AuthResponse>> RegisterAsync(
+    public async Task<AuthResponse> RegisterAsync(
         RegisterRequest request,
         CancellationToken cancellationToken = default
     )
@@ -49,7 +49,7 @@ public sealed class AuthService(
         );
         if (emailExists)
         {
-            return ServiceResult<AuthResponse>.Conflict(
+            throw new ConflictException(
                 "An account with this email address already exists.",
                 "Email already registered"
             );
@@ -61,7 +61,7 @@ public sealed class AuthService(
         );
         if (usernameExists)
         {
-            return ServiceResult<AuthResponse>.Conflict(
+            throw new ConflictException(
                 "The specified username is already in use.",
                 "Username taken"
             );
@@ -88,18 +88,16 @@ public sealed class AuthService(
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
 
-        return ServiceResult<AuthResponse>.Success(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
+        return new AuthResponse(
+            Token: token,
+            Id: user.Id,
+            Email: user.Email,
+            Username: user.Username,
+            ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
         );
     }
 
-    public async Task<ServiceResult<AuthResponse>> LoginAsync(
+    public async Task<AuthResponse?> LoginAsync(
         LoginRequest request,
         CancellationToken cancellationToken = default
     )
@@ -117,27 +115,22 @@ public sealed class AuthService(
             || !passwordHasher.VerifyPassword(request.Password, user.PasswordHash)
         )
         {
-            return ServiceResult<AuthResponse>.Unauthorized(
-                "The provided email or password is incorrect.",
-                "Invalid credentials"
-            );
+            return null;
         }
 
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
 
-        return ServiceResult<AuthResponse>.Success(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
+        return new AuthResponse(
+            Token: token,
+            Id: user.Id,
+            Email: user.Email,
+            Username: user.Username,
+            ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
         );
     }
 
-    public async Task<ServiceResult<CurrentUserDto>> GetCurrentUserAsync(
+    public async Task<CurrentUserDto?> GetCurrentUserAsync(
         Guid userId,
         CancellationToken cancellationToken = default
     )
@@ -148,18 +141,13 @@ public sealed class AuthService(
 
         if (user is null)
         {
-            return ServiceResult<CurrentUserDto>.NotFound(
-                "The authenticated user could not be found.",
-                "User not found"
-            );
+            return null;
         }
 
-        return ServiceResult<CurrentUserDto>.Success(
-            new CurrentUserDto(user.Id, user.Email, user.Username)
-        );
+        return new CurrentUserDto(user.Id, user.Email, user.Username);
     }
 
-    public async Task<ServiceResult<AuthResponse>> ExternalCallbackAsync(
+    public async Task<AuthResponse?> ExternalCallbackAsync(
         ExternalAuthRequest request,
         CancellationToken cancellationToken = default
     )
@@ -181,10 +169,7 @@ public sealed class AuthService(
 
         if (principal is null)
         {
-            return ServiceResult<AuthResponse>.Unauthorized(
-                "Could not validate credentials with the external provider.",
-                "External authentication failed"
-            );
+            return null;
         }
 
         var normalizedEmail = principal.Email.Trim().ToUpperInvariant();
@@ -255,14 +240,12 @@ public sealed class AuthService(
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
 
-        return ServiceResult<AuthResponse>.Success(
-            new AuthResponse(
-                Token: token,
-                Id: user.Id,
-                Email: user.Email,
-                Username: user.Username,
-                ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
-            )
+        return new AuthResponse(
+            Token: token,
+            Id: user.Id,
+            Email: user.Email,
+            Username: user.Username,
+            ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
         );
     }
 }

@@ -1,5 +1,3 @@
-using OpenDiagrammer.Core.Services;
-
 namespace OpenDiagrammer.Core.Boards;
 
 public interface IBoardService
@@ -9,32 +7,32 @@ public interface IBoardService
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<BoardDetailDto>> GetBoardByIdAsync(
+    Task<BoardDetailDto?> GetBoardByIdAsync(
         Guid userId,
         Guid boardId,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<BoardDetailDto>> CreateBoardAsync(
+    Task<BoardDetailDto> CreateBoardAsync(
         Guid userId,
         CreateBoardRequest request,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult<BoardDetailDto>> UpdateBoardAsync(
+    Task<BoardDetailDto?> UpdateBoardAsync(
         Guid userId,
         Guid boardId,
         UpdateBoardRequest request,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult> DeleteBoardAsync(
+    Task<bool> DeleteBoardAsync(
         Guid userId,
         Guid boardId,
         CancellationToken cancellationToken = default
     );
 
-    Task<ServiceResult> TransferOwnershipAsync(
+    Task<bool> TransferOwnershipAsync(
         Guid userId,
         Guid boardId,
         Guid newOwnerId,

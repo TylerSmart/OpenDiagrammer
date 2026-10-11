@@ -1,13 +1,13 @@
 using Microsoft.EntityFrameworkCore;
 using OpenDiagrammer.Core.Boards;
-using OpenDiagrammer.Core.Services;
+using OpenDiagrammer.Core.Exceptions;
 using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.Data.Services;
 
 public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoardMemberService
 {
-    public async Task<ServiceResult<IReadOnlyList<BoardMemberDto>>> GetMembersAsync(
+    public async Task<IReadOnlyList<BoardMemberDto>?> GetMembersAsync(
         Guid currentUserId,
         Guid boardId,
         CancellationToken cancellationToken = default
@@ -21,7 +21,7 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (board is null)
         {
-            return ServiceResult<IReadOnlyList<BoardMemberDto>>.NotFound();
+            return null;
         }
 
         var isOwner = board.OwnerId == currentUserId;
@@ -29,10 +29,12 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (!isOwner && !isMember)
         {
-            return ServiceResult<IReadOnlyList<BoardMemberDto>>.Forbidden();
+            throw new ForbiddenException(
+                "You do not have permission to view members of this board."
+            );
         }
 
-        var result = board
+        return board
             .Members.Select(m => new BoardMemberDto(
                 Id: m.Id,
                 BoardId: m.BoardId,
@@ -43,11 +45,9 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
                 CreatedAt: m.CreatedAt
             ))
             .ToList();
-
-        return ServiceResult<IReadOnlyList<BoardMemberDto>>.Success(result);
     }
 
-    public async Task<ServiceResult<BoardMemberDto>> AddMemberAsync(
+    public async Task<BoardMemberDto?> AddMemberAsync(
         Guid currentUserId,
         Guid boardId,
         AddBoardMemberRequest request,
@@ -60,7 +60,7 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (board is null)
         {
-            return ServiceResult<BoardMemberDto>.NotFound();
+            return null;
         }
 
         var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
@@ -68,12 +68,14 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (actorRole is null || !actorRole.Value.CanShareBoard())
         {
-            return ServiceResult<BoardMemberDto>.Forbidden();
+            throw new ForbiddenException(
+                "You do not have permission to add members to this board."
+            );
         }
 
         if (!actorRole.Value.CanAssignRole(request.Role))
         {
-            return ServiceResult<BoardMemberDto>.Forbidden();
+            throw new ForbiddenException("You do not have permission to assign this role.");
         }
 
         var targetSearch = request.EmailOrUsername.Trim();
@@ -86,15 +88,12 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (targetUser is null)
         {
-            return ServiceResult<BoardMemberDto>.NotFound(
-                $"No user found matching '{request.EmailOrUsername}'.",
-                "User not found"
-            );
+            throw new NotFoundException($"No user found matching '{request.EmailOrUsername}'.");
         }
 
         if (board.Members.Any(m => m.UserId == targetUser.Id))
         {
-            return ServiceResult<BoardMemberDto>.Conflict(
+            throw new ConflictException(
                 "The specified user is already a member of this board.",
                 "User already a member"
             );
@@ -111,7 +110,7 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
         dbContext.BoardMembers.Add(newMember);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var dto = new BoardMemberDto(
+        return new BoardMemberDto(
             Id: newMember.Id,
             BoardId: board.Id,
             UserId: targetUser.Id,
@@ -120,11 +119,9 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
             Role: newMember.Role,
             CreatedAt: newMember.CreatedAt
         );
-
-        return ServiceResult<BoardMemberDto>.Success(dto);
     }
 
-    public async Task<ServiceResult<BoardMemberDto>> UpdateMemberRoleAsync(
+    public async Task<BoardMemberDto?> UpdateMemberRoleAsync(
         Guid currentUserId,
         Guid boardId,
         Guid targetUserId,
@@ -139,7 +136,7 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (board is null)
         {
-            return ServiceResult<BoardMemberDto>.NotFound();
+            return null;
         }
 
         var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
@@ -147,41 +144,41 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (actorRole is null || !actorRole.Value.CanShareBoard())
         {
-            return ServiceResult<BoardMemberDto>.Forbidden();
+            throw new ForbiddenException(
+                "You do not have permission to manage members of this board."
+            );
         }
 
         var targetMember = board.Members.FirstOrDefault(m => m.UserId == targetUserId);
         if (targetMember is null)
         {
-            return ServiceResult<BoardMemberDto>.NotFound(
-                "The user is not a member of this board.",
-                "Member not found"
-            );
+            throw new NotFoundException("The user is not a member of this board.");
         }
 
         if (targetMember.UserId == board.OwnerId)
         {
-            return ServiceResult<BoardMemberDto>.BadRequest(
-                "The board owner's role cannot be modified. Use the transfer ownership endpoint instead.",
-                "Cannot modify owner role"
+            throw new InvalidOperationException(
+                "The board owner's role cannot be modified. Use the transfer ownership endpoint instead."
             );
         }
 
         if (!actorRole.Value.CanAssignRole(request.Role))
         {
-            return ServiceResult<BoardMemberDto>.Forbidden();
+            throw new ForbiddenException("You do not have permission to assign this role.");
         }
 
         // Admins cannot alter another Admin's role
         if (actorRole == BoardRole.Admin && targetMember.Role == BoardRole.Admin)
         {
-            return ServiceResult<BoardMemberDto>.Forbidden();
+            throw new ForbiddenException(
+                "Administrators cannot modify another administrator's role."
+            );
         }
 
         targetMember.Role = request.Role;
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        var dto = new BoardMemberDto(
+        return new BoardMemberDto(
             Id: targetMember.Id,
             BoardId: board.Id,
             UserId: targetMember.UserId,
@@ -190,11 +187,9 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
             Role: targetMember.Role,
             CreatedAt: targetMember.CreatedAt
         );
-
-        return ServiceResult<BoardMemberDto>.Success(dto);
     }
 
-    public async Task<ServiceResult> RemoveMemberAsync(
+    public async Task<bool> RemoveMemberAsync(
         Guid currentUserId,
         Guid boardId,
         Guid targetUserId,
@@ -207,20 +202,19 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (board is null)
         {
-            return ServiceResult.NotFound();
+            return false;
         }
 
         var targetMember = board.Members.FirstOrDefault(m => m.UserId == targetUserId);
         if (targetMember is null)
         {
-            return ServiceResult.NotFound();
+            return false;
         }
 
         if (targetMember.UserId == board.OwnerId)
         {
-            return ServiceResult.BadRequest(
-                "The board owner cannot be removed. Transfer ownership or delete the board.",
-                "Cannot remove owner"
+            throw new InvalidOperationException(
+                "The board owner cannot be removed. Transfer ownership or delete the board."
             );
         }
 
@@ -229,7 +223,7 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
         {
             dbContext.BoardMembers.Remove(targetMember);
             await dbContext.SaveChangesAsync(cancellationToken);
-            return ServiceResult.Success();
+            return true;
         }
 
         var actorMember = board.Members.FirstOrDefault(m => m.UserId == currentUserId);
@@ -237,12 +231,12 @@ public sealed class BoardMemberService(OpenDiagrammerDbContext dbContext) : IBoa
 
         if (actorRole is null || !actorRole.Value.CanRemoveMember(targetMember.Role))
         {
-            return ServiceResult.Forbidden();
+            throw new ForbiddenException("You do not have permission to remove this member.");
         }
 
         dbContext.BoardMembers.Remove(targetMember);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ServiceResult.Success();
+        return true;
     }
 }

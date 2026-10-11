@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using OpenDiagrammer.Core.Boards;
-using OpenDiagrammer.Core.Services;
+using OpenDiagrammer.Core.Exceptions;
 using OpenDiagrammer.Data.Entities;
 
 namespace OpenDiagrammer.Data.Services;
@@ -47,7 +47,7 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             .ToList();
     }
 
-    public async Task<ServiceResult<BoardDetailDto>> GetBoardByIdAsync(
+    public async Task<BoardDetailDto?> GetBoardByIdAsync(
         Guid userId,
         Guid boardId,
         CancellationToken cancellationToken = default
@@ -62,13 +62,13 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         if (board is null)
         {
-            return ServiceResult<BoardDetailDto>.NotFound();
+            return null;
         }
 
         var member = board.Members.FirstOrDefault(m => m.UserId == userId);
         if (board.OwnerId != userId && member is null)
         {
-            return ServiceResult<BoardDetailDto>.Forbidden();
+            throw new ForbiddenException("You do not have permission to view this board.");
         }
 
         var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
@@ -85,40 +85,31 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             ))
             .ToList();
 
-        return ServiceResult<BoardDetailDto>.Success(
-            new BoardDetailDto(
-                Id: board.Id,
-                Name: board.Name,
-                Description: board.Description,
-                OwnerId: board.OwnerId,
-                OwnerUsername: board.Owner.Username,
-                UserRole: userRole,
-                BackgroundType: board.BackgroundType,
-                BackgroundColor: board.BackgroundColor,
-                BackgroundOpacity: board.BackgroundOpacity,
-                Mode: board.Mode,
-                ThinkModeConfigJson: board.ThinkModeConfigJson,
-                CreatedAt: board.CreatedAt,
-                ModifiedAt: board.ModifiedAt,
-                Members: memberDtos
-            )
+        return new BoardDetailDto(
+            Id: board.Id,
+            Name: board.Name,
+            Description: board.Description,
+            OwnerId: board.OwnerId,
+            OwnerUsername: board.Owner.Username,
+            UserRole: userRole,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: board.Mode,
+            ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CreatedAt: board.CreatedAt,
+            ModifiedAt: board.ModifiedAt,
+            Members: memberDtos
         );
     }
 
-    public async Task<ServiceResult<BoardDetailDto>> CreateBoardAsync(
+    public async Task<BoardDetailDto> CreateBoardAsync(
         Guid userId,
         CreateBoardRequest request,
         CancellationToken cancellationToken = default
     )
     {
-        var user = await dbContext.Users.FirstOrDefaultAsync(
-            u => u.Id == userId,
-            cancellationToken
-        );
-        if (user is null)
-        {
-            return ServiceResult<BoardDetailDto>.Unauthorized();
-        }
+        var user = await dbContext.Users.FirstAsync(u => u.Id == userId, cancellationToken);
 
         var board = new Board
         {
@@ -155,7 +146,7 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             CreatedAt: ownerMember.CreatedAt
         );
 
-        var detail = new BoardDetailDto(
+        return new BoardDetailDto(
             Id: board.Id,
             Name: board.Name,
             Description: board.Description,
@@ -171,11 +162,9 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             ModifiedAt: board.ModifiedAt,
             Members: [memberDto]
         );
-
-        return ServiceResult<BoardDetailDto>.Success(detail);
     }
 
-    public async Task<ServiceResult<BoardDetailDto>> UpdateBoardAsync(
+    public async Task<BoardDetailDto?> UpdateBoardAsync(
         Guid userId,
         Guid boardId,
         UpdateBoardRequest request,
@@ -190,13 +179,13 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         if (board is null)
         {
-            return ServiceResult<BoardDetailDto>.NotFound();
+            return null;
         }
 
         var member = board.Members.FirstOrDefault(m => m.UserId == userId);
         if (board.OwnerId != userId && member is null)
         {
-            return ServiceResult<BoardDetailDto>.Forbidden();
+            throw new ForbiddenException("You are not a member of this board.");
         }
 
         var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
@@ -204,13 +193,15 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
         // Content edits require at least Editor role
         if (!userRole.CanEditBoard())
         {
-            return ServiceResult<BoardDetailDto>.Forbidden();
+            throw new ForbiddenException("You do not have permission to edit this board.");
         }
 
         // Mode changes require at least Admin role per PRD
         if (board.Mode != request.Mode && !userRole.CanChangeBoardMode())
         {
-            return ServiceResult<BoardDetailDto>.Forbidden();
+            throw new ForbiddenException(
+                "Only board owners and administrators can change the board mode."
+            );
         }
 
         board.Name = request.Name.Trim();
@@ -235,27 +226,25 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             ))
             .ToList();
 
-        return ServiceResult<BoardDetailDto>.Success(
-            new BoardDetailDto(
-                Id: board.Id,
-                Name: board.Name,
-                Description: board.Description,
-                OwnerId: board.OwnerId,
-                OwnerUsername: board.Owner.Username,
-                UserRole: userRole,
-                BackgroundType: board.BackgroundType,
-                BackgroundColor: board.BackgroundColor,
-                BackgroundOpacity: board.BackgroundOpacity,
-                Mode: board.Mode,
-                ThinkModeConfigJson: board.ThinkModeConfigJson,
-                CreatedAt: board.CreatedAt,
-                ModifiedAt: board.ModifiedAt,
-                Members: memberDtos
-            )
+        return new BoardDetailDto(
+            Id: board.Id,
+            Name: board.Name,
+            Description: board.Description,
+            OwnerId: board.OwnerId,
+            OwnerUsername: board.Owner.Username,
+            UserRole: userRole,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: board.Mode,
+            ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CreatedAt: board.CreatedAt,
+            ModifiedAt: board.ModifiedAt,
+            Members: memberDtos
         );
     }
 
-    public async Task<ServiceResult> DeleteBoardAsync(
+    public async Task<bool> DeleteBoardAsync(
         Guid userId,
         Guid boardId,
         CancellationToken cancellationToken = default
@@ -268,21 +257,21 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         if (board is null)
         {
-            return ServiceResult.NotFound();
+            return false;
         }
 
         if (board.OwnerId != userId)
         {
-            return ServiceResult.Forbidden();
+            throw new ForbiddenException("Only the board owner can delete this board.");
         }
 
         dbContext.Boards.Remove(board);
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ServiceResult.Success();
+        return true;
     }
 
-    public async Task<ServiceResult> TransferOwnershipAsync(
+    public async Task<bool> TransferOwnershipAsync(
         Guid userId,
         Guid boardId,
         Guid newOwnerId,
@@ -295,20 +284,17 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         if (board is null)
         {
-            return ServiceResult.NotFound();
+            return false;
         }
 
         if (board.OwnerId != userId)
         {
-            return ServiceResult.Forbidden();
+            throw new ForbiddenException("Only the board owner can transfer ownership.");
         }
 
         if (newOwnerId == userId)
         {
-            return ServiceResult.BadRequest(
-                "You are already the owner of this board.",
-                "Invalid ownership transfer"
-            );
+            throw new ArgumentException("You are already the owner of this board.");
         }
 
         var newOwnerUser = await dbContext.Users.FirstOrDefaultAsync(
@@ -317,9 +303,8 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
         );
         if (newOwnerUser is null)
         {
-            return ServiceResult.BadRequest(
-                "The target user for ownership transfer does not exist.",
-                "User not found"
+            throw new InvalidOperationException(
+                "The target user for ownership transfer does not exist."
             );
         }
 
@@ -366,6 +351,6 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
-        return ServiceResult.Success();
+        return true;
     }
 }

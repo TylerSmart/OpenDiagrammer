@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using OpenDiagrammer.API.Http;
 using OpenDiagrammer.Core.Boards;
+using OpenDiagrammer.Core.Exceptions;
 
 namespace OpenDiagrammer.API.Controllers;
 
@@ -33,8 +33,15 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetBoardById(Guid id, CancellationToken cancellationToken)
     {
-        var result = await boardService.GetBoardByIdAsync(CurrentUserId, id, cancellationToken);
-        return this.ToActionResult(result);
+        try
+        {
+            var board = await boardService.GetBoardByIdAsync(CurrentUserId, id, cancellationToken);
+            return board is not null ? Ok(board) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost]
@@ -45,13 +52,8 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
         CancellationToken cancellationToken
     )
     {
-        var result = await boardService.CreateBoardAsync(CurrentUserId, request, cancellationToken);
-        if (!result.IsSuccess)
-        {
-            return this.ToActionResult(result);
-        }
-
-        return CreatedAtAction(nameof(GetBoardById), new { id = result.Value!.Id }, result.Value);
+        var board = await boardService.CreateBoardAsync(CurrentUserId, request, cancellationToken);
+        return CreatedAtAction(nameof(GetBoardById), new { id = board.Id }, board);
     }
 
     [HttpPut("{id:guid}")]
@@ -64,13 +66,20 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
         CancellationToken cancellationToken
     )
     {
-        var result = await boardService.UpdateBoardAsync(
-            CurrentUserId,
-            id,
-            request,
-            cancellationToken
-        );
-        return this.ToActionResult(result);
+        try
+        {
+            var board = await boardService.UpdateBoardAsync(
+                CurrentUserId,
+                id,
+                request,
+                cancellationToken
+            );
+            return board is not null ? Ok(board) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpDelete("{id:guid}")]
@@ -79,13 +88,15 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> DeleteBoard(Guid id, CancellationToken cancellationToken)
     {
-        var result = await boardService.DeleteBoardAsync(CurrentUserId, id, cancellationToken);
-        if (!result.IsSuccess)
+        try
         {
-            return this.ToActionResult(result);
+            var deleted = await boardService.DeleteBoardAsync(CurrentUserId, id, cancellationToken);
+            return deleted ? NoContent() : NotFound();
         }
-
-        return NoContent();
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
     }
 
     [HttpPost("{id:guid}/transfer-ownership")]
@@ -99,17 +110,44 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
         CancellationToken cancellationToken
     )
     {
-        var result = await boardService.TransferOwnershipAsync(
-            CurrentUserId,
-            id,
-            request.NewOwnerId,
-            cancellationToken
-        );
-        if (!result.IsSuccess)
+        try
         {
-            return this.ToActionResult(result);
-        }
+            if (request.NewOwnerId == CurrentUserId)
+            {
+                return BadRequest(
+                    new ProblemDetails
+                    {
+                        Status = StatusCodes.Status400BadRequest,
+                        Title = "Invalid ownership transfer",
+                        Detail = "You are already the owner of this board.",
+                    }
+                );
+            }
 
-        return Ok(new { message = "Ownership transferred successfully." });
+            var success = await boardService.TransferOwnershipAsync(
+                CurrentUserId,
+                id,
+                request.NewOwnerId,
+                cancellationToken
+            );
+            return success
+                ? Ok(new { message = "Ownership transferred successfully." })
+                : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(
+                new ProblemDetails
+                {
+                    Status = StatusCodes.Status400BadRequest,
+                    Title = "User not found",
+                    Detail = ex.Message,
+                }
+            );
+        }
     }
 }
