@@ -40,10 +40,22 @@ public static class DataServiceCollectionExtensions
         }
 
         var openDiagrammerConnectionString =
-            configuration["ConnectionString:OpenDiagrammer"]
-            ?? throw new InvalidOperationException(
-                "ConnectionString:OpenDiagrammer is not configured."
-            );
+            configuration.GetConnectionString("OpenDiagrammer")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? configuration["ConnectionString:OpenDiagrammer"];
+
+        if (
+            string.IsNullOrWhiteSpace(openDiagrammerConnectionString)
+            || string.Equals(
+                openDiagrammerConnectionString,
+                "REPLACE_ME",
+                StringComparison.OrdinalIgnoreCase
+            )
+        )
+        {
+            openDiagrammerConnectionString =
+                "Server=localhost,14333;Database=OpenDiagrammer;User Id=sa;Password=OpenDiagrammer_Local_Dev_1;TrustServerCertificate=True;Encrypt=True;Application Name=OpenDiagrammer;";
+        }
 
         services.AddDbContext<OpenDiagrammerDbContext>(
             (provider, options) =>

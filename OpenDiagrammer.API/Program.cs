@@ -67,11 +67,13 @@ builder.Services.Configure<StaticFileOptions>(options =>
 
 var app = builder.Build();
 
-if (app.Environment.IsEnvironment("Local"))
+using (var scope = app.Services.CreateScope())
 {
-    using var scope = app.Services.CreateScope();
     var db = scope.ServiceProvider.GetRequiredService<OpenDiagrammerDbContext>();
-    db.Database.Migrate();
+    if (db.Database.IsRelational())
+    {
+        db.Database.Migrate();
+    }
 }
 
 app.UseSerilogRequestLogging(options =>

@@ -13,15 +13,24 @@ public sealed class OpenDiagrammerDbContextFactory
         var configuration = new ConfigurationBuilder()
             .SetBasePath(startupPath)
             .AddJsonFile("appsettings.json", optional: false)
+            .AddJsonFile("appsettings.Development.json", optional: true)
             .AddJsonFile("appsettings.Local.json", optional: true)
             .AddEnvironmentVariables()
             .Build();
 
         var connectionString =
-            configuration["ConnectionString:OpenDiagrammer"]
-            ?? throw new InvalidOperationException(
-                "ConnectionString:OpenDiagrammer is not configured for EF Core design-time."
-            );
+            configuration.GetConnectionString("OpenDiagrammer")
+            ?? configuration.GetConnectionString("DefaultConnection")
+            ?? configuration["ConnectionString:OpenDiagrammer"];
+
+        if (
+            string.IsNullOrWhiteSpace(connectionString)
+            || string.Equals(connectionString, "REPLACE_ME", StringComparison.OrdinalIgnoreCase)
+        )
+        {
+            connectionString =
+                "Server=localhost,14333;Database=OpenDiagrammer;User Id=sa;Password=OpenDiagrammer_Local_Dev_1;TrustServerCertificate=True;Encrypt=True;Application Name=OpenDiagrammer;";
+        }
 
         var options = new DbContextOptionsBuilder<OpenDiagrammerDbContext>()
             .UseSqlServer(connectionString)

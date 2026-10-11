@@ -21,6 +21,11 @@ This skill is used to identify and implement the next task in the project's impl
     - State clearly what the next task is.
     - Provide a brief plan of action for implementing it.
 5. **Implement the Confirmed Task**: After the user confirms, implement the task in the repository, following its existing conventions and keeping changes scoped to the task.
+    - If changes are made to entity models, relationships, or configurations in `OpenDiagrammer.Data`, always generate and apply a corresponding EF Core migration:
+      ```powershell
+      dotnet ef migrations add <DescriptiveName> --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
+      dotnet ef database update --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
+      ```
 6. **Add and Run Relevant Tests**:
     - Add or update tests for the new or changed behavior when applicable, using the repository's existing test patterns.
     - After every implementation iteration, build the entire application and run the full test suites, covering all production projects (including the API and client), not only the files touched in that iteration. Use the repository's documented build and test commands.
