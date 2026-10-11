@@ -23,4 +23,9 @@ public interface IAuthService
         ExternalAuthRequest request,
         CancellationToken cancellationToken = default
     );
+
+    Task<UserSummary> ProvisionOrGetExternalUserAsync(
+        ExternalUserPrincipal principal,
+        CancellationToken cancellationToken = default
+    );
 }

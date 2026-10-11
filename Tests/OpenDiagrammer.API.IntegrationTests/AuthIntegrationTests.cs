@@ -307,4 +307,38 @@ public sealed class AuthIntegrationTests
         var response = await _client.PostAsync("/api/auth/logout", null);
         Assert.AreEqual(HttpStatusCode.OK, response.StatusCode);
     }
+
+    [TestMethod]
+    public async Task ExternalToken_DirectlyInBearerHeader_AuthenticatesSuccessfully()
+    {
+        var tokenHandler = new System.IdentityModel.Tokens.Jwt.JwtSecurityTokenHandler();
+        var externalIdToken = tokenHandler.WriteToken(
+            new System.IdentityModel.Tokens.Jwt.JwtSecurityToken(
+                claims:
+                [
+                    new System.Security.Claims.Claim("sub", "ext-direct-bearer-user"),
+                    new System.Security.Claims.Claim("email", "directbearer@example.com"),
+                    new System.Security.Claims.Claim("name", "Direct Bearer User"),
+                ]
+            )
+        );
+
+        using var bearerClient = _factory.CreateClient();
+        bearerClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue(
+            "Bearer",
+            externalIdToken
+        );
+
+        var meResponse = await bearerClient.GetAsync("/api/auth/me");
+        Assert.AreEqual(HttpStatusCode.OK, meResponse.StatusCode);
+
+        var user = await meResponse.Content.ReadFromJsonAsync<CurrentUserDto>();
+        Assert.IsNotNull(user);
+        Assert.AreEqual("directbearer@example.com", user.Email);
+        Assert.AreEqual("Direct Bearer User", user.Username);
+
+        // Second call hits cache
+        var cachedResponse = await bearerClient.GetAsync("/api/auth/me");
+        Assert.AreEqual(HttpStatusCode.OK, cachedResponse.StatusCode);
+    }
 }
