@@ -27,4 +27,8 @@ public sealed class User : IAuditable
     public DateTimeOffset ModifiedAt { get; set; }
 
     public string ModifiedBy { get; set; } = "System";
+
+    public ICollection<Board> OwnedBoards { get; set; } = new List<Board>();
+
+    public ICollection<BoardMember> BoardMemberships { get; set; } = new List<BoardMember>();
 }

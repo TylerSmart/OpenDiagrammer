@@ -8,6 +8,10 @@ public sealed class OpenDiagrammerDbContext(DbContextOptions<OpenDiagrammerDbCon
 {
     public DbSet<User> Users => Set<User>();
 
+    public DbSet<Board> Boards => Set<Board>();
+
+    public DbSet<BoardMember> BoardMembers => Set<BoardMember>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDiagrammerDbContext).Assembly);
