@@ -26,6 +26,7 @@ This skill is used to identify and implement the next task in the project's impl
       dotnet ef migrations add <DescriptiveName> --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
       dotnet ef database update --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
       ```
+    - Maintain lean controllers: business logic, authorization rules, and persistence operations must be encapsulated in services defined in `OpenDiagrammer.Core`, keeping controllers as thin HTTP adapters.
 6. **Add and Run Relevant Tests**:
     - Add or update tests for the new or changed behavior when applicable, using the repository's existing test patterns.
     - After every implementation iteration, build the entire application and run the full test suites, covering all production projects (including the API and client), not only the files touched in that iteration. Use the repository's documented build and test commands.

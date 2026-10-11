@@ -27,11 +27,20 @@ Whenever changes are made to entity models, entity configurations, relationships
 
 ## 2. Backend Coding Standards
 
-- **Architecture Layers**:
-  - `OpenDiagrammer.Core`: Domain models, interfaces, enums, business logic.
-  - `OpenDiagrammer.Data`: DbContext, EF Core configurations, entity definitions, migrations.
+- **Architecture Layers & Responsibilities**:
+  - `OpenDiagrammer.Core`: Domain models, enums, business logic, authorization rules, and service interfaces.
+  - `OpenDiagrammer.Data`: DbContext, EF Core configurations, entity definitions, migrations, and data service implementations.
   - `OpenDiagrammer.Infrastructure`: Third-party service implementations, external APIs, JWT and OIDC services.
-  - `OpenDiagrammer.API`: ASP.NET Core controllers, DTOs, endpoint routing, middleware.
+  - `OpenDiagrammer.API`: ASP.NET Core controllers, DTOs, endpoint routing, middleware, and HTTP response mapping.
+- **Lean Controllers (Strict Rule)**:
+  - Controllers must remain thin HTTP adapters. A controller's responsibilities are strictly limited to:
+    1. Receiving and binding HTTP requests and DTOs.
+    2. Invoking application/domain services defined in `OpenDiagrammer.Core`.
+    3. Translating service results into HTTP responses (status codes, ProblemDetails, cookies/headers).
+  - Controllers MUST NEVER contain:
+    - Direct `DbContext` queries, LINQ data access, or raw persistence operations.
+    - Business logic, authorization/permission rules, or entity state mutation loops.
+  - All database operations, permission checks, and entity lifecycles must be encapsulated within dedicated services implementing interfaces defined in `OpenDiagrammer.Core`.
 - **Code Style & Formatting**:
   - Run `dotnet csharpier format .` before committing changes.
   - Adhere to nullable reference types (`#nullable enable`).
