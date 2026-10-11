@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using OpenDiagrammer.API.Authentication;
@@ -36,6 +37,39 @@ builder.Services.AddOpenApi(
                 document.Servers = [new OpenApiServer { Url = "/api" }];
 
                 document.Components ??= new OpenApiComponents();
+                document.Components.SecuritySchemes = new Dictionary<string, IOpenApiSecurityScheme>
+                {
+                    ["Bearer"] = new OpenApiSecurityScheme
+                    {
+                        Type = SecuritySchemeType.Http,
+                        Scheme = "bearer",
+                        BearerFormat = "JWT",
+                        Description =
+                            "JWT Authorization header using the Bearer scheme. Enter your token (or execute POST /api/auth/login in Scalar to automatically authenticate via session cookies).",
+                    },
+                };
+
+                return Task.CompletedTask;
+            }
+        );
+
+        options.AddOperationTransformer(
+            (operation, context, cancellationToken) =>
+            {
+                var metadata = context.Description.ActionDescriptor.EndpointMetadata;
+                var hasAuthorize = metadata.OfType<AuthorizeAttribute>().Any();
+                var allowAnonymous = metadata.OfType<AllowAnonymousAttribute>().Any();
+
+                if (hasAuthorize && !allowAnonymous)
+                {
+                    operation.Security ??= [];
+                    operation.Security.Add(
+                        new OpenApiSecurityRequirement
+                        {
+                            [new OpenApiSecuritySchemeReference("Bearer", null, null)] = [],
+                        }
+                    );
+                }
 
                 return Task.CompletedTask;
             }
@@ -125,6 +159,7 @@ app.MapScalarApiReference(
         {
             options.WithOpenApiRoutePattern("/api/openapi/{documentName}.json");
             options.WithTitle("OpenDiagrammer");
+            options.PersistentAuthentication = true;
         }
     )
     .AllowAnonymous();

@@ -35,5 +35,7 @@ public sealed class OpenApiIntegrationTests
         StringAssert.Contains(content, "OpenDiagrammer");
         StringAssert.Contains(content, "/boards");
         StringAssert.Contains(content, "/auth");
+        StringAssert.Contains(content, "securitySchemes");
+        StringAssert.Contains(content, "Bearer");
     }
 }

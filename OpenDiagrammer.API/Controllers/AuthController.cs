@@ -148,6 +148,7 @@ public sealed class AuthController(
 
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
+        SetAuthCookie(token);
 
         return Ok(
             new AuthResponse(
@@ -225,6 +226,7 @@ public sealed class AuthController(
 
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
+        SetAuthCookie(token);
 
         return Ok(
             new AuthResponse(
@@ -271,6 +273,7 @@ public sealed class AuthController(
 
         var userSummary = new UserSummary(user.Id, user.Email, user.Username);
         var token = jwtTokenService.GenerateToken(userSummary);
+        SetAuthCookie(token);
 
         return Ok(
             new AuthResponse(
@@ -281,6 +284,25 @@ public sealed class AuthController(
                 ExpiresAt: DateTimeOffset.UtcNow.AddHours(24)
             )
         );
+    }
+
+    [HttpPost("logout")]
+    [AllowAnonymous]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    public IActionResult Logout()
+    {
+        Response.Cookies.Delete(
+            "access_token",
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = Request.IsHttps,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+            }
+        );
+
+        return Ok(new { message = "Logged out successfully" });
     }
 
     [HttpGet("me")]
@@ -315,5 +337,21 @@ public sealed class AuthController(
         }
 
         return Ok(new CurrentUserDto(user.Id, user.Email, user.Username));
+    }
+
+    private void SetAuthCookie(string token)
+    {
+        Response.Cookies.Append(
+            "access_token",
+            token,
+            new CookieOptions
+            {
+                HttpOnly = true,
+                Secure = Request.IsHttps,
+                SameSite = SameSiteMode.Lax,
+                Path = "/",
+                Expires = DateTimeOffset.UtcNow.AddHours(24),
+            }
+        );
     }
 }

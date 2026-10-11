@@ -50,6 +50,36 @@ public static class AuthenticationServiceCollectionExtensions
                         ValidateLifetime = true,
                         ClockSkew = TimeSpan.FromMinutes(1),
                     };
+
+                    options.Events = new JwtBearerEvents
+                    {
+                        OnMessageReceived = context =>
+                        {
+                            string? authHeader = context.Request.Headers.Authorization;
+                            if (
+                                !string.IsNullOrEmpty(authHeader)
+                                && authHeader.StartsWith(
+                                    "Bearer ",
+                                    StringComparison.OrdinalIgnoreCase
+                                )
+                            )
+                            {
+                                return Task.CompletedTask;
+                            }
+
+                            if (
+                                context.Request.Cookies.TryGetValue(
+                                    "access_token",
+                                    out var cookieToken
+                                )
+                            )
+                            {
+                                context.Token = cookieToken;
+                            }
+
+                            return Task.CompletedTask;
+                        },
+                    };
                 }
             );
 
