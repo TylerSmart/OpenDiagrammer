@@ -44,6 +44,13 @@
         </div>
       }
 
+      @if (isProcessingOAuth()) {
+        <div class="oauth-loading" role="status">
+          <mat-spinner diameter="32"></mat-spinner>
+          <span>Completing external sign in...</span>
+        </div>
+      }
+
       <mat-tab-group
         [selectedIndex]="selectedTabIndex()"
         (selectedIndexChange)="onTabChange($event)"
@@ -265,13 +272,18 @@
         </mat-tab>
       </mat-tab-group>
 
-      @if (providers().length > 0) {
+      @if (externalProviders().length > 0) {
         <div class="divider">or continue with</div>
         <div class="external-providers">
-          @for (provider of providers(); track provider.id) {
-            <button mat-stroked-button type="button" (click)="onExternalLogin(provider)">
-              <mat-icon>login</mat-icon>
-              <span>{{ provider.name }}</span>
+          @for (provider of externalProviders(); track provider.id) {
+            <button
+              mat-stroked-button
+              type="button"
+              (click)="onExternalLogin(provider)"
+              [disabled]="authService.isLoading() || isProcessingOAuth()"
+            >
+              <mat-icon>{{ getProviderIcon(provider) }}</mat-icon>
+              <span>Sign in with {{ provider.name }}</span>
             </button>
           }
         </div>

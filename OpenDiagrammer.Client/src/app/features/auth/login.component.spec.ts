@@ -14,6 +14,7 @@ describe('LoginComponent', () => {
     isLoading: ReturnType<typeof vi.fn>;
     login: ReturnType<typeof vi.fn>;
     register: ReturnType<typeof vi.fn>;
+    externalCallback: ReturnType<typeof vi.fn>;
     getProviders: ReturnType<typeof vi.fn>;
   };
   let mockRouter: {
@@ -36,6 +37,15 @@ describe('LoginComponent', () => {
         }),
       ),
       register: vi.fn().mockReturnValue(
+        of({
+          token: 'token123',
+          id: 'u1',
+          email: 'test@example.com',
+          username: 'testuser',
+          expiresAt: '2026-10-11T00:00:00Z',
+        }),
+      ),
+      externalCallback: vi.fn().mockReturnValue(
         of({
           token: 'token123',
           id: 'u1',
@@ -152,5 +162,115 @@ describe('LoginComponent', () => {
       password: 'secretpassword',
     });
     expect(mockRouter.navigateByUrl).toHaveBeenCalledWith('/dashboard');
+  });
+
+  it('should display error if provider has missing oauth configuration', () => {
+    component.onExternalLogin({
+      id: 'google',
+      name: 'Google',
+      isExternal: true,
+    });
+
+    expect(component['errorMessage']()).toContain(
+      'OAuth authorization endpoint or client ID is not configured',
+    );
+  });
+
+  it('should construct oauth authorization url and redirect on external login', () => {
+    const originalLocation = window.location;
+    try {
+      delete (window as unknown as { location?: unknown }).location;
+      (window as unknown as { location: unknown }).location = {
+        href: '',
+        origin: 'http://localhost:4200',
+      };
+
+      component.onExternalLogin({
+        id: 'google',
+        name: 'Google',
+        isExternal: true,
+        oidcConfig: {
+          enabled: true,
+          providerName: 'Google',
+          authority: 'https://accounts.google.com',
+          clientId: 'my-google-client-id',
+          scope: 'openid profile email',
+        },
+      });
+
+      expect(window.location.href).toContain('https://accounts.google.com/o/oauth2/v2/auth');
+      expect(window.location.href).toContain('client_id=my-google-client-id');
+      expect(window.location.href).toContain('redirect_uri=http%3A%2F%2Flocalhost%3A4200%2Flogin');
+      expect(sessionStorage.getItem('oauth_return_url')).toBe('/dashboard');
+    } finally {
+      (window as unknown as { location: unknown }).location = originalLocation;
+    }
+  });
+
+  it('should handle OAuth callback error param', () => {
+    (
+      component as unknown as { route: { snapshot: { queryParams: Record<string, string> } } }
+    ).route.snapshot.queryParams = {
+      error: 'access_denied',
+      error_description: 'User canceled authorization',
+    };
+
+    component['checkExternalAuthCallback']();
+
+    expect(component['errorMessage']()).toBe('User canceled authorization');
+  });
+
+  it('should handle OAuth callback code and navigate to saved return url', () => {
+    sessionStorage.setItem('oauth_return_url', '/boards/123');
+    mockAuthService.externalCallback.mockReturnValue(
+      of({
+        token: 'oauth-token',
+        id: 'u-google',
+        email: 'user@google.com',
+        username: 'googler',
+        expiresAt: '2026-10-11T00:00:00Z',
+      }),
+    );
+    (
+      component as unknown as { route: { snapshot: { queryParams: Record<string, string> } } }
+    ).route.snapshot.queryParams = {
+      code: 'google-auth-code',
+    };
+
+    component['checkExternalAuthCallback']();
+
+    expect(mockAuthService.externalCallback).toHaveBeenCalledWith({
+      code: 'google-auth-code',
+      idToken: null,
+      accessToken: null,
+      redirectUri: `${window.location.origin}/login`,
+    });
+    expect(mockSnackBar.open).toHaveBeenCalledWith('Signed in successfully', 'Close', {
+      duration: 3000,
+    });
+    expect(mockRouter.navigateByUrl).toHaveBeenCalledWith('/boards/123');
+    expect(sessionStorage.getItem('oauth_return_url')).toBeNull();
+  });
+
+  it('should display error when externalCallback fails', () => {
+    mockAuthService.externalCallback.mockReturnValue(
+      throwError(
+        () =>
+          new HttpErrorResponse({
+            status: 400,
+            error: { detail: 'Invalid authorization code' },
+          }),
+      ),
+    );
+    (
+      component as unknown as { route: { snapshot: { queryParams: Record<string, string> } } }
+    ).route.snapshot.queryParams = {
+      code: 'invalid-code',
+    };
+
+    component['checkExternalAuthCallback']();
+
+    expect(component['errorMessage']()).toBe('Invalid authorization code');
+    expect(component['isProcessingOAuth']()).toBe(false);
   });
 });

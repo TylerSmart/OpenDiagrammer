@@ -7,6 +7,7 @@ import {
   AuthProviderDto,
   AuthResponse,
   CurrentUserDto,
+  ExternalAuthRequest,
   LoginRequest,
   RegisterRequest,
 } from '../../models/auth.models';
@@ -67,6 +68,20 @@ export class AuthService {
   register(data: RegisterRequest): Observable<AuthResponse> {
     this.isLoadingState.set(true);
     return this.http.post<AuthResponse>(apiUrl('/auth/register'), data).pipe(
+      tap((response) => {
+        this.setSession(response);
+        this.isLoadingState.set(false);
+      }),
+      catchError((error) => {
+        this.isLoadingState.set(false);
+        throw error;
+      }),
+    );
+  }
+
+  externalCallback(request: ExternalAuthRequest): Observable<AuthResponse> {
+    this.isLoadingState.set(true);
+    return this.http.post<AuthResponse>(apiUrl('/auth/external-callback'), request).pipe(
       tap((response) => {
         this.setSession(response);
         this.isLoadingState.set(false);

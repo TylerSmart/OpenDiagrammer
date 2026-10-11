@@ -87,6 +87,41 @@ describe('AuthService', () => {
     expect(service.isAuthenticated()).toBe(true);
   });
 
+  it('should handle externalCallback successfully and set session', () => {
+    const mockResponse = {
+      token: 'jwt-oauth-token',
+      id: 'oauth-user-id',
+      email: 'oauth@example.com',
+      username: 'googleuser',
+      expiresAt: '2026-10-11T00:00:00Z',
+    };
+
+    service
+      .externalCallback({
+        code: 'oauth-code-123',
+        idToken: null,
+        accessToken: null,
+        redirectUri: 'http://localhost:4200/login',
+      })
+      .subscribe((res) => {
+        expect(res).toEqual(mockResponse);
+      });
+
+    const req = httpMock.expectOne('/api/auth/external-callback');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({
+      code: 'oauth-code-123',
+      idToken: null,
+      accessToken: null,
+      redirectUri: 'http://localhost:4200/login',
+    });
+    req.flush(mockResponse);
+
+    expect(service.token()).toBe('jwt-oauth-token');
+    expect(service.currentUser()?.email).toBe('oauth@example.com');
+    expect(service.isAuthenticated()).toBe(true);
+  });
+
   it('should load current user', () => {
     const mockUser = {
       id: 'user-guid-1',

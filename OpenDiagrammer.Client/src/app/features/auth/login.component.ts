@@ -15,7 +15,8 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatMenuModule } from '@angular/material/menu';
-import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
+import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -54,7 +55,7 @@ const passwordMatchValidator: ValidatorFn = (control: AbstractControl): Validati
     MatIconModule,
     MatMenuModule,
     MatTooltipModule,
-    MatSnackBarModule,
+    MatProgressSpinnerModule,
   ],
   selector: 'app-login',
   styleUrl: './login.component.scss',
@@ -73,6 +74,11 @@ export class LoginComponent implements OnInit {
   protected readonly hideConfirmPassword = signal<boolean>(true);
   protected readonly errorMessage = signal<string | null>(null);
   protected readonly providers = signal<AuthProviderDto[]>([]);
+  protected readonly isProcessingOAuth = signal<boolean>(false);
+
+  protected readonly externalProviders = computed(() =>
+    this.providers().filter((p) => p.isExternal),
+  );
 
   protected readonly themeIcon = computed(() => THEME_ICONS[this.themeService.mode()]);
   protected readonly themeLabel = computed(() => THEME_LABELS[this.themeService.mode()]);
@@ -111,6 +117,8 @@ export class LoginComponent implements OnInit {
   );
 
   ngOnInit(): void {
+    this.checkExternalAuthCallback();
+
     this.authService.getProviders().subscribe({
       next: (list) => this.providers.set(list),
       error: () => undefined,
@@ -175,8 +183,141 @@ export class LoginComponent implements OnInit {
   }
 
   onExternalLogin(provider: AuthProviderDto): void {
-    if (provider.authorizationUrl) {
-      window.location.href = provider.authorizationUrl;
+    this.errorMessage.set(null);
+    const authUrl = this.buildAuthorizationUrl(provider);
+
+    if (!authUrl) {
+      this.errorMessage.set(
+        `Unable to sign in with ${provider.name}: OAuth authorization endpoint or client ID is not configured.`,
+      );
+      return;
+    }
+
+    const returnUrl = this.route.snapshot.queryParams['returnUrl'] || '/dashboard';
+    if (typeof sessionStorage !== 'undefined') {
+      sessionStorage.setItem('oauth_return_url', returnUrl);
+    }
+
+    window.location.href = authUrl;
+  }
+
+  protected getProviderIcon(provider: AuthProviderDto): string {
+    const name = provider.name.toLowerCase();
+    if (name.includes('google')) {
+      return 'account_circle';
+    }
+    if (name.includes('microsoft')) {
+      return 'window';
+    }
+    if (name.includes('github')) {
+      return 'code';
+    }
+    return 'login';
+  }
+
+  private buildAuthorizationUrl(provider: AuthProviderDto): string | null {
+    if (provider.authorizationUrl && provider.authorizationUrl.includes('?')) {
+      return provider.authorizationUrl;
+    }
+
+    const config = provider.oidcConfig;
+    let endpoint = config?.authorizationEndpoint || provider.authorizationUrl;
+
+    if (!endpoint && config?.authority) {
+      const authority = config.authority.replace(/\/$/, '');
+      if (authority.toLowerCase().includes('accounts.google.com')) {
+        endpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
+      } else {
+        endpoint = `${authority}/authorize`;
+      }
+    }
+
+    // Google authority fallback when authority was set to accounts.google.com without custom endpoint
+    if (endpoint && endpoint.includes('accounts.google.com') && endpoint.endsWith('/authorize')) {
+      endpoint = 'https://accounts.google.com/o/oauth2/v2/auth';
+    }
+
+    const clientId = config?.clientId;
+    if (!endpoint || !clientId) {
+      return null;
+    }
+
+    try {
+      const redirectUri =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/login`
+          : 'http://localhost:4200/login';
+      const url = new URL(endpoint);
+      url.searchParams.set('client_id', clientId);
+      url.searchParams.set('redirect_uri', redirectUri);
+      url.searchParams.set('response_type', 'code');
+      url.searchParams.set('scope', config?.scope || 'openid profile email');
+      url.searchParams.set('state', 'oidc');
+      url.searchParams.set('prompt', 'select_account');
+
+      return url.toString();
+    } catch {
+      return null;
+    }
+  }
+
+  private checkExternalAuthCallback(): void {
+    const queryParams = this.route.snapshot.queryParams;
+    const code = queryParams['code'];
+    const error = queryParams['error'];
+    const errorDescription = queryParams['error_description'];
+
+    const hashParams =
+      typeof window !== 'undefined' && window.location.hash
+        ? new URLSearchParams(window.location.hash.replace(/^#/, ''))
+        : null;
+    const idToken = queryParams['id_token'] || hashParams?.get('id_token') || null;
+    const accessToken = queryParams['access_token'] || hashParams?.get('access_token') || null;
+
+    if (error) {
+      this.errorMessage.set(errorDescription || `External sign in failed: ${error}`);
+      return;
+    }
+
+    if (code || idToken || accessToken) {
+      this.isProcessingOAuth.set(true);
+      const redirectUri =
+        typeof window !== 'undefined'
+          ? `${window.location.origin}/login`
+          : 'http://localhost:4200/login';
+
+      this.authService
+        .externalCallback({
+          code: code || null,
+          idToken: idToken || null,
+          accessToken: accessToken || null,
+          redirectUri,
+        })
+        .subscribe({
+          next: () => {
+            this.isProcessingOAuth.set(false);
+            this.snackBar.open('Signed in successfully', 'Close', {
+              duration: 3000,
+            });
+            const returnUrl =
+              typeof sessionStorage !== 'undefined'
+                ? sessionStorage.getItem('oauth_return_url') || '/dashboard'
+                : '/dashboard';
+            if (typeof sessionStorage !== 'undefined') {
+              sessionStorage.removeItem('oauth_return_url');
+            }
+            this.router.navigateByUrl(returnUrl);
+          },
+          error: (err: unknown) => {
+            this.isProcessingOAuth.set(false);
+            this.errorMessage.set(
+              this.extractErrorMessage(
+                err,
+                'Could not complete external sign in. Please try again.',
+              ),
+            );
+          },
+        });
     }
   }
 

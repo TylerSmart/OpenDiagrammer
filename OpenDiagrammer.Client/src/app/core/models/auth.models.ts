@@ -23,8 +23,26 @@ export interface CurrentUserDto {
   username: string;
 }
 
+export interface OidcConfigurationDto {
+  enabled: boolean;
+  providerName: string;
+  authority?: string;
+  clientId?: string;
+  scope?: string;
+  authorizationEndpoint?: string;
+}
+
 export interface AuthProviderDto {
   id: string;
   name: string;
+  isExternal: boolean;
+  oidcConfig?: OidcConfigurationDto;
   authorizationUrl?: string;
+}
+
+export interface ExternalAuthRequest {
+  code?: string | null;
+  idToken?: string | null;
+  accessToken?: string | null;
+  redirectUri?: string | null;
 }
