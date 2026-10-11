@@ -18,7 +18,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Implement local JWT authentication
 - [x] Setup generic OIDC/OAuth2 integration (for providers like Google or Microsoft)
 - [x] Define Board, Member, and Role entity models (Owner, Admin, Editor, Viewer)
-- [ ] Implement CRUD APIs for Boards and Board Members
+- [x] Implement CRUD APIs for Boards and Board Members
 - [ ] Setup basic test coverage for APIs
 
 ## Phase 3: Frontend Foundation & Board Management
