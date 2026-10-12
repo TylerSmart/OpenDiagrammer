@@ -254,6 +254,29 @@
       }
     </svg>
 
+    <!-- Dynamic Alignment & Snapping Guides Layer -->
+    <svg class="canvas-alignment-guides-layer" overflow="visible" aria-hidden="true">
+      @for (guide of alignmentGuides(); track $index) {
+        @if (guide.type === 'horizontal') {
+          <line
+            class="alignment-guide-line"
+            [attr.x1]="guide.start"
+            [attr.y1]="guide.coordinate"
+            [attr.x2]="guide.end"
+            [attr.y2]="guide.coordinate"
+          />
+        } @else {
+          <line
+            class="alignment-guide-line"
+            [attr.x1]="guide.coordinate"
+            [attr.y1]="guide.start"
+            [attr.x2]="guide.coordinate"
+            [attr.y2]="guide.end"
+          />
+        }
+      }
+    </svg>
+
     <!-- Selection Bounding Box & Resize Handles (OS-window style edges + corner grips) -->
     @if (selectionBox(); as box) {
       <div
@@ -299,6 +322,99 @@
             class="resize-handle handle-sw"
             (pointerdown)="handleResizePointerDown($event, 'sw')"
           ></div>
+        }
+      </div>
+    }
+
+    <!-- Multi-selection Alignment Toolbar Dock -->
+    @if (selectionToolbarPos(); as sPos) {
+      <div
+        class="selection-tools-dock"
+        role="toolbar"
+        aria-label="Selection alignment tools"
+        [style.left.px]="sPos.x"
+        [style.top.px]="sPos.y"
+        (pointerdown)="$event.stopPropagation()"
+      >
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('left')"
+          matTooltip="Align Left"
+          aria-label="Align left"
+        >
+          <mat-icon>align_horizontal_left</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('center')"
+          matTooltip="Align Center (Horizontal)"
+          aria-label="Align center horizontal"
+        >
+          <mat-icon>align_horizontal_center</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('right')"
+          matTooltip="Align Right"
+          aria-label="Align right"
+        >
+          <mat-icon>align_horizontal_right</mat-icon>
+        </button>
+
+        <div class="dock-divider"></div>
+
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('top')"
+          matTooltip="Align Top"
+          aria-label="Align top"
+        >
+          <mat-icon>align_vertical_top</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('middle')"
+          matTooltip="Align Middle (Vertical)"
+          aria-label="Align middle vertical"
+        >
+          <mat-icon>align_vertical_center</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="alignSelectedShapes('bottom')"
+          matTooltip="Align Bottom"
+          aria-label="Align bottom"
+        >
+          <mat-icon>align_vertical_bottom</mat-icon>
+        </button>
+
+        @if (selectedShapeIds().size >= 3) {
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            (click)="distributeSelectedShapes('horizontal')"
+            matTooltip="Distribute Horizontally"
+            aria-label="Distribute horizontally"
+          >
+            <mat-icon>horizontal_distribute</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            (click)="distributeSelectedShapes('vertical')"
+            matTooltip="Distribute Vertically"
+            aria-label="Distribute vertically"
+          >
+            <mat-icon>vertical_distribute</mat-icon>
+          </button>
         }
       </div>
     }

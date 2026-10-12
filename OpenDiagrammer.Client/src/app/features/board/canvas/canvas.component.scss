@@ -85,6 +85,25 @@
   z-index: 1000;
 }
 
+// Alignment & Snapping Guides Layer
+.canvas-alignment-guides-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1002;
+}
+
+.alignment-guide-line {
+  stroke: var(--mat-sys-tertiary, #e91e63);
+  stroke-width: 1px;
+  stroke-dasharray: 4, 3;
+  pointer-events: none;
+}
+
 .connection-hit-area {
   fill: none;
   stroke: transparent;
@@ -214,8 +233,9 @@
   }
 }
 
-// Floating Contextual Connection Toolbar
-.connection-tools-dock {
+// Floating Contextual Docks (Connection Toolbar and Multi-Selection Alignment Dock)
+.connection-tools-dock,
+.selection-tools-dock {
   position: absolute;
   transform: translate(-50%, -100%);
   margin-top: -12px;

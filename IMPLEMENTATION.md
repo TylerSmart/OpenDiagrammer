@@ -45,7 +45,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
   - Segment midpoint drag handles to create and divert lines (straight & curved)
   - Orthogonal corner drag handles to shift corner positions and add steps
   - Waypoint deletion (double click handle or drag back in-line)
-- [ ] Implement node snapping, alignment, and fine adjustment (arrow keys)
+- [x] Implement node snapping, alignment, and fine adjustment (arrow keys)
 - [ ] Implement basic grouping and layer management (bring forward/backward)
 - [ ] Implement Copy/Paste within the board
 

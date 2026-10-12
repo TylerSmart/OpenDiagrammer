@@ -1345,4 +1345,180 @@ describe('CanvasComponent', () => {
       }
     });
   });
+
+  describe('Node Snapping, Alignment, and Fine Adjustment', () => {
+    it('should snap moving shape to another shape left and top edges within threshold and show guide lines', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      component.updateShape(s1.id, { x: 100, y: 100, width: 120, height: 80 });
+      const s2 = component.createShape('rectangle', { x: 360, y: 340 });
+      component.updateShape(s2.id, { x: 300, y: 300, width: 120, height: 80 });
+
+      component.clearSelection();
+      component.selectShape(s2.id);
+
+      // Start dragging s2 from (300, 300)
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 300 }),
+        s2,
+      );
+
+      // Move to (104, 103), which would place s2 at (104, 103) (within 8px of s1 at (100, 100))
+      component.handlePointerMove(new PointerEvent('pointermove', { clientX: 104, clientY: 103 }));
+
+      const movedS2 = component.shapes().find((s) => s.id === s2.id);
+      expect(movedS2?.x).toBe(100);
+      expect(movedS2?.y).toBe(100);
+
+      // Alignment guides should be emitted
+      const guides = component.alignmentGuides();
+      expect(guides.length).toBeGreaterThanOrEqual(2);
+      expect(guides.some((g) => g.type === 'vertical' && g.coordinate === 100)).toBe(true);
+      expect(guides.some((g) => g.type === 'horizontal' && g.coordinate === 100)).toBe(true);
+
+      // Pointer up clears guides
+      component.handlePointerUp(new PointerEvent('pointerup'));
+      expect(component.alignmentGuides().length).toBe(0);
+    });
+
+    it('should bypass snapping when Alt key is held during drag', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      component.updateShape(s1.id, { x: 100, y: 100, width: 120, height: 80 });
+      const s2 = component.createShape('rectangle', { x: 360, y: 340 });
+      component.updateShape(s2.id, { x: 300, y: 300, width: 120, height: 80 });
+
+      component.clearSelection();
+      component.selectShape(s2.id);
+
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 300 }),
+        s2,
+      );
+
+      // Move to (104, 103) with altKey: true
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: 104, clientY: 103, altKey: true }),
+      );
+
+      const movedS2 = component.shapes().find((s) => s.id === s2.id);
+      expect(movedS2?.x).toBe(104);
+      expect(movedS2?.y).toBe(103);
+      expect(component.alignmentGuides().length).toBe(0);
+    });
+
+    it('should perform fine adjustments using arrow keys (1px and 10px with Shift)', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      component.updateShape(s1.id, { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      // 1px right
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.x).toBe(101);
+
+      // 10px down with Shift
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowDown', shiftKey: true }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.y).toBe(110);
+
+      // 1px left
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowLeft' }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.x).toBe(100);
+
+      // 10px up with Shift
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.y).toBe(100);
+    });
+
+    it('should nudge connection waypoints along with shapes when nudging with arrow keys', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      component.updateShape(s1.id, { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 360, y: 140 });
+      component.updateShape(s2.id, { x: 300, y: 100 });
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+      component.updateConnection(conn.id, { waypoints: [{ x: 200, y: 150 }] });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight', shiftKey: true }));
+
+      expect(component.shapes().find((s) => s.id === s1.id)?.x).toBe(110);
+      expect(component.shapes().find((s) => s.id === s2.id)?.x).toBe(310);
+      const updatedConn = component.connections().find((c) => c.id === conn.id);
+      expect(updatedConn?.waypoints?.[0]).toEqual({ x: 210, y: 150 });
+    });
+
+    it('should align multiple selected shapes to left, center, right, top, middle, and bottom', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const s2 = component.createShape('rectangle', { x: 260, y: 190 });
+      const s3 = component.createShape('rectangle', { x: 360, y: 240 });
+
+      const resetShapes = () => {
+        component.updateShape(s1.id, { x: 100, y: 100, width: 100, height: 50 });
+        component.updateShape(s2.id, { x: 200, y: 150, width: 100, height: 50 });
+        component.updateShape(s3.id, { x: 300, y: 200, width: 100, height: 50 });
+      };
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+      component.selectShape(s3.id, true);
+
+      // Align Left -> all at x = 100
+      resetShapes();
+      component.alignSelectedShapes('left');
+      expect(component.shapes().map((s) => s.x)).toEqual([100, 100, 100]);
+
+      // Align Right -> all right edges at 400 (maxX), so x = 300
+      resetShapes();
+      component.alignSelectedShapes('right');
+      expect(component.shapes().map((s) => s.x)).toEqual([300, 300, 300]);
+
+      // Align Center -> centerX = (100 + 400) / 2 = 250, so x = 250 - 50 = 200
+      resetShapes();
+      component.alignSelectedShapes('center');
+      expect(component.shapes().map((s) => s.x)).toEqual([200, 200, 200]);
+
+      // Align Top -> all at y = 100
+      resetShapes();
+      component.alignSelectedShapes('top');
+      expect(component.shapes().map((s) => s.y)).toEqual([100, 100, 100]);
+
+      // Align Bottom -> maxY = 250, so y = 250 - 50 = 200
+      resetShapes();
+      component.alignSelectedShapes('bottom');
+      expect(component.shapes().map((s) => s.y)).toEqual([200, 200, 200]);
+
+      // Align Middle -> centerY = (100 + 250) / 2 = 175, so y = 175 - 25 = 150
+      resetShapes();
+      component.alignSelectedShapes('middle');
+      expect(component.shapes().map((s) => s.y)).toEqual([150, 150, 150]);
+    });
+
+    it('should evenly distribute shapes horizontally and vertically', () => {
+      const s1 = component.createShape('rectangle', { x: 60, y: 40 });
+      component.updateShape(s1.id, { x: 0, y: 0, width: 50, height: 40 });
+      const s2 = component.createShape('rectangle', { x: 140, y: 90 });
+      component.updateShape(s2.id, { x: 80, y: 50, width: 50, height: 40 });
+      const s3 = component.createShape('rectangle', { x: 360, y: 240 });
+      component.updateShape(s3.id, { x: 300, y: 200, width: 50, height: 40 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+      component.selectShape(s3.id, true);
+
+      // Horizontal distribute: span = 350 - 0 = 350, widths = 150, totalGap = 200, gap = 100.
+      // s1 at 0, s2 at 0 + 50 + 100 = 150, s3 at 300
+      component.distributeSelectedShapes('horizontal');
+      const xs = component.shapes().map((s) => s.x);
+      expect(xs).toEqual([0, 150, 300]);
+
+      // Vertical distribute: span = 240 - 0 = 240, heights = 120, totalGap = 120, gap = 60.
+      // s1 at 0, s2 at 0 + 40 + 60 = 100, s3 at 200
+      component.distributeSelectedShapes('vertical');
+      const ys = component.shapes().map((s) => s.y);
+      expect(ys).toEqual([0, 100, 200]);
+    });
+  });
 });

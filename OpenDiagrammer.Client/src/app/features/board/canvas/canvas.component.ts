@@ -19,11 +19,13 @@ import {
 } from './connection.models';
 import {
   ActiveTool,
+  AlignmentGuide,
   BoundingBox,
   CanvasShape,
   ResizeHandlePosition,
   SHAPE_CONSTANTS,
   ShapeType,
+  computeShapeMovementSnapping,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -99,6 +101,10 @@ export class CanvasComponent {
   readonly marqueeBox = signal<BoundingBox | null>(null);
   private marqueeStart: CanvasPoint | null = null;
 
+  // Alignment & Snapping state
+  readonly alignmentGuides = signal<AlignmentGuide[]>([]);
+  private initialMovingBounds: BoundingBox | null = null;
+
   // Node movement state
   private isMovingShapes = false;
   private moveStartPoint: CanvasPoint | null = null;
@@ -144,6 +150,18 @@ export class CanvasComponent {
       maxY,
       width: maxX - minX,
       height: maxY - minY,
+    };
+  });
+
+  // Multi-selection Alignment Toolbar position
+  readonly selectionToolbarPos = computed<{ x: number; y: number } | null>(() => {
+    const box = this.selectionBox();
+    if (!box || this.selectedShapeIds().size < 2) {
+      return null;
+    }
+    return {
+      x: box.minX + box.width / 2,
+      y: box.minY - 14,
     };
   });
 
@@ -766,6 +784,10 @@ export class CanvasComponent {
     return newShape;
   }
 
+  updateShape(id: string, partial: Partial<CanvasShape>): void {
+    this.shapes.update((list) => list.map((s) => (s.id === id ? { ...s, ...partial } : s)));
+  }
+
   deleteSelectedShapes(): void {
     const selected = this.selectedShapeIds();
     const selectedConns = this.selectedConnectionIds();
@@ -1204,20 +1226,32 @@ export class CanvasComponent {
     this.shapeInitialPositions.clear();
 
     const selectedIds = this.selectedShapeIds();
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
     for (const s of this.shapes()) {
       if (selectedIds.has(s.id)) {
         this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+        minX = Math.min(minX, s.x);
+        minY = Math.min(minY, s.y);
+        maxX = Math.max(maxX, s.x + s.width);
+        maxY = Math.max(maxY, s.y + s.height);
       }
     }
+    this.initialMovingBounds =
+      isFinite(minX) && isFinite(minY)
+        ? { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
+        : null;
 
     this.connectionInitialWaypoints.clear();
     for (const c of this.connections()) {
-      if (
-        c.targetShapeId &&
-        c.sourceShapeId === c.targetShapeId &&
-        selectedIds.has(c.sourceShapeId) &&
-        c.waypoints?.length
-      ) {
+      const isSelfLoop =
+        c.targetShapeId && c.sourceShapeId === c.targetShapeId && selectedIds.has(c.sourceShapeId);
+      const isBothEndpoints =
+        c.targetShapeId && selectedIds.has(c.sourceShapeId) && selectedIds.has(c.targetShapeId);
+
+      if ((isSelfLoop || isBothEndpoints) && c.waypoints?.length) {
         this.connectionInitialWaypoints.set(
           c.id,
           c.waypoints.map((p) => ({ ...p })),
@@ -1715,8 +1749,36 @@ export class CanvasComponent {
 
     // Moving shapes
     if (this.isMovingShapes && this.moveStartPoint) {
-      const deltaX = currentWorld.x - this.moveStartPoint.x;
-      const deltaY = currentWorld.y - this.moveStartPoint.y;
+      const rawDeltaX = currentWorld.x - this.moveStartPoint.x;
+      const rawDeltaY = currentWorld.y - this.moveStartPoint.y;
+
+      let deltaX = rawDeltaX;
+      let deltaY = rawDeltaY;
+
+      if (this.initialMovingBounds && !event.altKey) {
+        const selectedIds = this.selectedShapeIds();
+        const otherShapes = this.shapes().filter((s) => !selectedIds.has(s.id));
+        const gridSize =
+          this.backgroundType() === BoardBackgroundType.GridLines
+            ? CANVAS_CONSTANTS.GRID_SIZE
+            : this.backgroundType() === BoardBackgroundType.GridDots
+              ? CANVAS_CONSTANTS.DOT_GRID_SIZE
+              : undefined;
+
+        const snap = computeShapeMovementSnapping(
+          this.initialMovingBounds,
+          otherShapes,
+          rawDeltaX,
+          rawDeltaY,
+          8,
+          gridSize,
+        );
+        deltaX = snap.snappedDeltaX;
+        deltaY = snap.snappedDeltaY;
+        this.alignmentGuides.set(snap.guides);
+      } else {
+        this.alignmentGuides.set([]);
+      }
 
       this.shapes.update((list) =>
         list.map((shape) => {
@@ -1912,6 +1974,8 @@ export class CanvasComponent {
     if (this.isMovingShapes) {
       this.isMovingShapes = false;
       this.moveStartPoint = null;
+      this.initialMovingBounds = null;
+      this.alignmentGuides.set([]);
       this.shapeInitialPositions.clear();
       this.connectionInitialWaypoints.clear();
     }
@@ -2149,11 +2213,153 @@ export class CanvasComponent {
     }
   }
 
-  private nudgeSelectedShapes(deltaX: number, deltaY: number): void {
+  nudgeSelectedShapes(deltaX: number, deltaY: number): void {
     const selected = this.selectedShapeIds();
     this.shapes.update((list) =>
       list.map((s) => (selected.has(s.id) ? { ...s, x: s.x + deltaX, y: s.y + deltaY } : s)),
     );
+
+    this.connections.update((list) =>
+      list.map((c) => {
+        const isSelfLoop =
+          c.targetShapeId && c.sourceShapeId === c.targetShapeId && selected.has(c.sourceShapeId);
+        const isBothEndpoints =
+          c.targetShapeId && selected.has(c.sourceShapeId) && selected.has(c.targetShapeId);
+
+        if ((isSelfLoop || isBothEndpoints) && c.waypoints?.length) {
+          return {
+            ...c,
+            waypoints: c.waypoints.map((p) => ({
+              x: Math.round(p.x + deltaX),
+              y: Math.round(p.y + deltaY),
+            })),
+          };
+        }
+        return c;
+      }),
+    );
+  }
+
+  alignSelectedShapes(alignment: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
+    const selected = this.selectedShapeIds();
+    if (selected.size < 2) {
+      return;
+    }
+
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    if (selectedShapes.length < 2) {
+      return;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const s of selectedShapes) {
+      minX = Math.min(minX, s.x);
+      minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.width);
+      maxY = Math.max(maxY, s.y + s.height);
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+
+    this.shapes.update((list) =>
+      list.map((s) => {
+        if (!selected.has(s.id)) {
+          return s;
+        }
+        let newX = s.x;
+        let newY = s.y;
+
+        switch (alignment) {
+          case 'left':
+            newX = minX;
+            break;
+          case 'center':
+            newX = Math.round(centerX - s.width / 2);
+            break;
+          case 'right':
+            newX = maxX - s.width;
+            break;
+          case 'top':
+            newY = minY;
+            break;
+          case 'middle':
+            newY = Math.round(centerY - s.height / 2);
+            break;
+          case 'bottom':
+            newY = maxY - s.height;
+            break;
+        }
+
+        return { ...s, x: newX, y: newY };
+      }),
+    );
+  }
+
+  distributeSelectedShapes(direction: 'horizontal' | 'vertical'): void {
+    const selected = this.selectedShapeIds();
+    if (selected.size < 3) {
+      return;
+    }
+
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    if (selectedShapes.length < 3) {
+      return;
+    }
+
+    if (direction === 'horizontal') {
+      const sorted = [...selectedShapes].sort((a, b) => a.x - b.x);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const totalSpan = last.x + last.width - first.x;
+      const totalWidths = sorted.reduce((sum, s) => sum + s.width, 0);
+      const totalGap = totalSpan - totalWidths;
+      const gap = totalGap / (sorted.length - 1);
+
+      let currentX = first.x;
+      const newXMap = new Map<string, number>();
+      for (const s of sorted) {
+        newXMap.set(s.id, Math.round(currentX));
+        currentX += s.width + gap;
+      }
+
+      this.shapes.update((list) =>
+        list.map((s) => {
+          if (newXMap.has(s.id)) {
+            return { ...s, x: newXMap.get(s.id)! };
+          }
+          return s;
+        }),
+      );
+    } else {
+      const sorted = [...selectedShapes].sort((a, b) => a.y - b.y);
+      const first = sorted[0];
+      const last = sorted[sorted.length - 1];
+      const totalSpan = last.y + last.height - first.y;
+      const totalHeights = sorted.reduce((sum, s) => sum + s.height, 0);
+      const totalGap = totalSpan - totalHeights;
+      const gap = totalGap / (sorted.length - 1);
+
+      let currentY = first.y;
+      const newYMap = new Map<string, number>();
+      for (const s of sorted) {
+        newYMap.set(s.id, Math.round(currentY));
+        currentY += s.height + gap;
+      }
+
+      this.shapes.update((list) =>
+        list.map((s) => {
+          if (newYMap.has(s.id)) {
+            return { ...s, y: newYMap.get(s.id)! };
+          }
+          return s;
+        }),
+      );
+    }
   }
 
   handleKeyUp(event: KeyboardEvent): void {
@@ -2164,6 +2370,7 @@ export class CanvasComponent {
 
   handleBlur(): void {
     this.isSpacePressed = false;
+    this.alignmentGuides.set([]);
   }
 
   private emitTransformChange(): void {
