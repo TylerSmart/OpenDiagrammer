@@ -178,6 +178,9 @@ export interface BoardMembersDialogData {
     </mat-dialog-actions>
   `,
   styles: `
+    :host {
+      display: block;
+    }
     .dialog-title {
       display: flex;
       align-items: center;
@@ -185,8 +188,8 @@ export interface BoardMembersDialogData {
     }
     .add-member-section,
     .members-list-section {
-      min-width: 320px;
-      max-width: 560px;
+      width: 100%;
+      box-sizing: border-box;
 
       h3 {
         margin: 0 0 0.75rem;

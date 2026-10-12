@@ -113,6 +113,9 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
     </mat-dialog-actions>
   `,
   styles: `
+    :host {
+      display: block;
+    }
     .dialog-title {
       display: flex;
       align-items: center;
@@ -122,8 +125,8 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
       display: flex;
       flex-direction: column;
       gap: 0.25rem;
-      min-width: 320px;
-      max-width: 500px;
+      width: 100%;
+      box-sizing: border-box;
       padding-top: 0.5rem;
     }
     .full-width {
@@ -132,9 +135,12 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
     .row {
       display: flex;
       gap: 1rem;
+      width: 100%;
+      box-sizing: border-box;
     }
     .half-width {
       flex: 1;
+      min-width: 0;
     }
     .color-picker-input {
       padding: 0;
@@ -145,6 +151,8 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
       display: flex;
       flex-direction: column;
       margin-bottom: 0.5rem;
+      width: 100%;
+      box-sizing: border-box;
     }
     .slider-label {
       font-size: 0.875rem;
