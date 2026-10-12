@@ -769,4 +769,24 @@ describe('CanvasComponent', () => {
     const updatedPoints = updated!.points;
     expect(updatedPoints.some((p) => p.y === 220)).toBe(true);
   });
+
+  it('should enforce minimum outward clearance length before turning on orthogonal connections', () => {
+    // s1 at (100, 100), s2 placed below and to the right at (200, 300)
+    // Connect from s1 right anchor to s2 top anchor
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 200, y: 300 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'top');
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(rendered).toBeDefined();
+
+    // s1 center (100, 100), width 120 -> right anchor x = 160, y = 100
+    // Line must travel rightwards by at least 20px stub before making any vertical turn
+    const pts = rendered!.points;
+    expect(pts[0].x).toBe(160);
+    expect(pts[0].y).toBe(100);
+    // Next point must be at x >= 180 (160 + 20) with y = 100, coming straight out of the right side
+    expect(pts[1].x).toBeGreaterThanOrEqual(180);
+    expect(pts[1].y).toBe(100);
+  });
 });

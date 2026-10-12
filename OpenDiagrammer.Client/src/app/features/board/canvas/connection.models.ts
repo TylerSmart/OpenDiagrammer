@@ -193,8 +193,8 @@ export function computeConnectionPath(
   let points: CanvasPoint[];
 
   if (waypoints && waypoints.length > 0) {
-    // If explicit waypoints are defined, route orthogonally through them
-    const allPts = [start, ...waypoints, end];
+    // If explicit waypoints are defined, route orthogonally with initial stubs
+    const allPts = [start, pStartStub, ...waypoints, pEndStub, end];
     points = [start];
     for (let i = 1; i < allPts.length; i++) {
       const pPrev = allPts[i - 1];
@@ -202,7 +202,7 @@ export function computeConnectionPath(
       if (!pPrev || !pCurr) continue;
       // If segment is diagonal, make an orthogonal step between them
       if (Math.abs(pPrev.x - pCurr.x) > 1 && Math.abs(pPrev.y - pCurr.y) > 1) {
-        // Step horizontally then vertically or vice versa
+        // Step according to dominant direction or anchor orientation
         const midX = (pPrev.x + pCurr.x) / 2;
         points.push({ x: midX, y: pPrev.y });
         points.push({ x: midX, y: pCurr.y });
@@ -228,21 +228,45 @@ export function computeConnectionPath(
     }
   } else if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
     if (targetAnchor === 'top' || targetAnchor === 'bottom') {
-      // Both vertical
-      const midY = (pStartStub.y + pEndStub.y) / 2;
-      points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
+      // Both vertical (e.g. top to bottom or bottom to top)
+      const isOpposite =
+        (sourceAnchor === 'bottom' && targetAnchor === 'top' && end.y >= start.y + 2 * STUB) ||
+        (sourceAnchor === 'top' && targetAnchor === 'bottom' && start.y >= end.y + 2 * STUB);
+
+      if (isOpposite) {
+        // Direct vertical step between anchors with clearance
+        const midY = (start.y + end.y) / 2;
+        points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
+      } else {
+        // Target is behind or overlapping: step out through stubs then around
+        const midY = (pStartStub.y + pEndStub.y) / 2;
+        points = [start, pStartStub, { x: start.x, y: midY }, { x: end.x, y: midY }, pEndStub, end];
+      }
     } else {
       // Source is vertical, target is horizontal or unassigned
-      points = [start, { x: start.x, y: end.y }, end];
+      // Must come straight out of sourceAnchor by at least STUB length
+      points = [start, pStartStub, { x: start.x, y: end.y }, end];
     }
   } else if (sourceAnchor === 'left' || sourceAnchor === 'right') {
     if (targetAnchor === 'left' || targetAnchor === 'right') {
-      // Both horizontal
-      const midX = (pStartStub.x + pEndStub.x) / 2;
-      points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+      // Both horizontal (e.g. right to left or left to right)
+      const isOpposite =
+        (sourceAnchor === 'right' && targetAnchor === 'left' && end.x >= start.x + 2 * STUB) ||
+        (sourceAnchor === 'left' && targetAnchor === 'right' && start.x >= end.x + 2 * STUB);
+
+      if (isOpposite) {
+        // Direct horizontal step between anchors with clearance
+        const midX = (start.x + end.x) / 2;
+        points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+      } else {
+        // Target is behind or overlapping: step out through stubs then around
+        const midX = (pStartStub.x + pEndStub.x) / 2;
+        points = [start, pStartStub, { x: midX, y: start.y }, { x: midX, y: end.y }, pEndStub, end];
+      }
     } else {
       // Source is horizontal, target is vertical or unassigned
-      points = [start, { x: end.x, y: start.y }, end];
+      // Must come straight out of sourceAnchor by at least STUB length
+      points = [start, pStartStub, { x: end.x, y: start.y }, end];
     }
   } else {
     // Default midpoint step
