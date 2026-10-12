@@ -1,4 +1,5 @@
 import { HttpErrorResponse } from '@angular/common/http';
+import { NgOptimizedImage } from '@angular/common';
 import { Component, OnInit, computed, inject, signal } from '@angular/core';
 import {
   AbstractControl,
@@ -56,6 +57,7 @@ const passwordMatchValidator: ValidatorFn = (control: AbstractControl): Validati
     MatMenuModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
+    NgOptimizedImage,
   ],
   selector: 'app-login',
   styleUrl: './login.component.scss',
@@ -213,6 +215,17 @@ export class LoginComponent implements OnInit {
       return 'code';
     }
     return 'login';
+  }
+
+  protected getProviderSvg(provider: AuthProviderDto): string | null {
+    const name = provider.name.toLowerCase();
+    if (name.includes('google')) {
+      return 'icons/google.svg';
+    }
+    if (name.includes('microsoft')) {
+      return 'icons/microsoft.svg';
+    }
+    return null;
   }
 
   private buildAuthorizationUrl(provider: AuthProviderDto): string | null {

@@ -280,10 +280,22 @@
             <button
               mat-stroked-button
               type="button"
+              class="provider-btn"
               (click)="onExternalLogin(provider)"
               [disabled]="authService.isLoading() || isProcessingOAuth()"
             >
-              <mat-icon>{{ getProviderIcon(provider) }}</mat-icon>
+              @if (getProviderSvg(provider); as svgPath) {
+                <img
+                  [ngSrc]="svgPath"
+                  width="20"
+                  height="20"
+                  alt=""
+                  aria-hidden="true"
+                  class="provider-icon"
+                />
+              } @else {
+                <mat-icon aria-hidden="true">{{ getProviderIcon(provider) }}</mat-icon>
+              }
               <span>Sign in with {{ provider.name }}</span>
             </button>
           }

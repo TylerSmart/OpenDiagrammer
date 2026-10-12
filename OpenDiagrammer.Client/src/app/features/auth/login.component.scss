@@ -2,7 +2,7 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--mat-sys-surface);
+  // background-color: var(--mat-sys-surface);
 }
 
 .auth-header {
@@ -148,7 +148,16 @@
   flex-direction: column;
   gap: 0.5rem;
 
-  button {
+  .provider-btn {
     width: 100%;
+
+    .provider-icon {
+      width: 20px;
+      height: 20px;
+      margin-right: 8px;
+      vertical-align: middle;
+      display: inline-block;
+      flex-shrink: 0;
+    }
   }
 }

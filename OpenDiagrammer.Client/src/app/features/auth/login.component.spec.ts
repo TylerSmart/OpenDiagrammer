@@ -273,4 +273,16 @@ describe('LoginComponent', () => {
     expect(component['errorMessage']()).toBe('Invalid authorization code');
     expect(component['isProcessingOAuth']()).toBe(false);
   });
+
+  it('should return SVG icon path for Google and Microsoft', () => {
+    expect(component['getProviderSvg']({ id: 'google', name: 'Google', isExternal: true })).toBe(
+      'icons/google.svg',
+    );
+    expect(
+      component['getProviderSvg']({ id: 'ms', name: 'Microsoft Entra', isExternal: true }),
+    ).toBe('icons/microsoft.svg');
+    expect(
+      component['getProviderSvg']({ id: 'custom', name: 'Custom OIDC', isExternal: true }),
+    ).toBeNull();
+  });
 });
