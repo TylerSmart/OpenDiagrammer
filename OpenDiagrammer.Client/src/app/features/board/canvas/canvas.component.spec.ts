@@ -673,17 +673,44 @@ describe('CanvasComponent', () => {
     expect(component.connections()[0].strokeWidth).toBe(4);
   });
 
-  it('should support connection text labels and editing', () => {
+  it('should support connection text labels and editing and automatically focus the input', async () => {
     const s1 = component.createShape('rectangle', { x: 100, y: 100 });
     const s2 = component.createShape('rectangle', { x: 400, y: 100 });
     const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
 
     component.startEditingConnectionText(conn.id);
     expect(component.editingConnectionId()).toBe(conn.id);
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const inputEl = fixture.nativeElement.querySelector(
+      '.connection-text-editor input',
+    ) as HTMLInputElement;
+    expect(inputEl).not.toBeNull();
+    expect(document.activeElement).toBe(inputEl);
 
     component.finishEditingConnectionText(conn.id, 'Connects Service A to B');
     expect(component.editingConnectionId()).toBeNull();
     expect(component.connections()[0].text).toBe('Connects Service A to B');
+  });
+
+  it('should focus the text input when connector is double clicked', async () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+    fixture.detectChanges();
+
+    const pathEl = fixture.nativeElement.querySelector('.connection-path') as SVGPathElement;
+    pathEl?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    expect(component.editingConnectionId()).toBe(conn.id);
+    const inputEl = fixture.nativeElement.querySelector(
+      '.connection-text-editor input',
+    ) as HTMLInputElement;
+    expect(inputEl).not.toBeNull();
+    expect(document.activeElement).toBe(inputEl);
   });
 
   it('should insert, drag, and remove waypoints on selected connection', () => {

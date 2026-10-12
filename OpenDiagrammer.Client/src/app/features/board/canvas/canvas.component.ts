@@ -1,4 +1,14 @@
-import { Component, ElementRef, computed, inject, input, output, signal } from '@angular/core';
+import {
+  Component,
+  ElementRef,
+  computed,
+  effect,
+  inject,
+  input,
+  output,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
@@ -566,7 +576,15 @@ export class CanvasComponent {
   }
 
   startEditingConnectionText(connId: string): void {
+    this.selectConnection(connId);
     this.editingConnectionId.set(connId);
+    queueMicrotask(() => {
+      const inputEl = this.connTextInput()?.nativeElement;
+      if (inputEl) {
+        inputEl.focus();
+        inputEl.select();
+      }
+    });
   }
 
   finishEditingConnectionText(connId: string, text: string): void {
@@ -597,6 +615,18 @@ export class CanvasComponent {
   // View child references
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly fullscreenService = inject(FullscreenService);
+  readonly connTextInput = viewChild<ElementRef<HTMLInputElement>>('textInput');
+
+  constructor() {
+    effect(() => {
+      const editId = this.editingConnectionId();
+      const inputRef = this.connTextInput();
+      if (editId && inputRef) {
+        inputRef.nativeElement.focus();
+        inputRef.nativeElement.select();
+      }
+    });
+  }
 
   // Computed zoom percentage formatted string
   readonly zoomPercentage = computed(() => `${Math.round(this.zoom() * 100)}%`);

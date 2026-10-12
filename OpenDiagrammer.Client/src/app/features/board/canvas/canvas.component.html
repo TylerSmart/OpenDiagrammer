@@ -98,6 +98,7 @@
               <g
                 class="connection-label-group"
                 [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+                (pointerdown)="handleConnectionPointerDown($event, conn.id)"
                 (dblclick)="startEditingConnectionText(conn.id)"
               >
                 <rect
