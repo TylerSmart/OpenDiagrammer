@@ -882,9 +882,9 @@ export class CanvasComponent {
     } else {
       current.clear();
       idsToSelect.forEach((item) => current.add(item));
+      this.selectedConnectionIds.set(new Set<string>());
     }
     this.selectedShapeIds.set(current);
-    this.selectedConnectionIds.set(new Set<string>());
   }
 
   createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
@@ -1302,9 +1302,9 @@ export class CanvasComponent {
     } else {
       current.clear();
       current.add(id);
+      this.selectedShapeIds.set(new Set<string>());
     }
     this.selectedConnectionIds.set(current);
-    this.selectedShapeIds.set(new Set<string>());
   }
 
   createConnection(
@@ -1342,7 +1342,8 @@ export class CanvasComponent {
       return;
     }
     event.stopPropagation();
-    this.selectConnection(connId, event.shiftKey);
+    const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+    this.selectConnection(connId, isMultiSelect);
   }
 
   handleEndpointPointerDown(
@@ -1690,9 +1691,10 @@ export class CanvasComponent {
       return;
     }
 
+    const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
     if (!this.isShapeSelected(shape.id)) {
-      this.selectShape(shape.id, event.shiftKey);
-    } else if (event.shiftKey) {
+      this.selectShape(shape.id, isMultiSelect);
+    } else if (isMultiSelect) {
       this.selectShape(shape.id, true);
       return;
     }
@@ -1853,7 +1855,7 @@ export class CanvasComponent {
         return;
       }
 
-      if (!event.shiftKey) {
+      if (!event.shiftKey && !event.ctrlKey && !event.metaKey) {
         this.clearSelection();
       }
 
@@ -2496,7 +2498,8 @@ export class CanvasComponent {
     if (this.marqueeStart) {
       const box = this.marqueeBox();
       if (box && box.width > 2 && box.height > 2) {
-        const matchingIds = new Set<string>(event.shiftKey ? this.selectedShapeIds() : []);
+        const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+        const matchingIds = new Set<string>(isMultiSelect ? this.selectedShapeIds() : []);
         for (const shape of this.shapes()) {
           const intersects =
             shape.x < box.maxX &&

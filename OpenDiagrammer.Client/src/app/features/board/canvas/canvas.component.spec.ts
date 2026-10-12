@@ -2141,4 +2141,156 @@ describe('CanvasComponent', () => {
       expect(labelText.getAttribute('fill')).toBe('var(--canvas-color-purple-stroke)');
     });
   });
+
+  describe('Control / Command Key Multi-Selection', () => {
+    it('should select multiple shapes when clicking with ctrlKey held', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const s3 = component.createShape('ellipse', { x: 500, y: 100 });
+
+      // Click s1 normally
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }),
+        s1,
+      );
+      expect(component.selectedShapeIds().size).toBe(1);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+
+      // Ctrl + Click s2
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 100, ctrlKey: true }),
+        s2,
+      );
+      expect(component.selectedShapeIds().size).toBe(2);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(true);
+
+      // Ctrl + Click s3
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 500, clientY: 100, ctrlKey: true }),
+        s3,
+      );
+      expect(component.selectedShapeIds().size).toBe(3);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(true);
+      expect(component.isShapeSelected(s3.id)).toBe(true);
+
+      // Ctrl + Click s2 again to toggle/deselect it
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 100, ctrlKey: true }),
+        s2,
+      );
+      expect(component.selectedShapeIds().size).toBe(2);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(false);
+      expect(component.isShapeSelected(s3.id)).toBe(true);
+    });
+
+    it('should select multiple shapes when clicking with metaKey (Command on Mac) held', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }),
+        s1,
+      );
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 100, metaKey: true }),
+        s2,
+      );
+
+      expect(component.selectedShapeIds().size).toBe(2);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(true);
+    });
+
+    it('should select multiple connections when clicking with ctrlKey held', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const s3 = component.createShape('rectangle', { x: 500, y: 100 });
+
+      const c1 = component.createConnection(s1.id, 'right', s2.id, 'left');
+      const c2 = component.createConnection(s2.id, 'right', s3.id, 'left');
+
+      component.handleConnectionPointerDown(new PointerEvent('pointerdown', { button: 0 }), c1.id);
+      expect(component.selectedConnectionIds().size).toBe(1);
+      expect(component.isConnectionSelected(c1.id)).toBe(true);
+
+      component.handleConnectionPointerDown(
+        new PointerEvent('pointerdown', { button: 0, ctrlKey: true }),
+        c2.id,
+      );
+      expect(component.selectedConnectionIds().size).toBe(2);
+      expect(component.isConnectionSelected(c1.id)).toBe(true);
+      expect(component.isConnectionSelected(c2.id)).toBe(true);
+
+      // Ctrl + Click c1 again to toggle/deselect it
+      component.handleConnectionPointerDown(
+        new PointerEvent('pointerdown', { button: 0, ctrlKey: true }),
+        c1.id,
+      );
+      expect(component.selectedConnectionIds().size).toBe(1);
+      expect(component.isConnectionSelected(c1.id)).toBe(false);
+      expect(component.isConnectionSelected(c2.id)).toBe(true);
+    });
+
+    it('should preserve shape and connection selections when multi-selecting with Ctrl', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const c1 = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+      // Click shape s1
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100 }),
+        s1,
+      );
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+
+      // Ctrl + Click connector c1
+      component.handleConnectionPointerDown(
+        new PointerEvent('pointerdown', { button: 0, ctrlKey: true }),
+        c1.id,
+      );
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isConnectionSelected(c1.id)).toBe(true);
+
+      // Delete should delete both selected shape and connection
+      component.deleteSelectedShapes();
+      expect(component.shapes().find((s) => s.id === s1.id)).toBeUndefined();
+      expect(component.connections().find((c) => c.id === c1.id)).toBeUndefined();
+    });
+
+    it('should preserve existing selection during marquee drag when ctrlKey is held', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 500, y: 500 });
+
+      // Select s1 first
+      component.selectShape(s1.id);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+
+      // Marquee drag over s2 with ctrlKey held
+      const startPt = component.worldToScreen({ x: 450, y: 450 });
+      component.handlePointerDown(
+        new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: startPt.x,
+          clientY: startPt.y,
+          ctrlKey: true,
+        }),
+      );
+
+      const movePt = component.worldToScreen({ x: 650, y: 650 });
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: movePt.x, clientY: movePt.y, ctrlKey: true }),
+      );
+
+      component.handlePointerUp(
+        new PointerEvent('pointerup', { clientX: movePt.x, clientY: movePt.y, ctrlKey: true }),
+      );
+
+      // Both s1 (previously selected) and s2 (enclosed by marquee) should be selected
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(true);
+    });
+  });
 });
