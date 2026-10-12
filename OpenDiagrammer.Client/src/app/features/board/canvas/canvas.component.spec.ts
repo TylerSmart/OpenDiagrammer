@@ -244,7 +244,7 @@ describe('CanvasComponent', () => {
     expect(zoomedInSize).toBeLessThanOrEqual(72);
   });
 
-  it('should create and select shapes using tools', () => {
+  it('should create and select shapes using tools while retaining active tool until returning to select', () => {
     component.setActiveTool('rectangle');
     expect(component.activeTool()).toBe('rectangle');
 
@@ -252,13 +252,32 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(1);
     expect(shape.type).toBe('rectangle');
     expect(component.isShapeSelected(shape.id)).toBe(true);
-    expect(component.activeTool()).toBe('select');
+    // Tool remains active!
+    expect(component.activeTool()).toBe('rectangle');
 
     // Selection bounding box should match shape bounds
     const box = component.selectionBox();
     expect(box).not.toBeNull();
     expect(box?.minX).toBe(shape.x);
     expect(box?.minY).toBe(shape.y);
+
+    // Creating another shape still keeps the tool active
+    const shape2 = component.createShape('rectangle', { x: 400, y: 150 });
+    expect(shape2.type).toBe('rectangle');
+    expect(component.shapes().length).toBe(2);
+    expect(component.activeTool()).toBe('rectangle');
+
+    // Clicking on an existing shape with shape tool creates a new shape at click location
+    component.handleShapePointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: 200, clientY: 150 }),
+      shape,
+    );
+    expect(component.shapes().length).toBe(3);
+    expect(component.activeTool()).toBe('rectangle');
+
+    // Returns to select tool when user explicitly chooses select
+    component.setActiveTool('select');
+    expect(component.activeTool()).toBe('select');
   });
 
   it('should select multiple shapes and clear selection', () => {
@@ -550,6 +569,10 @@ describe('CanvasComponent', () => {
 
     expect(component.inProgressConnection()).toBeNull();
     expect(component.connections().length).toBe(1);
+    expect(component.activeTool()).toBe('connection');
+
+    // User can manually return to select tool
+    component.setActiveTool('select');
     expect(component.activeTool()).toBe('select');
   });
 

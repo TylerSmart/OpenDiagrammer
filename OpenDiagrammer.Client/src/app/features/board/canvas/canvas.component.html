@@ -2,6 +2,7 @@
   class="canvas-viewport-area"
   [class.is-panning]="isPanning()"
   [class.is-space-pressed]="isSpacePressed"
+  [class.is-creation-tool]="activeTool() !== 'select'"
 >
   <!-- Infinite Grid/Dot background layer -->
   <div

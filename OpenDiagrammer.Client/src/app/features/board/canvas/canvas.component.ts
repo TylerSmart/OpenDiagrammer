@@ -802,7 +802,6 @@ export class CanvasComponent {
 
     this.shapes.update((list) => [...list, newShape]);
     this.selectShape(newShape.id);
-    this.activeTool.set('select');
     return newShape;
   }
 
@@ -1346,7 +1345,6 @@ export class CanvasComponent {
         );
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
-        this.activeTool.set('select');
         return;
       } else {
         // Clicked exact same shape handle: cannot loop on the same connector handle
@@ -1437,7 +1435,6 @@ export class CanvasComponent {
         this.createConnection(inProg.sourceShapeId, inProg.sourceAnchor, shape.id, targetAnchor);
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
-        this.activeTool.set('select');
         return;
       } else {
         // Clicked the same shape: select nearest anchor that is not the starting anchor
@@ -1458,7 +1455,6 @@ export class CanvasComponent {
         this.createConnection(inProg.sourceShapeId, inProg.sourceAnchor, shape.id, bestAnchor);
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
-        this.activeTool.set('select');
         return;
       }
     }
@@ -1478,6 +1474,12 @@ export class CanvasComponent {
         }
       }
       this.handleAnchorPointerDown({ event, shape, anchor: bestAnchor });
+      return;
+    }
+
+    if (this.activeTool() !== 'select') {
+      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      this.createShape(this.activeTool() as ShapeType, worldPoint);
       return;
     }
 
@@ -1535,7 +1537,7 @@ export class CanvasComponent {
 
   // Pointer event handlers on resize handles
   handleResizePointerDown(event: PointerEvent, handle: ResizeHandlePosition): void {
-    if (event.button !== 0) {
+    if (event.button !== 0 || this.activeTool() !== 'select') {
       return;
     }
 
@@ -1615,7 +1617,6 @@ export class CanvasComponent {
         );
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
-        this.activeTool.set('select');
         return;
       }
 
@@ -2171,7 +2172,6 @@ export class CanvasComponent {
         }
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
-        this.activeTool.set('select');
       }
       // If dragDistance <= 5px, it was a click to start! Keep inProgressConnection active
       // so user can click a target anchor or shape to complete the connection.
