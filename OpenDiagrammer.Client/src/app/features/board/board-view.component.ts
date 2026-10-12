@@ -18,6 +18,7 @@ import {
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeMode, ThemeService } from '../../core/services/theme/theme.service';
+import { CanvasComponent } from './canvas/canvas.component';
 import {
   BoardMembersDialogComponent,
   BoardMembersDialogData,
@@ -47,6 +48,7 @@ const THEME_LABELS: Record<ThemeMode, string> = {
     MatMenuModule,
     MatTooltipModule,
     MatProgressSpinnerModule,
+    CanvasComponent,
   ],
   selector: 'app-board-view',
   styleUrl: './board-view.component.scss',

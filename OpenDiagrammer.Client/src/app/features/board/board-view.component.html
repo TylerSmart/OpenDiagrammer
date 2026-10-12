@@ -97,26 +97,20 @@
 
     <!-- Canvas Viewport -->
     <main class="canvas-viewport">
-      <div
-        class="canvas-background"
-        [class.bg-grid-lines]="currentBoard.backgroundType === BoardBackgroundType.GridLines"
-        [class.bg-grid-dots]="currentBoard.backgroundType === BoardBackgroundType.GridDots"
-        [style.backgroundColor]="currentBoard.backgroundColor || 'transparent'"
-        [style.opacity]="currentBoard.backgroundOpacity"
-        aria-hidden="true"
-      ></div>
-
-      <div class="canvas-placeholder-card">
-        <mat-icon aria-hidden="true">draw</mat-icon>
-        <h2>{{ currentBoard.name }}</h2>
-        <p>
-          {{ currentBoard.description || 'Welcome to your diagramming board!' }}
-        </p>
-        <div class="canvas-status">
-          <mat-icon>info</mat-icon>
-          <span>Canvas diagramming & tools will be enabled in Phase 4</span>
+      <app-canvas
+        [backgroundType]="currentBoard.backgroundType"
+        [backgroundColor]="currentBoard.backgroundColor"
+        [backgroundOpacity]="currentBoard.backgroundOpacity"
+      >
+        <!-- Canvas Content (Nodes & Connections in future Phase 4 tasks) -->
+        <div class="canvas-center-welcome" aria-hidden="true">
+          <div class="welcome-card">
+            <mat-icon>draw</mat-icon>
+            <h2>{{ currentBoard.name }}</h2>
+            <p>{{ currentBoard.description || 'Welcome to your diagramming board!' }}</p>
+          </div>
         </div>
-      </div>
+      </app-canvas>
     </main>
   </div>
 }

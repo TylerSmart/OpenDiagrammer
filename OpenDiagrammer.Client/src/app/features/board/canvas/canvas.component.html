@@ -1,0 +1,63 @@
+<div class="canvas-viewport-area" [class.is-panning]="isPanning()">
+  <!-- Infinite Grid/Dot background layer -->
+  <div
+    class="canvas-grid-layer"
+    [class.bg-grid-lines]="isGridLines()"
+    [class.bg-grid-dots]="isGridDots()"
+    [style.backgroundColor]="backgroundStyles().backgroundColor"
+    [style.opacity]="backgroundStyles().opacity"
+    [style.backgroundPosition]="backgroundStyles().backgroundPosition"
+    [style.backgroundSize]="backgroundStyles().backgroundSize || ''"
+    aria-hidden="true"
+  ></div>
+
+  <!-- Transformable content layer -->
+  <div class="canvas-content-layer" [style.transform]="contentTransform()">
+    <ng-content></ng-content>
+  </div>
+
+  <!-- Floating Canvas Controls Dock -->
+  <div class="canvas-controls-dock" role="toolbar" aria-label="Canvas zoom and view controls">
+    <button
+      mat-icon-button
+      class="control-btn"
+      (click)="zoomOut()"
+      aria-label="Zoom out (Ctrl + -)"
+      matTooltip="Zoom out"
+    >
+      <mat-icon>remove</mat-icon>
+    </button>
+
+    <button
+      mat-button
+      class="zoom-level-btn"
+      (click)="resetZoom()"
+      aria-label="Reset zoom to 100% (Ctrl + 0)"
+      matTooltip="Reset zoom to 100%"
+    >
+      <span>{{ zoomPercentage() }}</span>
+    </button>
+
+    <button
+      mat-icon-button
+      class="control-btn"
+      (click)="zoomIn()"
+      aria-label="Zoom in (Ctrl + +)"
+      matTooltip="Zoom in"
+    >
+      <mat-icon>add</mat-icon>
+    </button>
+
+    <div class="dock-divider"></div>
+
+    <button
+      mat-icon-button
+      class="control-btn"
+      (click)="resetView()"
+      aria-label="Reset view to origin"
+      matTooltip="Reset view (origin)"
+    >
+      <mat-icon>filter_center_focus</mat-icon>
+    </button>
+  </div>
+</div>

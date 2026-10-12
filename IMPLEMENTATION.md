@@ -31,7 +31,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 
 ## Phase 4: Core Canvas & Diagramming (Frontend)
 *Implement the drawing canvas and basic diagramming tools.*
-- [ ] Implement infinite canvas with zoom/pan controls and grid/dot backgrounds
+- [x] Implement infinite canvas with zoom/pan controls and grid/dot backgrounds
 - [ ] Implement shape rendering, selection, and resizing
 - [ ] Implement connections (lines, arrows, anchors, routing)
 - [ ] Implement node snapping, alignment, and fine adjustment (arrow keys)

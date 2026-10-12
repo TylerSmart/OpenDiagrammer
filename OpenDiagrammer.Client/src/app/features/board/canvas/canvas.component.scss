@@ -1,0 +1,95 @@
+:host {
+  display: block;
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  outline: none;
+  user-select: none;
+  touch-action: none;
+}
+
+.canvas-viewport-area {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  cursor: grab;
+
+  &.is-panning {
+    cursor: grabbing;
+  }
+}
+
+.canvas-grid-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.bg-grid-lines {
+  background-image:
+    linear-gradient(to right, rgba(128, 128, 128, 0.18) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(128, 128, 128, 0.18) 1px, transparent 1px);
+}
+
+.bg-grid-dots {
+  background-image: radial-gradient(circle, rgba(128, 128, 128, 0.3) 1.5px, transparent 1.5px);
+}
+
+.canvas-content-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  transform-origin: 0 0;
+  pointer-events: auto;
+}
+
+.canvas-controls-dock {
+  position: absolute;
+  bottom: 1.5rem;
+  left: 1.5rem;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 9999px;
+  box-shadow: var(--mat-sys-level2);
+  user-select: none;
+}
+
+.control-btn {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  mat-icon {
+    font-size: 1.125rem;
+    width: 1.125rem;
+    height: 1.125rem;
+  }
+}
+
+.zoom-level-btn {
+  min-width: 56px;
+  height: 32px;
+  padding: 0 0.5rem;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--mat-sys-on-surface);
+}
+
+.dock-divider {
+  width: 1px;
+  height: 20px;
+  background-color: var(--mat-sys-outline-variant);
+  margin: 0 0.25rem;
+}
