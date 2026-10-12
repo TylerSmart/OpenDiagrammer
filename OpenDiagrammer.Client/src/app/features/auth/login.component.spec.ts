@@ -274,13 +274,13 @@ describe('LoginComponent', () => {
     expect(component['isProcessingOAuth']()).toBe(false);
   });
 
-  it('should return SVG icon path for Google and Microsoft', () => {
+  it('should return SVG icon name for Google and Microsoft', () => {
     expect(component['getProviderSvg']({ id: 'google', name: 'Google', isExternal: true })).toBe(
-      'icons/google.svg',
+      'google',
     );
     expect(
       component['getProviderSvg']({ id: 'ms', name: 'Microsoft Entra', isExternal: true }),
-    ).toBe('icons/microsoft.svg');
+    ).toBe('microsoft');
     expect(
       component['getProviderSvg']({ id: 'custom', name: 'Custom OIDC', isExternal: true }),
     ).toBeNull();

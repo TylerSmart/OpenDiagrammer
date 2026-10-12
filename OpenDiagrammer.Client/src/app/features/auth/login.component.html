@@ -284,15 +284,8 @@
               (click)="onExternalLogin(provider)"
               [disabled]="authService.isLoading() || isProcessingOAuth()"
             >
-              @if (getProviderSvg(provider); as svgPath) {
-                <img
-                  [ngSrc]="svgPath"
-                  width="20"
-                  height="20"
-                  alt=""
-                  aria-hidden="true"
-                  class="provider-icon"
-                />
+              @if (getProviderSvg(provider); as svgIcon) {
+                <mat-icon [svgIcon]="svgIcon" aria-hidden="true"></mat-icon>
               } @else {
                 <mat-icon aria-hidden="true">{{ getProviderIcon(provider) }}</mat-icon>
               }
