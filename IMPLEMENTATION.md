@@ -47,7 +47,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
   - Waypoint deletion (double click handle or drag back in-line)
 - [x] Implement node snapping, alignment, and fine adjustment (arrow keys)
 - [x] Implement basic grouping and layer management (bring forward/backward)
-- [ ] Implement Copy/Paste within the board
+- [x] Implement Copy/Paste within the board
 
 ## Phase 5: Real-Time Collaboration & CRDTs
 *Enable multi-user collaboration and offline resiliency.*

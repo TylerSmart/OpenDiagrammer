@@ -482,6 +482,28 @@
         >
           <mat-icon>vertical_align_bottom</mat-icon>
         </button>
+
+        <div class="dock-divider"></div>
+
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="duplicate()"
+          matTooltip="Duplicate (Ctrl + D)"
+          aria-label="Duplicate selection"
+        >
+          <mat-icon>content_copy</mat-icon>
+        </button>
+
+        <button
+          mat-icon-button
+          class="tool-btn small"
+          (click)="deleteSelectedShapes()"
+          matTooltip="Delete (Delete)"
+          aria-label="Delete selection"
+        >
+          <mat-icon>delete_outline</mat-icon>
+        </button>
       </div>
     }
 

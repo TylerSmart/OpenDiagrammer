@@ -1,3 +1,6 @@
+import { CanvasConnection } from './connection.models';
+import { CanvasShape } from './shape.models';
+
 export interface CanvasTransform {
   zoom: number;
   panX: number;
@@ -12,6 +15,11 @@ export interface CanvasPoint {
 export interface CanvasViewportBounds {
   width: number;
   height: number;
+}
+
+export interface CanvasClipboardData {
+  shapes: CanvasShape[];
+  connections: CanvasConnection[];
 }
 
 export const CANVAS_CONSTANTS = {

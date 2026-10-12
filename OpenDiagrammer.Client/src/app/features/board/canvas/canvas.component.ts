@@ -4,7 +4,12 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BoardBackgroundType } from '../../../core/models/board.models';
-import { CANVAS_CONSTANTS, CanvasPoint, CanvasTransform } from './canvas.models';
+import {
+  CANVAS_CONSTANTS,
+  CanvasClipboardData,
+  CanvasPoint,
+  CanvasTransform,
+} from './canvas.models';
 import {
   AnchorPosition,
   CanvasConnection,
@@ -925,6 +930,148 @@ export class CanvasComponent {
         s.groupId && targetGroupIds.has(s.groupId) ? { ...s, groupId: undefined } : s,
       ),
     );
+  }
+
+  // Copy, Cut, Paste, and Duplicate API (Within the Board)
+  private clipboard: CanvasClipboardData | null = null;
+  private pasteOffsetCount = 0;
+
+  hasClipboard(): boolean {
+    return (
+      this.clipboard !== null &&
+      (this.clipboard.shapes.length > 0 || this.clipboard.connections.length > 0)
+    );
+  }
+
+  copy(): boolean {
+    const selectedShapeIds = this.selectedShapeIds();
+    const selectedConnIds = this.selectedConnectionIds();
+
+    if (selectedShapeIds.size === 0 && selectedConnIds.size === 0) {
+      return false;
+    }
+
+    const shapesToCopy = this.shapes().filter((s) => selectedShapeIds.has(s.id));
+
+    // Include connections connecting between selected shapes, or explicitly selected connections
+    const connsToCopy = this.connections().filter((c) => {
+      if (selectedConnIds.has(c.id)) {
+        return true;
+      }
+      if (
+        c.targetShapeId &&
+        selectedShapeIds.has(c.sourceShapeId) &&
+        selectedShapeIds.has(c.targetShapeId)
+      ) {
+        return true;
+      }
+      return false;
+    });
+
+    this.clipboard = {
+      shapes: shapesToCopy.map((s) => ({ ...s })),
+      connections: connsToCopy.map((c) => ({
+        ...c,
+        waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+      })),
+    };
+    this.pasteOffsetCount = 0;
+    return true;
+  }
+
+  cut(): boolean {
+    const copied = this.copy();
+    if (copied) {
+      this.deleteSelectedShapes();
+    }
+    return copied;
+  }
+
+  paste(): boolean {
+    if (
+      !this.clipboard ||
+      (this.clipboard.shapes.length === 0 && this.clipboard.connections.length === 0)
+    ) {
+      return false;
+    }
+
+    this.pasteOffsetCount++;
+    const OFFSET_STEP = 24;
+    const deltaX = OFFSET_STEP * this.pasteOffsetCount;
+    const deltaY = OFFSET_STEP * this.pasteOffsetCount;
+
+    const idMap = new Map<string, string>();
+    const groupMap = new Map<string, string>();
+
+    const maxZ = this.shapes().reduce((max, s) => Math.max(max, s.zIndex), 0);
+
+    const newShapes: CanvasShape[] = this.clipboard.shapes.map((s, idx) => {
+      const newId = `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${idx}`;
+      idMap.set(s.id, newId);
+
+      let newGroupId: string | undefined;
+      if (s.groupId) {
+        if (!groupMap.has(s.groupId)) {
+          groupMap.set(
+            s.groupId,
+            `group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+          );
+        }
+        newGroupId = groupMap.get(s.groupId);
+      }
+
+      return {
+        ...s,
+        id: newId,
+        x: s.x + deltaX,
+        y: s.y + deltaY,
+        zIndex: maxZ + idx + 1,
+        groupId: newGroupId,
+      };
+    });
+
+    const newConns: CanvasConnection[] = this.clipboard.connections.map((c, idx) => {
+      const newId = `conn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${idx}`;
+      const newSourceShapeId = idMap.get(c.sourceShapeId) ?? c.sourceShapeId;
+      const newTargetShapeId = c.targetShapeId
+        ? (idMap.get(c.targetShapeId) ?? c.targetShapeId)
+        : undefined;
+      const newTargetPoint = c.targetPoint
+        ? { x: c.targetPoint.x + deltaX, y: c.targetPoint.y + deltaY }
+        : undefined;
+      const newWaypoints = c.waypoints
+        ? c.waypoints.map((p) => ({ x: p.x + deltaX, y: p.y + deltaY }))
+        : undefined;
+
+      return {
+        ...c,
+        id: newId,
+        sourceShapeId: newSourceShapeId,
+        targetShapeId: newTargetShapeId,
+        targetPoint: newTargetPoint,
+        waypoints: newWaypoints,
+      };
+    });
+
+    this.shapes.update((list) => [...list, ...newShapes]);
+    this.connections.update((list) => [...list, ...newConns]);
+
+    this.clearSelection();
+    if (newShapes.length > 0) {
+      this.selectedShapeIds.set(new Set(newShapes.map((s) => s.id)));
+    } else if (newConns.length > 0) {
+      this.selectedConnectionIds.set(new Set(newConns.map((c) => c.id)));
+    }
+
+    return true;
+  }
+
+  duplicate(): boolean {
+    const copied = this.copy();
+    if (!copied) {
+      return false;
+    }
+    return this.paste();
   }
 
   // Connections API
@@ -2218,6 +2365,10 @@ export class CanvasComponent {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return;
+    }
+
     if (event.code === 'Space' || event.key === ' ') {
       this.isSpacePressed = true;
     }
@@ -2318,6 +2469,30 @@ export class CanvasComponent {
       } else {
         this.sendBackward();
       }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'c' || event.key === 'C')) {
+      event.preventDefault();
+      this.copy();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'x' || event.key === 'X')) {
+      event.preventDefault();
+      this.cut();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'v' || event.key === 'V')) {
+      event.preventDefault();
+      this.paste();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'd' || event.key === 'D')) {
+      event.preventDefault();
+      this.duplicate();
       return;
     }
 

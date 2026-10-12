@@ -1645,4 +1645,118 @@ describe('CanvasComponent', () => {
       expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(1);
     });
   });
+
+  describe('Copy and Paste within the board', () => {
+    it('should copy and paste a shape with an offset and new ID', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      expect(component.copy()).toBe(true);
+      expect(component.hasClipboard()).toBe(true);
+
+      const pasteSuccess = component.paste();
+      expect(pasteSuccess).toBe(true);
+      expect(component.shapes().length).toBe(2);
+
+      const pastedShape = component.shapes().find((s) => s.id !== s1.id);
+      expect(pastedShape).toBeDefined();
+      expect(pastedShape?.x).toBe(s1.x + 24);
+      expect(pastedShape?.y).toBe(s1.y + 24);
+      expect(component.selectedShapeIds().has(pastedShape!.id)).toBe(true);
+      expect(component.selectedShapeIds().has(s1.id)).toBe(false);
+    });
+
+    it('should cut and paste a shape removing the original from board', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      expect(component.cut()).toBe(true);
+      expect(component.shapes().length).toBe(0);
+
+      expect(component.paste()).toBe(true);
+      expect(component.shapes().length).toBe(1);
+      const pasted = component.shapes()[0];
+      expect(pasted.id).not.toBe(s1.id);
+      expect(component.selectedShapeIds().has(pasted.id)).toBe(true);
+    });
+
+    it('should copy and paste connected shapes along with their connections and offset waypoints', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+      component.updateConnection(conn.id, { waypoints: [{ x: 200, y: 150 }] });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      expect(component.copy()).toBe(true);
+      expect(component.paste()).toBe(true);
+
+      expect(component.shapes().length).toBe(4);
+      expect(component.connections().length).toBe(2);
+
+      const newShapes = component.shapes().filter((s) => s.id !== s1.id && s.id !== s2.id);
+      expect(newShapes.length).toBe(2);
+
+      const newConn = component.connections().find((c) => c.id !== conn.id);
+      expect(newConn).toBeDefined();
+      expect(newShapes.some((s) => s.id === newConn?.sourceShapeId)).toBe(true);
+      expect(newShapes.some((s) => s.id === newConn?.targetShapeId)).toBe(true);
+      expect(newConn?.waypoints?.[0]).toEqual({ x: 200 + 24, y: 150 + 24 });
+    });
+
+    it('should copy and paste grouped shapes preserving grouping with a new groupId', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+      const originalGroupId = component.groupSelectedShapes();
+      expect(originalGroupId).toBeDefined();
+
+      component.copy();
+      component.paste();
+
+      const pastedShapes = component.shapes().filter((s) => s.id !== s1.id && s.id !== s2.id);
+      expect(pastedShapes.length).toBe(2);
+      expect(pastedShapes[0].groupId).toBeDefined();
+      expect(pastedShapes[0].groupId).not.toBe(originalGroupId);
+      expect(pastedShapes[0].groupId).toBe(pastedShapes[1].groupId);
+    });
+
+    it('should duplicate selected shapes immediately via duplicate() or Ctrl+D', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      component.duplicate();
+      expect(component.shapes().length).toBe(2);
+
+      // Ctrl + D
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true }));
+      expect(component.shapes().length).toBe(3);
+    });
+
+    it('should handle keyboard shortcuts Ctrl+C, Ctrl+X, Ctrl+V', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      // Ctrl + C
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true }));
+      expect(component.hasClipboard()).toBe(true);
+
+      // Ctrl + V
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true }));
+      expect(component.shapes().length).toBe(2);
+
+      // Ctrl + X on newly selected shape
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true }));
+      expect(component.shapes().length).toBe(1);
+    });
+  });
 });
