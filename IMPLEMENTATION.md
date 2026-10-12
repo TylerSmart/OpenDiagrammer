@@ -23,11 +23,11 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 
 ## Phase 3: Frontend Foundation & Board Management
 *Build out the initial UI and connect it to the backend.*
-- [ ] Setup Angular routing structure (Login, Dashboard, Board View)
-- [ ] Implement Light/Dark theme syncing with system settings
-- [ ] Build Login/Register and Auth flow UI
-- [ ] Build Dashboard for Board management (Create/Delete/List)
-- [ ] Build Board Settings and Role assignment modals
+- [x] Setup Angular routing structure (Login, Dashboard, Board View)
+- [x] Implement Light/Dark theme syncing with system settings
+- [x] Build Login/Register and Auth flow UI
+- [x] Build Dashboard for Board management (Create/Delete/List)
+- [x] Build Board Settings and Role assignment modals
 
 ## Phase 4: Core Canvas & Diagramming (Frontend)
 *Implement the drawing canvas and basic diagramming tools.*

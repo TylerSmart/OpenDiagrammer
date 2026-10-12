@@ -1,0 +1,122 @@
+@if (isLoading()) {
+  <div class="loading-container">
+    <mat-spinner diameter="40"></mat-spinner>
+    <span>Loading board...</span>
+  </div>
+} @else if (errorMessage()) {
+  <div class="error-container" role="alert">
+    <mat-icon aria-hidden="true">error_outline</mat-icon>
+    <h2>Unable to load board</h2>
+    <p>{{ errorMessage() }}</p>
+    <button mat-flat-button color="primary" (click)="goBack()">
+      <mat-icon>arrow_back</mat-icon>
+      <span>Return to Dashboard</span>
+    </button>
+  </div>
+} @else if (board(); as currentBoard) {
+  <div class="board-view-container">
+    <!-- Header -->
+    <header class="board-header">
+      <div class="header-left">
+        <button
+          mat-icon-button
+          (click)="goBack()"
+          aria-label="Back to Dashboard"
+          matTooltip="Back to Dashboard"
+        >
+          <mat-icon>arrow_back</mat-icon>
+        </button>
+
+        <div class="board-title-group">
+          <h1 class="board-name">{{ currentBoard.name }}</h1>
+          <span
+            class="role-badge"
+            [class]="'role-' + getRoleName(currentBoard.userRole).toLowerCase()"
+          >
+            {{ getRoleName(currentBoard.userRole) }}
+          </span>
+
+          @if (currentBoard.mode === BoardMode.ThinkMode) {
+            <span class="think-mode-badge">
+              <mat-icon>psychology</mat-icon>
+              <span>Think Mode</span>
+            </span>
+          }
+        </div>
+      </div>
+
+      <div class="header-right">
+        <!-- Members button -->
+        <button
+          mat-button
+          (click)="openMembersDialog()"
+          aria-label="Manage board members"
+          matTooltip="Manage members"
+        >
+          <mat-icon>group</mat-icon>
+          <span>{{ currentBoard.members.length }}</span>
+        </button>
+
+        <!-- Settings button -->
+        @if (canManageSettings(currentBoard.userRole)) {
+          <button
+            mat-icon-button
+            (click)="openSettingsDialog()"
+            aria-label="Board settings"
+            matTooltip="Board settings"
+          >
+            <mat-icon>settings</mat-icon>
+          </button>
+        }
+
+        <!-- Theme menu -->
+        <button
+          mat-icon-button
+          [matMenuTriggerFor]="themeMenu"
+          [attr.aria-label]="'Theme: ' + themeLabel()"
+          [matTooltip]="'Theme: ' + themeLabel()"
+        >
+          <mat-icon>{{ themeIcon() }}</mat-icon>
+        </button>
+        <mat-menu #themeMenu="matMenu">
+          <button mat-menu-item (click)="themeService.setMode('light')">
+            <mat-icon>light_mode</mat-icon>
+            <span>Light</span>
+          </button>
+          <button mat-menu-item (click)="themeService.setMode('dark')">
+            <mat-icon>dark_mode</mat-icon>
+            <span>Dark</span>
+          </button>
+          <button mat-menu-item (click)="themeService.setMode('system')">
+            <mat-icon>brightness_auto</mat-icon>
+            <span>System</span>
+          </button>
+        </mat-menu>
+      </div>
+    </header>
+
+    <!-- Canvas Viewport -->
+    <main class="canvas-viewport">
+      <div
+        class="canvas-background"
+        [class.bg-grid-lines]="currentBoard.backgroundType === BoardBackgroundType.GridLines"
+        [class.bg-grid-dots]="currentBoard.backgroundType === BoardBackgroundType.GridDots"
+        [style.backgroundColor]="currentBoard.backgroundColor || 'transparent'"
+        [style.opacity]="currentBoard.backgroundOpacity"
+        aria-hidden="true"
+      ></div>
+
+      <div class="canvas-placeholder-card">
+        <mat-icon aria-hidden="true">draw</mat-icon>
+        <h2>{{ currentBoard.name }}</h2>
+        <p>
+          {{ currentBoard.description || 'Welcome to your diagramming board!' }}
+        </p>
+        <div class="canvas-status">
+          <mat-icon>info</mat-icon>
+          <span>Canvas diagramming & tools will be enabled in Phase 4</span>
+        </div>
+      </div>
+    </main>
+  </div>
+}

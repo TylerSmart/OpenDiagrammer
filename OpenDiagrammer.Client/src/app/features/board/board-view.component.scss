@@ -1,0 +1,174 @@
+.board-view-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.board-header {
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1rem;
+  background-color: var(--mat-sys-surface-container);
+  border-bottom: 1px solid var(--mat-sys-outline-variant);
+  z-index: 10;
+}
+
+.header-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+.board-title-group {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  overflow: hidden;
+}
+
+.board-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  margin: 0;
+  color: var(--mat-sys-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.think-mode-badge {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  background-color: var(--mat-sys-secondary-container);
+  color: var(--mat-sys-on-secondary-container);
+
+  mat-icon {
+    font-size: 1rem;
+    width: 1rem;
+    height: 1rem;
+  }
+}
+
+.canvas-viewport {
+  flex: 1;
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.canvas-background {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.bg-grid-lines {
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(128, 128, 128, 0.15) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(128, 128, 128, 0.15) 1px, transparent 1px);
+}
+
+.bg-grid-dots {
+  background-size: 24px 24px;
+  background-image: radial-gradient(circle, rgba(128, 128, 128, 0.25) 1.5px, transparent 1.5px);
+}
+
+.canvas-placeholder-card {
+  z-index: 5;
+  max-width: 480px;
+  padding: 1.5rem;
+  text-align: center;
+  border-radius: 1rem;
+  box-shadow: var(--mat-sys-level3);
+  background-color: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+
+  & > mat-icon {
+    font-size: 3rem;
+    width: 3rem;
+    height: 3rem;
+    color: var(--mat-sys-primary);
+    margin-bottom: 0.75rem;
+  }
+
+  h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--mat-sys-on-surface);
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: var(--mat-sys-on-surface-variant);
+    font-size: 0.875rem;
+    line-height: 1.4;
+  }
+}
+
+.canvas-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--mat-sys-outline);
+}
+
+.loading-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  color: var(--mat-sys-on-surface-variant);
+}
+
+.error-container {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 1rem;
+  padding: 2rem;
+
+  mat-icon {
+    font-size: 3.5rem;
+    width: 3.5rem;
+    height: 3.5rem;
+    color: var(--mat-sys-error);
+  }
+
+  h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    color: var(--mat-sys-on-surface);
+  }
+
+  p {
+    margin: 0 0 1rem;
+    color: var(--mat-sys-on-surface-variant);
+    max-width: 400px;
+  }
+}
