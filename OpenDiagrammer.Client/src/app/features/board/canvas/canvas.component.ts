@@ -759,23 +759,84 @@ export class CanvasComponent {
     }
   }
 
+  private lastTrackpadGestureTime = 0;
+
+  isTrackpadWheel(event: WheelEvent): boolean {
+    // 1. Line or Page deltaMode is exclusively emitted by physical mice (e.g. Firefox line scrolling).
+    if (event.deltaMode !== 0) {
+      return false;
+    }
+
+    const absX = Math.abs(event.deltaX);
+    const absY = Math.abs(event.deltaY);
+
+    // 2. Fractional deltas are a telltale signature of precision trackpad scrolling.
+    const isFractional = absX % 1 !== 0 || absY % 1 !== 0;
+    if (isFractional) {
+      this.lastTrackpadGestureTime = Date.now();
+      return true;
+    }
+
+    // 3. Simultaneous horizontal and vertical scrolling (2D diagonal swipe) is characteristic of trackpads.
+    if (absX > 0 && absY > 0) {
+      this.lastTrackpadGestureTime = Date.now();
+      return true;
+    }
+
+    // 4. Very small deltas (< 20px) at the start or end of a continuous swipe indicate trackpads.
+    // (Physical mouse wheels emit discrete notches: typically >= 40px, standard 100px or 120px).
+    if ((absY > 0 && absY < 20) || (absX > 0 && absX < 20)) {
+      this.lastTrackpadGestureTime = Date.now();
+      return true;
+    }
+
+    // 5. Inertial momentum / ongoing gesture: if trackpad was detected within the last 350ms,
+    // continue treating deceleration events as trackpad scrolling.
+    if (Date.now() - this.lastTrackpadGestureTime < 350) {
+      this.lastTrackpadGestureTime = Date.now();
+      return true;
+    }
+
+    // 6. If deltaX is 0 and deltaY is a discrete large integer (>= 20px, e.g. 50, 100, 120), it's a mouse wheel.
+    if (absX === 0 && absY >= 20) {
+      return false;
+    }
+
+    // 7. If deltaY is 0 and deltaX is horizontal scroll (e.g. mouse thumb wheel), treat as pan.
+    if (absY === 0 && absX > 0) {
+      return true;
+    }
+
+    return false;
+  }
+
   handleWheel(event: WheelEvent): void {
     event.preventDefault();
 
-    if (event.ctrlKey || event.metaKey) {
-      const rect = this.elementRef.nativeElement.getBoundingClientRect();
-      const focalPoint: CanvasPoint = {
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
-      };
+    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+    const focalPoint: CanvasPoint = {
+      x: event.clientX - rect.left,
+      y: event.clientY - rect.top,
+    };
 
+    if (event.ctrlKey || event.metaKey) {
       const zoomFactor = Math.exp(-event.deltaY * 0.005);
       this.zoomTo(this.zoom() * zoomFactor, focalPoint);
-    } else if (event.shiftKey) {
+      return;
+    }
+
+    if (event.shiftKey) {
       const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
       this.panBy(-delta, 0);
-    } else {
+      return;
+    }
+
+    if (this.isTrackpadWheel(event)) {
       this.panBy(-event.deltaX, -event.deltaY);
+    } else {
+      // Physical mouse wheel: zoom centered at mouse cursor position
+      const zoomFactor = event.deltaY > 0 ? 1 / 1.15 : 1.15;
+      this.zoomTo(this.zoom() * zoomFactor, focalPoint);
     }
   }
 

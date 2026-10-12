@@ -136,6 +136,74 @@ describe('CanvasComponent', () => {
     expect(component.panY()).toBe(curPanY);
   });
 
+  it('should zoom with physical mouse wheel instead of scrolling', () => {
+    // Reset trackpad history
+    component['lastTrackpadGestureTime'] = 0;
+
+    const initialZoom = component.zoom();
+
+    // Mouse wheel down (positive deltaY >= 20, deltaX = 0, deltaMode = 0)
+    const wheelDown = new WheelEvent('wheel', {
+      deltaX: 0,
+      deltaY: 100,
+      deltaMode: 0,
+      clientX: 200,
+      clientY: 200,
+      cancelable: true,
+    });
+    component.handleWheel(wheelDown);
+
+    // Zoom should decrease (zoom out)
+    expect(component.zoom()).toBeLessThan(initialZoom);
+
+    // Mouse wheel up (negative deltaY, deltaX = 0)
+    const zoomAfterDown = component.zoom();
+    const wheelUp = new WheelEvent('wheel', {
+      deltaX: 0,
+      deltaY: -100,
+      deltaMode: 0,
+      clientX: 200,
+      clientY: 200,
+      cancelable: true,
+    });
+    component.handleWheel(wheelUp);
+
+    // Zoom should increase (zoom in)
+    expect(component.zoom()).toBeGreaterThan(zoomAfterDown);
+
+    // Line mode mouse wheel (deltaMode = 1, e.g. Firefox)
+    const prevZoom = component.zoom();
+    const lineWheel = new WheelEvent('wheel', {
+      deltaX: 0,
+      deltaY: 3,
+      deltaMode: 1,
+      clientX: 200,
+      clientY: 200,
+      cancelable: true,
+    });
+    component.handleWheel(lineWheel);
+    expect(component.zoom()).toBeLessThan(prevZoom);
+  });
+
+  it('should pan board when scrolling with trackpad gestures (fractional or 2D gestures)', () => {
+    const initialZoom = component.zoom();
+    const initialPanX = component.panX();
+    const initialPanY = component.panY();
+
+    // Fractional delta trackpad scroll
+    const trackpadScroll = new WheelEvent('wheel', {
+      deltaX: 5.5,
+      deltaY: 12.5,
+      deltaMode: 0,
+      cancelable: true,
+    });
+    component.handleWheel(trackpadScroll);
+
+    expect(component.panX()).toBeCloseTo(initialPanX - 5.5);
+    expect(component.panY()).toBeCloseTo(initialPanY - 12.5);
+    expect(component.zoom()).toBe(initialZoom);
+  });
+
   it('should handle pointer drag panning with middle click, right click, or space+left click', () => {
     // Left-click without space should NOT pan
     const leftClickEvent = new PointerEvent('pointerdown', {
