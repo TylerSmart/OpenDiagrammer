@@ -1521,4 +1521,128 @@ describe('CanvasComponent', () => {
       expect(ys).toEqual([0, 100, 200]);
     });
   });
+
+  describe('Basic Grouping and Layer Management', () => {
+    it('should group selected shapes with a common groupId and select them as a cohesive unit', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const s3 = component.createShape('rectangle', { x: 500, y: 100 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      // Group s1 and s2
+      const groupId = component.groupSelectedShapes();
+      expect(groupId).not.toBeNull();
+      expect(component.shapes().find((s) => s.id === s1.id)?.groupId).toBe(groupId!);
+      expect(component.shapes().find((s) => s.id === s2.id)?.groupId).toBe(groupId!);
+      expect(component.shapes().find((s) => s.id === s3.id)?.groupId).toBeUndefined();
+
+      // Deselect all
+      component.clearSelection();
+      expect(component.selectedShapeIds().size).toBe(0);
+
+      // Selecting s1 alone should automatically select s2 as well because they are in the same group
+      component.selectShape(s1.id);
+      expect(component.selectedShapeIds().size).toBe(2);
+      expect(component.isShapeSelected(s1.id)).toBe(true);
+      expect(component.isShapeSelected(s2.id)).toBe(true);
+      expect(component.isShapeSelected(s3.id)).toBe(false);
+
+      // Ungroup s1 and s2
+      component.ungroupSelectedShapes();
+      expect(component.shapes().find((s) => s.id === s1.id)?.groupId).toBeUndefined();
+      expect(component.shapes().find((s) => s.id === s2.id)?.groupId).toBeUndefined();
+    });
+
+    it('should handle grouping and ungrouping via keyboard shortcuts Ctrl+G and Ctrl+Shift+G', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      // Ctrl + G -> Group
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'g', ctrlKey: true }));
+      const gId = component.shapes().find((s) => s.id === s1.id)?.groupId;
+      expect(gId).toBeDefined();
+      expect(component.shapes().find((s) => s.id === s2.id)?.groupId).toBe(gId);
+
+      // Ctrl + Shift + G -> Ungroup
+      component.handleKeyDown(
+        new KeyboardEvent('keydown', { key: 'G', ctrlKey: true, shiftKey: true }),
+      );
+      expect(component.shapes().find((s) => s.id === s1.id)?.groupId).toBeUndefined();
+      expect(component.shapes().find((s) => s.id === s2.id)?.groupId).toBeUndefined();
+    });
+
+    it('should manage layers using bringToFront, sendToBack, bringForward, and sendBackward', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 200, y: 100 });
+      const s3 = component.createShape('rectangle', { x: 300, y: 100 });
+      const s4 = component.createShape('rectangle', { x: 400, y: 100 });
+
+      // Initially zIndex order: s1=1, s2=2, s3=3, s4=4
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(1);
+      expect(component.shapes().find((s) => s.id === s2.id)?.zIndex).toBe(2);
+      expect(component.shapes().find((s) => s.id === s3.id)?.zIndex).toBe(3);
+      expect(component.shapes().find((s) => s.id === s4.id)?.zIndex).toBe(4);
+
+      // Bring s1 to front -> order becomes s2(1), s3(2), s4(3), s1(4)
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.bringToFront();
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(4);
+      expect(component.shapes().find((s) => s.id === s4.id)?.zIndex).toBe(3);
+
+      // Send s1 to back -> order becomes s1(1), s2(2), s3(3), s4(4)
+      component.sendToBack();
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(1);
+      expect(component.shapes().find((s) => s.id === s2.id)?.zIndex).toBe(2);
+
+      // Bring s1 forward by one -> swaps with s2: s2(1), s1(2), s3(3), s4(4)
+      component.bringForward();
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(2);
+      expect(component.shapes().find((s) => s.id === s2.id)?.zIndex).toBe(1);
+
+      // Send s1 backward by one -> swaps with s2: s1(1), s2(2), s3(3), s4(4)
+      component.sendBackward();
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(1);
+      expect(component.shapes().find((s) => s.id === s2.id)?.zIndex).toBe(2);
+    });
+
+    it('should manage layers using keyboard shortcuts Ctrl+], Ctrl+[, Ctrl+Shift+], and Ctrl+Shift+[', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 200, y: 100 });
+      const s3 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      // Order: s1=1, s2=2, s3=3
+      expect(component.shapes().find((s) => s.id === s2.id)?.zIndex).toBe(2);
+      expect(component.shapes().find((s) => s.id === s3.id)?.zIndex).toBe(3);
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      // Ctrl + ] -> Bring Forward: s2=1, s1=2, s3=3
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: ']', ctrlKey: true }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(2);
+
+      // Ctrl + Shift + ] -> Bring To Front: s2=1, s3=2, s1=3
+      component.handleKeyDown(
+        new KeyboardEvent('keydown', { key: ']', ctrlKey: true, shiftKey: true }),
+      );
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(3);
+
+      // Ctrl + [ -> Send Backward: s2=1, s1=2, s3=3
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: '[', ctrlKey: true }));
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(2);
+
+      // Ctrl + Shift + [ -> Send To Back: s1=1, s2=2, s3=3
+      component.handleKeyDown(
+        new KeyboardEvent('keydown', { key: '[', ctrlKey: true, shiftKey: true }),
+      );
+      expect(component.shapes().find((s) => s.id === s1.id)?.zIndex).toBe(1);
+    });
+  });
 });

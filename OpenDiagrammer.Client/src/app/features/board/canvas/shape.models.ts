@@ -13,6 +13,7 @@ export interface CanvasShape {
   text?: string;
   zIndex: number;
   locked?: boolean;
+  groupId?: string;
 }
 
 export type ResizeHandlePosition = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';

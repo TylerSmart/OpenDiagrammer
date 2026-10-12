@@ -153,16 +153,24 @@ export class CanvasComponent {
     };
   });
 
-  // Multi-selection Alignment Toolbar position
+  // Contextual Selection Toolbar position
   readonly selectionToolbarPos = computed<{ x: number; y: number } | null>(() => {
     const box = this.selectionBox();
-    if (!box || this.selectedShapeIds().size < 2) {
+    if (!box || this.selectedShapeIds().size === 0) {
       return null;
     }
     return {
       x: box.minX + box.width / 2,
       y: box.minY - 14,
     };
+  });
+
+  readonly hasSelectedGroup = computed<boolean>(() => {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return false;
+    }
+    return this.shapes().some((s) => selected.has(s.id) && s.groupId !== undefined);
   });
 
   // Rendered Connections computation
@@ -750,15 +758,24 @@ export class CanvasComponent {
 
   selectShape(id: string, multiSelect = false): void {
     const current = new Set(this.selectedShapeIds());
+    const targetShape = this.shapes().find((s) => s.id === id);
+    const idsToSelect =
+      targetShape && targetShape.groupId
+        ? this.shapes()
+            .filter((s) => s.groupId === targetShape.groupId)
+            .map((s) => s.id)
+        : [id];
+
     if (multiSelect) {
-      if (current.has(id)) {
-        current.delete(id);
+      const allSelected = idsToSelect.every((item) => current.has(item));
+      if (allSelected) {
+        idsToSelect.forEach((item) => current.delete(item));
       } else {
-        current.add(id);
+        idsToSelect.forEach((item) => current.add(item));
       }
     } else {
       current.clear();
-      current.add(id);
+      idsToSelect.forEach((item) => current.add(item));
     }
     this.selectedShapeIds.set(current);
     this.selectedConnectionIds.set(new Set<string>());
@@ -805,6 +822,109 @@ export class CanvasComponent {
     }
 
     this.clearSelection();
+  }
+
+  // Layer Management (Z-Index / Stacking Order)
+  bringToFront(shapeIds?: string[]): void {
+    const targetIds = new Set(shapeIds ?? this.selectedShapeIds());
+    if (targetIds.size === 0) {
+      return;
+    }
+    const all = [...this.shapes()].sort((a, b) => a.zIndex - b.zIndex);
+    const nonSelected = all.filter((s) => !targetIds.has(s.id));
+    const selected = all.filter((s) => targetIds.has(s.id));
+    const reordered = [...nonSelected, ...selected];
+    const newZIndexMap = new Map<string, number>();
+    reordered.forEach((s, idx) => newZIndexMap.set(s.id, idx + 1));
+    this.shapes.update((list) =>
+      list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
+    );
+  }
+
+  sendToBack(shapeIds?: string[]): void {
+    const targetIds = new Set(shapeIds ?? this.selectedShapeIds());
+    if (targetIds.size === 0) {
+      return;
+    }
+    const all = [...this.shapes()].sort((a, b) => a.zIndex - b.zIndex);
+    const nonSelected = all.filter((s) => !targetIds.has(s.id));
+    const selected = all.filter((s) => targetIds.has(s.id));
+    const reordered = [...selected, ...nonSelected];
+    const newZIndexMap = new Map<string, number>();
+    reordered.forEach((s, idx) => newZIndexMap.set(s.id, idx + 1));
+    this.shapes.update((list) =>
+      list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
+    );
+  }
+
+  bringForward(shapeIds?: string[]): void {
+    const targetIds = new Set(shapeIds ?? this.selectedShapeIds());
+    if (targetIds.size === 0) {
+      return;
+    }
+    const all = [...this.shapes()].sort((a, b) => a.zIndex - b.zIndex);
+    for (let i = all.length - 2; i >= 0; i--) {
+      if (targetIds.has(all[i].id) && !targetIds.has(all[i + 1].id)) {
+        const temp = all[i];
+        all[i] = all[i + 1];
+        all[i + 1] = temp;
+      }
+    }
+    const newZIndexMap = new Map<string, number>();
+    all.forEach((s, idx) => newZIndexMap.set(s.id, idx + 1));
+    this.shapes.update((list) =>
+      list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
+    );
+  }
+
+  sendBackward(shapeIds?: string[]): void {
+    const targetIds = new Set(shapeIds ?? this.selectedShapeIds());
+    if (targetIds.size === 0) {
+      return;
+    }
+    const all = [...this.shapes()].sort((a, b) => a.zIndex - b.zIndex);
+    for (let i = 1; i < all.length; i++) {
+      if (targetIds.has(all[i].id) && !targetIds.has(all[i - 1].id)) {
+        const temp = all[i];
+        all[i] = all[i - 1];
+        all[i - 1] = temp;
+      }
+    }
+    const newZIndexMap = new Map<string, number>();
+    all.forEach((s, idx) => newZIndexMap.set(s.id, idx + 1));
+    this.shapes.update((list) =>
+      list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
+    );
+  }
+
+  // Grouping API
+  groupSelectedShapes(): string | null {
+    const selected = this.selectedShapeIds();
+    if (selected.size < 2) {
+      return null;
+    }
+    const newGroupId = `group_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+    this.shapes.update((list) =>
+      list.map((s) => (selected.has(s.id) ? { ...s, groupId: newGroupId } : s)),
+    );
+    return newGroupId;
+  }
+
+  ungroupSelectedShapes(): void {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return;
+    }
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    const targetGroupIds = new Set(selectedShapes.filter((s) => s.groupId).map((s) => s.groupId!));
+    if (targetGroupIds.size === 0) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) =>
+        s.groupId && targetGroupIds.has(s.groupId) ? { ...s, groupId: undefined } : s,
+      ),
+    );
   }
 
   // Connections API
@@ -2168,6 +2288,36 @@ export class CanvasComponent {
     if ((event.ctrlKey || event.metaKey) && event.key === '0') {
       event.preventDefault();
       this.resetZoom();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'g' || event.key === 'G')) {
+      event.preventDefault();
+      if (event.shiftKey) {
+        this.ungroupSelectedShapes();
+      } else {
+        this.groupSelectedShapes();
+      }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === ']') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        this.bringToFront();
+      } else {
+        this.bringForward();
+      }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === '[') {
+      event.preventDefault();
+      if (event.shiftKey) {
+        this.sendToBack();
+      } else {
+        this.sendBackward();
+      }
       return;
     }
 
