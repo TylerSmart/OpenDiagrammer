@@ -823,4 +823,44 @@ describe('CanvasComponent', () => {
     // After collapsing, points will align at y = 140
     expect(updated!.points.every((p) => p.y === 140)).toBe(true);
   });
+
+  it('should reset connection waypoints when resetConnectionWaypoints is called', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.updateConnection(conn.id, {
+      waypoints: [
+        { x: 200, y: 50 },
+        { x: 250, y: 150 },
+      ],
+    });
+
+    const connWithWaypoints = component.connections().find((c) => c.id === conn.id);
+    expect(connWithWaypoints?.waypoints?.length).toBe(2);
+
+    component.resetConnectionWaypoints(conn.id);
+
+    const resetConn = component.connections().find((c) => c.id === conn.id);
+    expect(resetConn?.waypoints?.length).toBe(0);
+  });
+
+  it('should reset connection waypoints when handleSegmentDblClick is called', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.updateConnection(conn.id, {
+      waypoints: [{ x: 200, y: 200 }],
+    });
+
+    const dblClickEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+    const stopSpy = vi.spyOn(dblClickEvent, 'stopPropagation');
+
+    component.handleSegmentDblClick(dblClickEvent, conn.id);
+
+    expect(stopSpy).toHaveBeenCalled();
+    const resetConn = component.connections().find((c) => c.id === conn.id);
+    expect(resetConn?.waypoints?.length).toBe(0);
+  });
 });

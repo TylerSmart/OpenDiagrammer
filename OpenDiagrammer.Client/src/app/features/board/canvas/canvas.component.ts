@@ -302,6 +302,15 @@ export class CanvasComponent {
     this.editingConnectionId.set(null);
   }
 
+  resetConnectionWaypoints(connId: string): void {
+    this.updateConnection(connId, { waypoints: [] });
+  }
+
+  handleSegmentDblClick(event: MouseEvent, connId: string): void {
+    event.stopPropagation();
+    this.resetConnectionWaypoints(connId);
+  }
+
   // Interaction tracking state
   readonly isPanning = signal<boolean>(false);
   isSpacePressed = false;

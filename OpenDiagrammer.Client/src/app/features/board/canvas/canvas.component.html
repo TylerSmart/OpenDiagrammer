@@ -158,6 +158,7 @@
                   [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
                   rx="3"
                   (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
+                  (dblclick)="handleSegmentDblClick($event, conn.id)"
                 />
               }
             } @else {
@@ -373,6 +374,21 @@
           >
             <mat-icon>title</mat-icon>
           </button>
+
+          <!-- Reset Path / Clear Waypoints -->
+          @if (selConn.waypoints && selConn.waypoints.length > 0) {
+            <div class="dock-divider"></div>
+
+            <button
+              mat-icon-button
+              class="tool-btn small"
+              (click)="resetConnectionWaypoints(selConn.id)"
+              matTooltip="Reset Line / Remove Custom Bends"
+              aria-label="Reset line bends"
+            >
+              <mat-icon>restart_alt</mat-icon>
+            </button>
+          }
         </div>
       }
     }
