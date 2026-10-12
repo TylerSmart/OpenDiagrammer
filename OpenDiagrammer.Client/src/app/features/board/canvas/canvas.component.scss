@@ -33,17 +33,32 @@
   position: absolute;
   inset: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
+  background-color: var(--mat-sys-surface);
+  transition:
+    opacity 0.2s ease,
+    background-color 0.2s ease;
 }
 
 .bg-grid-lines {
   background-image:
-    linear-gradient(to right, rgba(128, 128, 128, 0.18) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(128, 128, 128, 0.18) 1px, transparent 1px);
+    linear-gradient(
+      to right,
+      light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09)) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      light-dark(rgba(0, 0, 0, 0.08), rgba(255, 255, 255, 0.09)) 1px,
+      transparent 1px
+    );
 }
 
 .bg-grid-dots {
-  background-image: radial-gradient(circle, rgba(128, 128, 128, 0.3) 1.5px, transparent 1.5px);
+  background-image: radial-gradient(
+    circle,
+    light-dark(rgba(0, 0, 0, 0.16), rgba(255, 255, 255, 0.18)) 1.25px,
+    transparent 1.25px
+  );
 }
 
 .canvas-content-layer {

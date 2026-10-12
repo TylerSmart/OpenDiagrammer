@@ -8,6 +8,26 @@
   box-sizing: border-box;
 }
 
+:root {
+  --canvas-color-default-fill: light-dark(#ffffff, #1e1e24);
+  --canvas-color-default-stroke: light-dark(#374151, #d1d5db);
+
+  --canvas-color-blue-fill: light-dark(#eff6ff, rgba(30, 58, 138, 0.35));
+  --canvas-color-blue-stroke: light-dark(#2563eb, #60a5fa);
+
+  --canvas-color-green-fill: light-dark(#f0fdf4, rgba(20, 83, 45, 0.35));
+  --canvas-color-green-stroke: light-dark(#16a34a, #4ade80);
+
+  --canvas-color-red-fill: light-dark(#fef2f2, rgba(127, 29, 29, 0.35));
+  --canvas-color-red-stroke: light-dark(#dc2626, #f87171);
+
+  --canvas-color-amber-fill: light-dark(#fffbeb, rgba(120, 53, 15, 0.35));
+  --canvas-color-amber-stroke: light-dark(#d97706, #fbbf24);
+
+  --canvas-color-purple-fill: light-dark(#faf5ff, rgba(88, 28, 135, 0.35));
+  --canvas-color-purple-stroke: light-dark(#9333ea, #c084fc);
+}
+
 html {
   height: 100%;
   background-color: var(--mat-sys-surface);

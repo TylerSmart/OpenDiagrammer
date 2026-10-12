@@ -37,13 +37,66 @@ export interface MarqueeBox {
 export type ActiveTool =
   'select' | 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond' | 'connection';
 
+export interface CanvasColorPreset {
+  id: string;
+  label: string;
+  fill: string;
+  stroke: string;
+  swatch: string;
+}
+
+export const CANVAS_COLOR_PRESETS: CanvasColorPreset[] = [
+  {
+    id: 'default',
+    label: 'Neutral',
+    fill: 'var(--canvas-color-default-fill)',
+    stroke: 'var(--canvas-color-default-stroke)',
+    swatch: 'var(--canvas-color-default-stroke)',
+  },
+  {
+    id: 'blue',
+    label: 'Blue',
+    fill: 'var(--canvas-color-blue-fill)',
+    stroke: 'var(--canvas-color-blue-stroke)',
+    swatch: 'var(--canvas-color-blue-stroke)',
+  },
+  {
+    id: 'green',
+    label: 'Green',
+    fill: 'var(--canvas-color-green-fill)',
+    stroke: 'var(--canvas-color-green-stroke)',
+    swatch: 'var(--canvas-color-green-stroke)',
+  },
+  {
+    id: 'red',
+    label: 'Red',
+    fill: 'var(--canvas-color-red-fill)',
+    stroke: 'var(--canvas-color-red-stroke)',
+    swatch: 'var(--canvas-color-red-stroke)',
+  },
+  {
+    id: 'amber',
+    label: 'Amber',
+    fill: 'var(--canvas-color-amber-fill)',
+    stroke: 'var(--canvas-color-amber-stroke)',
+    swatch: 'var(--canvas-color-amber-stroke)',
+  },
+  {
+    id: 'purple',
+    label: 'Purple',
+    fill: 'var(--canvas-color-purple-fill)',
+    stroke: 'var(--canvas-color-purple-stroke)',
+    swatch: 'var(--canvas-color-purple-stroke)',
+  },
+];
+
 export const SHAPE_CONSTANTS = {
   MIN_WIDTH: 30,
   MIN_HEIGHT: 30,
   DEFAULT_WIDTH: 120,
   DEFAULT_HEIGHT: 80,
-  DEFAULT_FILL: 'rgba(255, 255, 255, 0.95)',
-  DEFAULT_STROKE: '#333333',
+  DEFAULT_FILL: 'var(--canvas-color-default-fill)',
+  DEFAULT_STROKE: 'var(--canvas-color-default-stroke)',
   DEFAULT_STROKE_WIDTH: 2,
 } as const;
 

@@ -292,13 +292,9 @@ describe('CanvasComponent', () => {
 
   it('should compute background styles based on input properties', () => {
     fixture.componentRef.setInput('backgroundType', BoardBackgroundType.GridLines);
-    fixture.componentRef.setInput('backgroundColor', '#f0f0f0');
-    fixture.componentRef.setInput('backgroundOpacity', 0.8);
     fixture.detectChanges();
 
     const styles = component.backgroundStyles();
-    expect(styles.backgroundColor).toBe('#f0f0f0');
-    expect(styles.opacity).toBe('0.8');
     expect(styles.backgroundSize).toBe('32px 32px');
     expect(component.isGridLines()).toBe(true);
     expect(component.isGridDots()).toBe(false);
@@ -2041,6 +2037,61 @@ describe('CanvasComponent', () => {
       expect(clonedShapes[0].groupId).toBe(clonedShapes[1].groupId);
 
       component.handlePointerUp(new PointerEvent('pointerup'));
+    });
+  });
+
+  describe('Theme-Aware Prescribed Color Palette', () => {
+    it('should create new shapes using theme-aware default fill and stroke tokens', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      expect(shape.fillColor).toBe('var(--canvas-color-default-fill)');
+      expect(shape.strokeColor).toBe('var(--canvas-color-default-stroke)');
+    });
+
+    it('should create new connections using theme-aware default stroke token', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+      expect(conn.strokeColor).toBe('var(--canvas-color-default-stroke)');
+    });
+
+    it('should allow customizing selected shapes with prescribed color presets', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('ellipse', { x: 300, y: 100 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      const bluePreset = component.canvasColorPresets.find((p) => p.id === 'blue')!;
+      expect(bluePreset).toBeDefined();
+
+      component.setSelectedShapesColor(bluePreset);
+
+      const updatedS1 = component.shapes().find((s) => s.id === s1.id)!;
+      const updatedS2 = component.shapes().find((s) => s.id === s2.id)!;
+      expect(updatedS1.fillColor).toBe('var(--canvas-color-blue-fill)');
+      expect(updatedS1.strokeColor).toBe('var(--canvas-color-blue-stroke)');
+      expect(updatedS2.fillColor).toBe('var(--canvas-color-blue-fill)');
+      expect(updatedS2.strokeColor).toBe('var(--canvas-color-blue-stroke)');
+
+      expect(component.isShapeColorActive(bluePreset)).toBe(true);
+
+      const redPreset = component.canvasColorPresets.find((p) => p.id === 'red')!;
+      expect(component.isShapeColorActive(redPreset)).toBe(false);
+    });
+
+    it('should allow customizing connection color with prescribed color preset strokes', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+      component.selectConnection(conn.id);
+
+      const greenPreset = component.canvasColorPresets.find((p) => p.id === 'green')!;
+      component.setConnectionColor(greenPreset.stroke);
+
+      expect(component.connections()[0].strokeColor).toBe('var(--canvas-color-green-stroke)');
     });
   });
 });

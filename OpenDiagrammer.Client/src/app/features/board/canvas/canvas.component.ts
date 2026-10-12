@@ -37,7 +37,9 @@ import {
   ActiveTool,
   AlignmentGuide,
   BoundingBox,
+  CanvasColorPreset,
   CanvasShape,
+  CANVAS_COLOR_PRESETS,
   ResizeHandlePosition,
   SHAPE_CONSTANTS,
   ShapeType,
@@ -81,8 +83,6 @@ export interface ReconnectingPreview {
 export class CanvasComponent {
   // Inputs for board settings
   readonly backgroundType = input<BoardBackgroundType>(BoardBackgroundType.GridLines);
-  readonly backgroundColor = input<string | null>('transparent');
-  readonly backgroundOpacity = input<number>(1);
 
   // Transform change output event
   readonly transformChange = output<CanvasTransform>();
@@ -309,7 +309,8 @@ export class CanvasComponent {
   // Inline connection text editing state
   readonly editingConnectionId = signal<string | null>(null);
 
-  readonly connectionColors = ['#333333', '#1976d2', '#388e3c', '#d32f2f', '#f57c00', '#7b1fa2'];
+  readonly canvasColorPresets = CANVAS_COLOR_PRESETS;
+  readonly connectionColors = CANVAS_COLOR_PRESETS.map((p) => p.stroke);
 
   readonly connectionToolbarPos = computed<{
     x: number;
@@ -663,8 +664,6 @@ export class CanvasComponent {
     }
 
     return {
-      backgroundColor: this.backgroundColor() || 'transparent',
-      opacity: `${this.backgroundOpacity()}`,
       backgroundPosition: `${panX}px ${panY}px`,
       ...(bgSize ? { backgroundSize: bgSize } : {}),
     };
@@ -904,6 +903,35 @@ export class CanvasComponent {
 
   updateShape(id: string, partial: Partial<CanvasShape>): void {
     this.shapes.update((list) => list.map((s) => (s.id === id ? { ...s, ...partial } : s)));
+  }
+
+  setSelectedShapesColor(preset: CanvasColorPreset): void {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) =>
+        selected.has(s.id)
+          ? {
+              ...s,
+              fillColor: preset.fill,
+              strokeColor: preset.stroke,
+            }
+          : s,
+      ),
+    );
+  }
+
+  isShapeColorActive(preset: CanvasColorPreset): boolean {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return false;
+    }
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    return (
+      selectedShapes.length > 0 && selectedShapes.every((s) => s.strokeColor === preset.stroke)
+    );
   }
 
   deleteSelectedShapes(): void {
@@ -1293,7 +1321,7 @@ export class CanvasComponent {
       targetAnchor,
       targetPoint,
       routing: 'orthogonal',
-      strokeColor: '#333333',
+      strokeColor: SHAPE_CONSTANTS.DEFAULT_STROKE,
       strokeWidth: 2,
       pattern: 'solid',
       endMarker: 'arrow',

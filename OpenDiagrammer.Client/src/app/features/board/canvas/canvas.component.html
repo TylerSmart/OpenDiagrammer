@@ -9,8 +9,6 @@
     class="canvas-grid-layer"
     [class.bg-grid-lines]="isGridLines()"
     [class.bg-grid-dots]="isGridDots()"
-    [style.backgroundColor]="backgroundStyles().backgroundColor"
-    [style.opacity]="backgroundStyles().opacity"
     [style.backgroundPosition]="backgroundStyles().backgroundPosition"
     [style.backgroundSize]="backgroundStyles().backgroundSize || ''"
     aria-hidden="true"
@@ -339,6 +337,20 @@
         [style.top.px]="sPos.y"
         (pointerdown)="$event.stopPropagation()"
       >
+        <!-- Shape Color Swatches -->
+        @for (preset of canvasColorPresets; track preset.id) {
+          <button
+            class="color-swatch-btn"
+            [class.active]="isShapeColorActive(preset)"
+            [style.backgroundColor]="preset.swatch"
+            (click)="setSelectedShapesColor(preset)"
+            [attr.aria-label]="'Set color ' + preset.label"
+            [matTooltip]="preset.label"
+          ></button>
+        }
+
+        <div class="dock-divider"></div>
+
         @if (selectedShapeIds().size >= 2) {
           <button
             mat-icon-button
@@ -636,13 +648,14 @@
           <div class="dock-divider"></div>
 
           <!-- Color swatch picker -->
-          @for (color of connectionColors; track color) {
+          @for (preset of canvasColorPresets; track preset.id) {
             <button
               class="color-swatch-btn"
-              [class.active]="selConn.strokeColor === color"
-              [style.backgroundColor]="color"
-              (click)="setConnectionColor(color)"
-              [attr.aria-label]="'Set color ' + color"
+              [class.active]="selConn.strokeColor === preset.stroke"
+              [style.backgroundColor]="preset.swatch"
+              (click)="setConnectionColor(preset.stroke)"
+              [attr.aria-label]="'Set color ' + preset.label"
+              [matTooltip]="preset.label"
             ></button>
           }
 

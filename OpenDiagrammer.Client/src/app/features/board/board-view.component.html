@@ -109,11 +109,7 @@
 
     <!-- Canvas Viewport -->
     <main class="canvas-viewport">
-      <app-canvas
-        [backgroundType]="currentBoard.backgroundType"
-        [backgroundColor]="currentBoard.backgroundColor"
-        [backgroundOpacity]="currentBoard.backgroundOpacity"
-      >
+      <app-canvas [backgroundType]="currentBoard.backgroundType">
         <!-- Canvas Content (Nodes & Connections in future Phase 4 tasks) -->
         <div class="canvas-center-welcome" aria-hidden="true">
           <div class="welcome-card">
