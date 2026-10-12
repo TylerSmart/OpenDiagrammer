@@ -107,9 +107,30 @@ export function computeConnectionPath(
     for (let i = 1; i < pts.length; i++) {
       path += ` L ${pts[i].x} ${pts[i].y}`;
     }
-    const midIdx = Math.floor(pts.length / 2);
-    const mid =
-      pts.length === 2 ? { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 } : pts[midIdx];
+    let totalLength = 0;
+    const segLengths: number[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const len = Math.hypot(pts[i + 1].x - pts[i].x, pts[i + 1].y - pts[i].y);
+      segLengths.push(len);
+      totalLength += len;
+    }
+    let mid: CanvasPoint = pts[0];
+    if (totalLength > 0) {
+      const halfLength = totalLength / 2;
+      let accumulated = 0;
+      for (let i = 0; i < segLengths.length; i++) {
+        const segLen = segLengths[i];
+        if (accumulated + segLen >= halfLength && segLen > 0) {
+          const ratio = (halfLength - accumulated) / segLen;
+          mid = {
+            x: Math.round(pts[i].x + (pts[i + 1].x - pts[i].x) * ratio),
+            y: Math.round(pts[i].y + (pts[i + 1].y - pts[i].y) * ratio),
+          };
+          break;
+        }
+        accumulated += segLen;
+      }
+    }
     return { path, midpoint: mid, points: pts };
   }
 
@@ -301,11 +322,34 @@ export function computeConnectionPath(
   for (let i = 1; i < points.length; i++) {
     path += ` L ${points[i].x} ${points[i].y}`;
   }
-  const midIdx = Math.floor(points.length / 2);
-  const mid =
-    points.length >= 4
-      ? { x: (points[1].x + points[2].x) / 2, y: (points[1].y + points[2].y) / 2 }
-      : points[midIdx];
+
+  // Calculate true midpoint along total polyline length
+  let totalLength = 0;
+  const segLengths: number[] = [];
+  for (let i = 0; i < points.length - 1; i++) {
+    const len = Math.hypot(points[i + 1].x - points[i].x, points[i + 1].y - points[i].y);
+    segLengths.push(len);
+    totalLength += len;
+  }
+
+  let mid: CanvasPoint = points[0];
+  if (totalLength > 0) {
+    const halfLength = totalLength / 2;
+    let accumulated = 0;
+    for (let i = 0; i < segLengths.length; i++) {
+      const segLen = segLengths[i];
+      if (accumulated + segLen >= halfLength && segLen > 0) {
+        const remaining = halfLength - accumulated;
+        const ratio = remaining / segLen;
+        mid = {
+          x: Math.round(points[i].x + (points[i + 1].x - points[i].x) * ratio),
+          y: Math.round(points[i].y + (points[i + 1].y - points[i].y) * ratio),
+        };
+        break;
+      }
+      accumulated += segLen;
+    }
+  }
 
   return { path, midpoint: mid, points };
 }

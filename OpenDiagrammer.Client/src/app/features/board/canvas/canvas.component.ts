@@ -304,6 +304,7 @@ export class CanvasComponent {
 
   resetConnectionWaypoints(connId: string): void {
     this.updateConnection(connId, { waypoints: [] });
+    this.selectConnection(connId);
   }
 
   handleSegmentDblClick(event: MouseEvent, connId: string): void {
