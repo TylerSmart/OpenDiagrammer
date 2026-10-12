@@ -203,14 +203,19 @@ export interface BoardMembersDialogData {
       gap: 0.75rem;
       align-items: flex-start;
       flex-wrap: wrap;
+      width: 100%;
+      box-sizing: border-box;
     }
     .add-input {
       flex: 2;
       min-width: 180px;
+      max-width: 100%;
+      box-sizing: border-box;
     }
     .role-select {
       flex: 1;
       min-width: 120px;
+      box-sizing: border-box;
     }
     .add-btn {
       height: 52px;
@@ -231,6 +236,9 @@ export interface BoardMembersDialogData {
       gap: 0.75rem;
       max-height: 320px;
       overflow-y: auto;
+      overflow-x: hidden;
+      width: 100%;
+      box-sizing: border-box;
     }
     .member-item {
       display: flex;
@@ -239,6 +247,8 @@ export interface BoardMembersDialogData {
       padding: 0.5rem 0.75rem;
       border-radius: 0.5rem;
       background-color: var(--mat-sys-surface-container-low);
+      width: 100%;
+      box-sizing: border-box;
     }
     .member-avatar {
       width: 36px;
@@ -251,9 +261,11 @@ export interface BoardMembersDialogData {
       justify-content: center;
       font-weight: 600;
       font-size: 0.875rem;
+      flex-shrink: 0;
     }
     .member-info {
       flex: 1;
+      min-width: 0;
       overflow: hidden;
     }
     .member-name {
@@ -275,6 +287,7 @@ export interface BoardMembersDialogData {
       display: flex;
       align-items: center;
       gap: 0.5rem;
+      flex-shrink: 0;
     }
     .mini-role-select {
       width: 110px;

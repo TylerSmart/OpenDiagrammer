@@ -131,6 +131,7 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
     }
     .full-width {
       width: 100%;
+      box-sizing: border-box;
     }
     .row {
       display: flex;
@@ -153,6 +154,11 @@ import { BoardBackgroundType, CreateBoardRequest } from '../../../core/models/bo
       margin-bottom: 0.5rem;
       width: 100%;
       box-sizing: border-box;
+
+      mat-slider {
+        width: calc(100% - 16px);
+        max-width: calc(100% - 16px);
+      }
     }
     .slider-label {
       font-size: 0.875rem;

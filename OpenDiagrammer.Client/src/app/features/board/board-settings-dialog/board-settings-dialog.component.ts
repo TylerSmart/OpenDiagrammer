@@ -219,6 +219,7 @@ export type BoardSettingsDialogResult =
     }
     .full-width {
       width: 100%;
+      box-sizing: border-box;
     }
     .row {
       display: flex;
@@ -241,6 +242,11 @@ export type BoardSettingsDialogResult =
       margin-bottom: 0.5rem;
       width: 100%;
       box-sizing: border-box;
+
+      mat-slider {
+        width: calc(100% - 16px);
+        max-width: calc(100% - 16px);
+      }
     }
     .slider-label {
       font-size: 0.875rem;
@@ -252,6 +258,9 @@ export type BoardSettingsDialogResult =
     }
     .owner-section,
     .danger-zone {
+      width: 100%;
+      box-sizing: border-box;
+
       h3 {
         margin: 0 0 0.25rem;
         font-size: 1rem;
@@ -261,15 +270,28 @@ export type BoardSettingsDialogResult =
         margin: 0 0 0.75rem;
         font-size: 0.8125rem;
         color: var(--mat-sys-on-surface-variant);
+        word-break: break-word;
       }
     }
     .transfer-row {
       display: flex;
       gap: 0.75rem;
       align-items: flex-start;
+      width: 100%;
+      box-sizing: border-box;
+
+      button {
+        flex-shrink: 0;
+        white-space: nowrap;
+        height: 56px;
+      }
     }
     .transfer-input {
       flex: 1;
+      min-width: 0;
+    }
+    .danger-zone button {
+      max-width: 100%;
     }
     .error-banner {
       display: flex;

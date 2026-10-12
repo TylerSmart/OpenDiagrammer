@@ -44,6 +44,9 @@ export interface ConfirmDialogData {
     </mat-dialog-actions>
   `,
   styles: `
+    :host {
+      display: block;
+    }
     .dialog-title {
       display: flex;
       align-items: center;

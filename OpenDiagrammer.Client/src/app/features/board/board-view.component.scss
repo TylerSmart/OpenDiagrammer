@@ -101,7 +101,7 @@
   background-color: var(--mat-sys-surface-container);
   border: 1px solid var(--mat-sys-outline-variant);
 
-  mat-icon {
+  & > mat-icon {
     font-size: 3rem;
     width: 3rem;
     height: 3rem;
