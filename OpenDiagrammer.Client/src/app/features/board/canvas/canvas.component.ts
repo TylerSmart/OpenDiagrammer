@@ -415,6 +415,12 @@ export class CanvasComponent {
       return;
     }
 
+    // Prevent canvas interactions if clicking inside floating docks or UI controls
+    const target = event.target as HTMLElement | null;
+    if (target?.closest('.canvas-tools-dock') || target?.closest('.canvas-controls-dock')) {
+      return;
+    }
+
     // Left click on empty canvas
     if (event.button === 0) {
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
@@ -511,7 +517,8 @@ export class CanvasComponent {
       this.resizeInitialShape &&
       this.activeResizeHandle
     ) {
-      this.applyResize(currentWorld, event.shiftKey);
+      const keep1to1 = event.ctrlKey || event.metaKey;
+      this.applyResize(currentWorld, event.shiftKey, keep1to1);
       return;
     }
 
@@ -583,7 +590,11 @@ export class CanvasComponent {
     }
   }
 
-  private applyResize(currentWorld: CanvasPoint, maintainAspectRatio: boolean): void {
+  private applyResize(
+    currentWorld: CanvasPoint,
+    maintainAspectRatio: boolean,
+    keep1to1 = false,
+  ): void {
     if (!this.resizeInitialShape || !this.resizeStartPoint || !this.activeResizeHandle) {
       return;
     }
@@ -624,7 +635,26 @@ export class CanvasComponent {
       }
     }
 
-    if (maintainAspectRatio && init.width > 0 && init.height > 0) {
+    // When holding Ctrl (keep1to1), force Width === Height (1:1 perfect square/circle)
+    if (keep1to1) {
+      if (handle === 'e' || handle === 'w') {
+        newHeight = newWidth;
+      } else if (handle === 'n' || handle === 's') {
+        newWidth = newHeight;
+      } else {
+        // Corner resize: make larger of newWidth and newHeight
+        const side = Math.max(newWidth, newHeight);
+        if (handle.includes('w')) {
+          newX = init.x + (init.width - side);
+        }
+        if (handle.includes('n')) {
+          newY = init.y + (init.height - side);
+        }
+        newWidth = side;
+        newHeight = side;
+      }
+    } else if (maintainAspectRatio && init.width > 0 && init.height > 0) {
+      // Maintain initial shape aspect ratio if Shift is held
       const aspectRatio = init.width / init.height;
       if (handle === 'e' || handle === 'w') {
         newHeight = newWidth / aspectRatio;

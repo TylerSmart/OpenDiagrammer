@@ -61,7 +61,12 @@
   </div>
 
   <!-- Top Shape Creation Tool Palette Dock -->
-  <div class="canvas-tools-dock" role="toolbar" aria-label="Shape creation tools">
+  <div
+    class="canvas-tools-dock"
+    role="toolbar"
+    aria-label="Shape creation tools"
+    (pointerdown)="$event.stopPropagation()"
+  >
     <button
       mat-icon-button
       class="tool-btn"
@@ -121,7 +126,12 @@
   </div>
 
   <!-- Floating Canvas Controls Dock (Bottom Left) -->
-  <div class="canvas-controls-dock" role="toolbar" aria-label="Canvas zoom and view controls">
+  <div
+    class="canvas-controls-dock"
+    role="toolbar"
+    aria-label="Canvas zoom and view controls"
+    (pointerdown)="$event.stopPropagation()"
+  >
     <button
       mat-icon-button
       class="control-btn"

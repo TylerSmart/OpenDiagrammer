@@ -346,6 +346,25 @@ describe('CanvasComponent', () => {
     const resizedShape = component.shapes().find((s) => s.id === s1.id);
     expect(resizedShape?.width).toBe(s1.width + 50);
     expect(resizedShape?.height).toBe(s1.height + 40);
+
+    // Resize with Ctrl held to force 1:1 square
+    const downEvent2 = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: resizedShape!.x + resizedShape!.width,
+      clientY: resizedShape!.y + resizedShape!.height,
+    });
+    component.handleResizePointerDown(downEvent2, 'se');
+
+    const moveEvent2 = new PointerEvent('pointermove', {
+      clientX: resizedShape!.x + resizedShape!.width + 60,
+      clientY: resizedShape!.y + resizedShape!.height + 20,
+      ctrlKey: true,
+    });
+    component.handlePointerMove(moveEvent2);
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    const squareShape = component.shapes().find((s) => s.id === s1.id);
+    expect(squareShape?.width).toBe(squareShape?.height);
   });
 
   it('should select shapes via marquee drag selection', () => {
