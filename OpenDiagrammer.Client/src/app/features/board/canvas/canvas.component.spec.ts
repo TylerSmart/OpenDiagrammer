@@ -394,4 +394,99 @@ describe('CanvasComponent', () => {
     expect(component.isShapeSelected(s1.id)).toBe(true);
     expect(component.isShapeSelected(s2.id)).toBe(false);
   });
+
+  it('should create and render connections between shapes', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('ellipse', { x: 400, y: 100 });
+
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+    expect(component.connections().length).toBe(1);
+    expect(conn.sourceShapeId).toBe(s1.id);
+    expect(conn.targetShapeId).toBe(s2.id);
+
+    const rendered = component.renderedConnections();
+    expect(rendered.length).toBe(1);
+    expect(rendered[0].id).toBe(conn.id);
+    expect(rendered[0].path).toContain('M');
+
+    // Selection
+    expect(component.isConnectionSelected(conn.id)).toBe(true);
+    component.clearSelection();
+    expect(component.isConnectionSelected(conn.id)).toBe(false);
+
+    component.selectConnection(conn.id);
+    expect(component.isConnectionSelected(conn.id)).toBe(true);
+  });
+
+  it('should dynamically update connection paths when connected shapes move', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+
+    const _conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+    const initialPath = component.renderedConnections()[0].path;
+
+    // Move s1
+    component.selectShape(s1.id);
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+
+    const updatedPath = component.renderedConnections()[0].path;
+    expect(updatedPath).not.toBe(initialPath);
+  });
+
+  it('should delete connections when either connected shape is deleted', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    component.createConnection(s1.id, 'right', s2.id, 'left');
+    expect(component.connections().length).toBe(1);
+
+    component.selectShape(s1.id);
+    component.deleteSelectedShapes();
+
+    expect(component.shapes().length).toBe(1);
+    expect(component.connections().length).toBe(0);
+  });
+
+  it('should create connection via dragging from an anchor point', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+
+    // Anchor down on s1 right anchor
+    const anchorEvent = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: s1.x + s1.width,
+      clientY: s1.y + s1.height / 2,
+    });
+    component.handleAnchorPointerDown({
+      event: anchorEvent,
+      shape: s1,
+      anchor: 'right',
+    });
+
+    expect(component.inProgressConnection()).not.toBeNull();
+
+    // Hover over s2 left anchor
+    component.handleAnchorHover({ shape: s2, anchor: 'left' });
+
+    // Pointer move
+    const moveEvent = new PointerEvent('pointermove', {
+      clientX: s2.x,
+      clientY: s2.y + s2.height / 2,
+    });
+    component.handlePointerMove(moveEvent);
+
+    // Pointer up to complete connection
+    const upEvent = new PointerEvent('pointerup', {
+      button: 0,
+      clientX: s2.x,
+      clientY: s2.y + s2.height / 2,
+    });
+    component.handlePointerUp(upEvent);
+
+    expect(component.inProgressConnection()).toBeNull();
+    expect(component.connections().length).toBe(1);
+    const newConn = component.connections()[0];
+    expect(newConn.sourceShapeId).toBe(s1.id);
+    expect(newConn.targetShapeId).toBe(s2.id);
+    expect(newConn.targetAnchor).toBe('left');
+  });
 });

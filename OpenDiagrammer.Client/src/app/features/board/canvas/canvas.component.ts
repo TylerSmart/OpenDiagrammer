@@ -5,6 +5,12 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CANVAS_CONSTANTS, CanvasPoint, CanvasTransform } from './canvas.models';
 import {
+  AnchorPosition,
+  CanvasConnection,
+  computeConnectionPath,
+  getShapeAnchorPoint,
+} from './connection.models';
+import {
   ActiveTool,
   BoundingBox,
   CanvasShape,
@@ -13,6 +19,15 @@ import {
   ShapeType,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
+
+interface RenderedConnection {
+  id: string;
+  path: string;
+  strokeColor: string;
+  strokeWidth: number;
+  dashArray?: string;
+  endMarker?: string;
+}
 
 @Component({
   imports: [MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
@@ -50,6 +65,20 @@ export class CanvasComponent {
   readonly shapes = signal<CanvasShape[]>([]);
   readonly selectedShapeIds = signal<Set<string>>(new Set<string>());
   readonly activeTool = signal<ActiveTool>('select');
+
+  // Connections State
+  readonly connections = signal<CanvasConnection[]>([]);
+  readonly selectedConnectionIds = signal<Set<string>>(new Set<string>());
+  readonly inProgressConnection = signal<{
+    sourceShapeId: string;
+    sourceAnchor: AnchorPosition;
+    currentPoint: CanvasPoint;
+    targetShapeId?: string;
+    targetAnchor?: AnchorPosition;
+    path: string;
+  } | null>(null);
+
+  private hoveredAnchor: { shape: CanvasShape; anchor: AnchorPosition } | null = null;
 
   // Marquee selection state
   readonly marqueeBox = signal<BoundingBox | null>(null);
@@ -100,6 +129,56 @@ export class CanvasComponent {
       width: maxX - minX,
       height: maxY - minY,
     };
+  });
+
+  // Rendered Connections computation
+  readonly renderedConnections = computed<RenderedConnection[]>(() => {
+    const shapeMap = new Map(this.shapes().map((s) => [s.id, s]));
+    const result: RenderedConnection[] = [];
+
+    for (const conn of this.connections()) {
+      const sourceShape = shapeMap.get(conn.sourceShapeId);
+      if (!sourceShape) {
+        continue;
+      }
+
+      const start = getShapeAnchorPoint(sourceShape, conn.sourceAnchor);
+      let end: CanvasPoint;
+
+      if (conn.targetShapeId && shapeMap.has(conn.targetShapeId) && conn.targetAnchor) {
+        const targetShape = shapeMap.get(conn.targetShapeId)!;
+        end = getShapeAnchorPoint(targetShape, conn.targetAnchor);
+      } else if (conn.targetPoint) {
+        end = conn.targetPoint;
+      } else {
+        continue;
+      }
+
+      const path = computeConnectionPath(
+        start,
+        end,
+        conn.routing,
+        conn.sourceAnchor,
+        conn.targetAnchor,
+      );
+
+      let dashArray: string | undefined;
+      if (conn.pattern === 'dashed') {
+        dashArray = '6,4';
+      } else if (conn.pattern === 'dotted') {
+        dashArray = '2,3';
+      }
+
+      result.push({
+        id: conn.id,
+        path,
+        strokeColor: conn.strokeColor,
+        strokeWidth: conn.strokeWidth,
+        dashArray,
+      });
+    }
+
+    return result;
   });
 
   // Interaction tracking state
@@ -277,6 +356,7 @@ export class CanvasComponent {
 
   clearSelection(): void {
     this.selectedShapeIds.set(new Set<string>());
+    this.selectedConnectionIds.set(new Set<string>());
   }
 
   selectShape(id: string, multiSelect = false): void {
@@ -292,6 +372,7 @@ export class CanvasComponent {
       current.add(id);
     }
     this.selectedShapeIds.set(current);
+    this.selectedConnectionIds.set(new Set<string>());
   }
 
   createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
@@ -316,11 +397,108 @@ export class CanvasComponent {
 
   deleteSelectedShapes(): void {
     const selected = this.selectedShapeIds();
-    if (selected.size === 0) {
+    const selectedConns = this.selectedConnectionIds();
+
+    if (selected.size > 0) {
+      this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
+      // Also remove any connections linked to deleted shapes
+      this.connections.update((conns) =>
+        conns.filter((c) => !selected.has(c.sourceShapeId) && !selected.has(c.targetShapeId ?? '')),
+      );
+    }
+
+    if (selectedConns.size > 0) {
+      this.connections.update((conns) => conns.filter((c) => !selectedConns.has(c.id)));
+    }
+
+    this.clearSelection();
+  }
+
+  // Connections API
+  isConnectionSelected(id: string): boolean {
+    return this.selectedConnectionIds().has(id);
+  }
+
+  selectConnection(id: string, multiSelect = false): void {
+    const current = new Set(this.selectedConnectionIds());
+    if (multiSelect) {
+      if (current.has(id)) {
+        current.delete(id);
+      } else {
+        current.add(id);
+      }
+    } else {
+      current.clear();
+      current.add(id);
+    }
+    this.selectedConnectionIds.set(current);
+    this.selectedShapeIds.set(new Set<string>());
+  }
+
+  createConnection(
+    sourceShapeId: string,
+    sourceAnchor: AnchorPosition,
+    targetShapeId?: string,
+    targetAnchor?: AnchorPosition,
+    targetPoint?: CanvasPoint,
+  ): CanvasConnection {
+    const newConn: CanvasConnection = {
+      id: `conn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      sourceShapeId,
+      sourceAnchor,
+      targetShapeId,
+      targetAnchor,
+      targetPoint,
+      routing: 'orthogonal',
+      strokeColor: '#333333',
+      strokeWidth: 2,
+      pattern: 'solid',
+      endMarker: 'arrow',
+    };
+
+    this.connections.update((list) => [...list, newConn]);
+    this.selectConnection(newConn.id);
+    return newConn;
+  }
+
+  handleConnectionPointerDown(event: PointerEvent, connId: string): void {
+    if (event.button !== 0 || this.isSpacePressed) {
       return;
     }
-    this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
-    this.clearSelection();
+    event.stopPropagation();
+    this.selectConnection(connId, event.shiftKey);
+  }
+
+  handleAnchorPointerDown(payload: {
+    event: PointerEvent;
+    shape: CanvasShape;
+    anchor: AnchorPosition;
+  }): void {
+    if (payload.event.button !== 0 || this.isSpacePressed) {
+      return;
+    }
+
+    payload.event.stopPropagation();
+
+    const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
+    const initialPath = computeConnectionPath(startPoint, startPoint, 'orthogonal', payload.anchor);
+
+    this.inProgressConnection.set({
+      sourceShapeId: payload.shape.id,
+      sourceAnchor: payload.anchor,
+      currentPoint: startPoint,
+      path: initialPath,
+    });
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(payload.event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  handleAnchorHover(payload: { shape: CanvasShape; anchor: AnchorPosition } | null): void {
+    this.hoveredAnchor = payload;
   }
 
   // Pointer event handlers on shapes
@@ -330,6 +508,12 @@ export class CanvasComponent {
     }
 
     event.stopPropagation();
+
+    if (this.activeTool() === 'connection') {
+      // Start connection from center or nearest anchor on click
+      this.handleAnchorPointerDown({ event, shape, anchor: 'right' });
+      return;
+    }
 
     if (!this.isShapeSelected(shape.id)) {
       this.selectShape(shape.id, event.shiftKey);
@@ -426,7 +610,7 @@ export class CanvasComponent {
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
       const currentTool = this.activeTool();
 
-      if (currentTool !== 'select') {
+      if (currentTool !== 'select' && currentTool !== 'connection') {
         this.createShape(currentTool as ShapeType, worldPoint);
         return;
       }
@@ -435,20 +619,22 @@ export class CanvasComponent {
         this.clearSelection();
       }
 
-      this.marqueeStart = worldPoint;
-      this.marqueeBox.set({
-        minX: worldPoint.x,
-        minY: worldPoint.y,
-        maxX: worldPoint.x,
-        maxY: worldPoint.y,
-        width: 0,
-        height: 0,
-      });
+      if (currentTool === 'select') {
+        this.marqueeStart = worldPoint;
+        this.marqueeBox.set({
+          minX: worldPoint.x,
+          minY: worldPoint.y,
+          maxX: worldPoint.x,
+          maxY: worldPoint.y,
+          width: 0,
+          height: 0,
+        });
 
-      try {
-        (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
-      } catch {
-        // Ignored
+        try {
+          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+        } catch {
+          // Ignored
+        }
       }
     }
   }
@@ -488,6 +674,39 @@ export class CanvasComponent {
     }
 
     const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
+
+    // In-progress connection drawing
+    const inProg = this.inProgressConnection();
+    if (inProg) {
+      const sourceShape = this.shapes().find((s) => s.id === inProg.sourceShapeId);
+      if (sourceShape) {
+        const startPoint = getShapeAnchorPoint(sourceShape, inProg.sourceAnchor);
+        let endPoint = currentWorld;
+        let targetAnchor: AnchorPosition | undefined;
+
+        if (this.hoveredAnchor && this.hoveredAnchor.shape.id !== inProg.sourceShapeId) {
+          endPoint = getShapeAnchorPoint(this.hoveredAnchor.shape, this.hoveredAnchor.anchor);
+          targetAnchor = this.hoveredAnchor.anchor;
+        }
+
+        const path = computeConnectionPath(
+          startPoint,
+          endPoint,
+          'orthogonal',
+          inProg.sourceAnchor,
+          targetAnchor,
+        );
+
+        this.inProgressConnection.set({
+          ...inProg,
+          currentPoint: endPoint,
+          targetShapeId: this.hoveredAnchor?.shape.id,
+          targetAnchor,
+          path,
+        });
+      }
+      return;
+    }
 
     // Moving shapes
     if (this.isMovingShapes && this.moveStartPoint) {
@@ -553,6 +772,31 @@ export class CanvasComponent {
       }
       this.isPanning.set(false);
       this.lastPointerPos = null;
+    }
+
+    // Finish in-progress connection
+    const inProg = this.inProgressConnection();
+    if (inProg) {
+      const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      if (inProg.targetShapeId && inProg.targetAnchor) {
+        this.createConnection(
+          inProg.sourceShapeId,
+          inProg.sourceAnchor,
+          inProg.targetShapeId,
+          inProg.targetAnchor,
+        );
+      } else {
+        // Connect to empty world point
+        this.createConnection(
+          inProg.sourceShapeId,
+          inProg.sourceAnchor,
+          undefined,
+          undefined,
+          currentWorld,
+        );
+      }
+      this.inProgressConnection.set(null);
+      this.activeTool.set('select');
     }
 
     if (this.isMovingShapes) {
@@ -642,7 +886,6 @@ export class CanvasComponent {
       } else if (handle === 'n' || handle === 's') {
         newWidth = newHeight;
       } else {
-        // Corner resize: make larger of newWidth and newHeight
         const side = Math.max(newWidth, newHeight);
         if (handle.includes('w')) {
           newX = init.x + (init.width - side);
@@ -654,7 +897,6 @@ export class CanvasComponent {
         newHeight = side;
       }
     } else if (maintainAspectRatio && init.width > 0 && init.height > 0) {
-      // Maintain initial shape aspect ratio if Shift is held
       const aspectRatio = init.width / init.height;
       if (handle === 'e' || handle === 'w') {
         newHeight = newWidth / aspectRatio;
@@ -688,6 +930,10 @@ export class CanvasComponent {
     if (!event.ctrlKey && !event.metaKey && !event.altKey) {
       if (event.key === 'v' || event.key === 'V') {
         this.setActiveTool('select');
+        return;
+      }
+      if (event.key === 'c' || event.key === 'C') {
+        this.setActiveTool('connection');
         return;
       }
       if (event.key === 'r' || event.key === 'R') {

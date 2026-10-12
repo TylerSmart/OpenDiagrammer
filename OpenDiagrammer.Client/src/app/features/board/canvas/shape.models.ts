@@ -33,7 +33,8 @@ export interface MarqueeBox {
   currentY: number;
 }
 
-export type ActiveTool = 'select' | 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond';
+export type ActiveTool =
+  'select' | 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond' | 'connection';
 
 export const SHAPE_CONSTANTS = {
   MIN_WIDTH: 30,

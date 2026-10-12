@@ -19,12 +19,80 @@
   <div class="canvas-content-layer" [style.transform]="contentTransform()">
     <ng-content></ng-content>
 
+    <!-- Rendered SVG Connections Layer -->
+    <svg class="canvas-connections-layer" aria-hidden="true">
+      <defs>
+        <marker
+          id="arrow-marker"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--mat-sys-on-surface, #333)" />
+        </marker>
+        <marker
+          id="arrow-marker-selected"
+          viewBox="0 0 10 10"
+          refX="9"
+          refY="5"
+          markerWidth="6"
+          markerHeight="6"
+          orient="auto-start-reverse"
+        >
+          <path d="M 0 1 L 10 5 L 0 9 z" fill="var(--mat-sys-primary, #1976d2)" />
+        </marker>
+      </defs>
+
+      @for (conn of renderedConnections(); track conn.id) {
+        <path
+          class="connection-hit-area"
+          [attr.d]="conn.path"
+          (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+        />
+        <path
+          class="connection-path"
+          [class.is-selected]="isConnectionSelected(conn.id)"
+          [attr.d]="conn.path"
+          [attr.stroke]="
+            isConnectionSelected(conn.id) ? 'var(--mat-sys-primary)' : conn.strokeColor
+          "
+          [attr.stroke-width]="conn.strokeWidth"
+          [attr.stroke-dasharray]="conn.dashArray || ''"
+          [attr.marker-end]="
+            isConnectionSelected(conn.id) ? 'url(#arrow-marker-selected)' : 'url(#arrow-marker)'
+          "
+          (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+        />
+      }
+
+      @if (inProgressConnection(); as inProg) {
+        <path
+          class="connection-path in-progress"
+          [attr.d]="inProg.path"
+          stroke="var(--mat-sys-primary)"
+          stroke-width="2"
+          stroke-dasharray="5,5"
+          marker-end="url(#arrow-marker-selected)"
+        />
+      }
+    </svg>
+
     <!-- Rendered Shapes -->
     @for (shape of shapes(); track shape.id) {
       <app-canvas-shape
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
+        [showAnchors]="
+          activeTool() === 'connection' ||
+          isShapeSelected(shape.id) ||
+          inProgressConnection() !== null
+        "
         (pointerdown)="handleShapePointerDown($event, shape)"
+        (anchorPointerDown)="handleAnchorPointerDown($event)"
+        (anchorHover)="handleAnchorHover($event)"
       ></app-canvas-shape>
     }
 
@@ -76,6 +144,19 @@
       matTooltip="Select tool (V)"
     >
       <mat-icon>near_me</mat-icon>
+    </button>
+
+    <div class="dock-divider"></div>
+
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'connection'"
+      (click)="setActiveTool('connection')"
+      aria-label="Connection Tool"
+      matTooltip="Connector Line / Arrow (C)"
+    >
+      <mat-icon>trending_flat</mat-icon>
     </button>
 
     <div class="dock-divider"></div>

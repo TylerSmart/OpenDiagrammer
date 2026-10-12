@@ -59,4 +59,17 @@
       <span>{{ shape().text }}</span>
     </div>
   }
+
+  <!-- Connection Anchor Points -->
+  @if (showAnchors() || isSelected()) {
+    @for (anchor of anchors; track anchor) {
+      <div
+        class="shape-anchor anchor-{{ anchor }}"
+        (pointerdown)="handleAnchorDown($event, anchor)"
+        (pointerenter)="handleAnchorEnter(anchor)"
+        (pointerleave)="handleAnchorLeave()"
+        [attr.aria-label]="anchor + ' connection anchor'"
+      ></div>
+    }
+  }
 </div>

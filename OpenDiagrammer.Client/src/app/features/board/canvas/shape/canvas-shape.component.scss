@@ -39,3 +39,45 @@
   text-overflow: ellipsis;
   word-break: break-word;
 }
+
+// Connection Anchors
+.shape-anchor {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: var(--mat-sys-surface);
+  border: 2px solid var(--mat-sys-primary);
+  pointer-events: auto;
+  cursor: crosshair;
+  z-index: 20;
+  transition:
+    transform 0.1s ease,
+    background-color 0.1s ease;
+  box-sizing: border-box;
+
+  &:hover {
+    transform: scale(1.4);
+    background-color: var(--mat-sys-primary);
+  }
+
+  &.anchor-top {
+    top: -5px;
+    left: calc(50% - 5px);
+  }
+
+  &.anchor-right {
+    top: calc(50% - 5px);
+    right: -5px;
+  }
+
+  &.anchor-bottom {
+    bottom: -5px;
+    left: calc(50% - 5px);
+  }
+
+  &.anchor-left {
+    top: calc(50% - 5px);
+    left: -5px;
+  }
+}

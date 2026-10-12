@@ -1,4 +1,5 @@
-import { Component, computed, input } from '@angular/core';
+import { Component, computed, input, output } from '@angular/core';
+import { AnchorPosition } from '../connection.models';
 import { CanvasShape } from '../shape.models';
 
 @Component({
@@ -9,6 +10,20 @@ import { CanvasShape } from '../shape.models';
 export class CanvasShapeComponent {
   readonly shape = input.required<CanvasShape>();
   readonly isSelected = input<boolean>(false);
+  readonly showAnchors = input<boolean>(false);
+
+  readonly anchorPointerDown = output<{
+    event: PointerEvent;
+    shape: CanvasShape;
+    anchor: AnchorPosition;
+  }>();
+
+  readonly anchorHover = output<{
+    shape: CanvasShape;
+    anchor: AnchorPosition;
+  } | null>();
+
+  readonly anchors: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
 
   readonly shapeStyles = computed(() => {
     const s = this.shape();
@@ -25,4 +40,21 @@ export class CanvasShapeComponent {
     const h = this.shape().height;
     return `${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`;
   });
+
+  handleAnchorDown(event: PointerEvent, anchor: AnchorPosition): void {
+    event.stopPropagation();
+    this.anchorPointerDown.emit({
+      event,
+      shape: this.shape(),
+      anchor,
+    });
+  }
+
+  handleAnchorEnter(anchor: AnchorPosition): void {
+    this.anchorHover.emit({ shape: this.shape(), anchor });
+  }
+
+  handleAnchorLeave(): void {
+    this.anchorHover.emit(null);
+  }
 }

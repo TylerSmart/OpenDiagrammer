@@ -52,6 +52,41 @@
   pointer-events: auto;
 }
 
+// Connections Layer
+.canvas-connections-layer {
+  position: absolute;
+  top: -100000px;
+  left: -100000px;
+  width: 200000px;
+  height: 200000px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 5;
+}
+
+.connection-hit-area {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 14px;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.connection-path {
+  fill: none;
+  pointer-events: stroke;
+  cursor: pointer;
+  transition: stroke 0.1s ease;
+
+  &.is-selected {
+    filter: drop-shadow(0 0 2px var(--mat-sys-primary));
+  }
+
+  &.in-progress {
+    pointer-events: none;
+  }
+}
+
 // Selection Bounding Box & Handles
 .selection-box {
   position: absolute;
