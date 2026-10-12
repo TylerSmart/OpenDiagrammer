@@ -62,8 +62,8 @@
     </div>
   }
 
-  <!-- Connection Anchor Points (suppressed if shape is selected so resize handles take priority) -->
-  @if (!isSelected() && (showAnchors() || isHovered())) {
+  <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->
+  @if (showAnchors() || isHovered() || isSelected()) {
     @for (anchor of anchors; track anchor) {
       <div
         class="shape-anchor anchor-{{ anchor }}"

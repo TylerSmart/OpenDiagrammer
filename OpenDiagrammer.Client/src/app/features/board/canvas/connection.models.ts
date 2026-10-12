@@ -90,6 +90,161 @@ export function getShapeAnchorPoint(shape: CanvasShape, anchor: AnchorPosition):
 }
 
 /**
+ * Computes orthogonal routing points for a self-loop on a shape.
+ * Guarantees that the connector emerges cleanly from sourceAnchor,
+ * routes around the exterior of the shape without entering its interior bounding box,
+ * and enters cleanly through targetAnchor.
+ */
+export function computeSelfLoopOrthogonalPoints(
+  start: CanvasPoint,
+  end: CanvasPoint,
+  sourceAnchor: AnchorPosition,
+  targetAnchor: AnchorPosition,
+  shapeBounds?: { x: number; y: number; width: number; height: number },
+  stub = 28,
+): CanvasPoint[] {
+  const shapeLeft = shapeBounds ? shapeBounds.x : Math.min(start.x, end.x);
+  const shapeRight = shapeBounds ? shapeBounds.x + shapeBounds.width : Math.max(start.x, end.x);
+  const shapeTop = shapeBounds ? shapeBounds.y : Math.min(start.y, end.y);
+  const shapeBottom = shapeBounds ? shapeBounds.y + shapeBounds.height : Math.max(start.y, end.y);
+
+  const xLeft = shapeLeft - stub;
+  const xRight = shapeRight + stub;
+  const yTop = shapeTop - stub;
+  const yBottom = shapeBottom + stub;
+
+  switch (sourceAnchor) {
+    case 'bottom':
+      switch (targetAnchor) {
+        case 'left':
+          return [
+            start,
+            { x: start.x, y: yBottom },
+            { x: xLeft, y: yBottom },
+            { x: xLeft, y: end.y },
+            end,
+          ];
+        case 'right':
+          return [
+            start,
+            { x: start.x, y: yBottom },
+            { x: xRight, y: yBottom },
+            { x: xRight, y: end.y },
+            end,
+          ];
+        case 'top':
+          return [
+            start,
+            { x: start.x, y: yBottom },
+            { x: xRight, y: yBottom },
+            { x: xRight, y: yTop },
+            { x: end.x, y: yTop },
+            end,
+          ];
+        case 'bottom':
+          return [start, end];
+      }
+      break;
+
+    case 'top':
+      switch (targetAnchor) {
+        case 'left':
+          return [
+            start,
+            { x: start.x, y: yTop },
+            { x: xLeft, y: yTop },
+            { x: xLeft, y: end.y },
+            end,
+          ];
+        case 'right':
+          return [
+            start,
+            { x: start.x, y: yTop },
+            { x: xRight, y: yTop },
+            { x: xRight, y: end.y },
+            end,
+          ];
+        case 'bottom':
+          return [
+            start,
+            { x: start.x, y: yTop },
+            { x: xRight, y: yTop },
+            { x: xRight, y: yBottom },
+            { x: end.x, y: yBottom },
+            end,
+          ];
+        case 'top':
+          return [start, end];
+      }
+      break;
+
+    case 'left':
+      switch (targetAnchor) {
+        case 'top':
+          return [
+            start,
+            { x: xLeft, y: start.y },
+            { x: xLeft, y: yTop },
+            { x: end.x, y: yTop },
+            end,
+          ];
+        case 'bottom':
+          return [
+            start,
+            { x: xLeft, y: start.y },
+            { x: xLeft, y: yBottom },
+            { x: end.x, y: yBottom },
+            end,
+          ];
+        case 'right':
+          return [
+            start,
+            { x: xLeft, y: start.y },
+            { x: xLeft, y: yBottom },
+            { x: xRight, y: yBottom },
+            { x: xRight, y: end.y },
+            end,
+          ];
+        case 'left':
+          return [start, end];
+      }
+      break;
+
+    case 'right':
+      switch (targetAnchor) {
+        case 'top':
+          return [
+            start,
+            { x: xRight, y: start.y },
+            { x: xRight, y: yTop },
+            { x: end.x, y: yTop },
+            end,
+          ];
+        case 'bottom':
+          return [
+            start,
+            { x: xRight, y: start.y },
+            { x: xRight, y: yBottom },
+            { x: end.x, y: yBottom },
+            end,
+          ];
+        case 'left':
+          return [
+            start,
+            { x: xRight, y: start.y },
+            { x: xRight, y: yBottom },
+            { x: xLeft, y: yBottom },
+            { x: xLeft, y: end.y },
+            end,
+          ];
+        case 'right':
+          return [start, end];
+      }
+      break;
+  }
+}
+
+/**
  * Generates an SVG path string for connection lines with various routing types and waypoints.
  */
 export function computeConnectionPath(
@@ -99,7 +254,90 @@ export function computeConnectionPath(
   sourceAnchor?: AnchorPosition,
   targetAnchor?: AnchorPosition,
   waypoints?: CanvasPoint[],
+  shapeBounds?: { x: number; y: number; width: number; height: number },
+  isSelfLoop?: boolean,
 ): { path: string; midpoint: CanvasPoint; points: CanvasPoint[] } {
+  const selfLoop =
+    isSelfLoop ??
+    (Boolean(shapeBounds) &&
+      Boolean(sourceAnchor) &&
+      Boolean(targetAnchor) &&
+      sourceAnchor !== targetAnchor);
+
+  // Self-loop default path calculation (when no custom waypoints have been set)
+  if (
+    selfLoop &&
+    sourceAnchor &&
+    targetAnchor &&
+    sourceAnchor !== targetAnchor &&
+    (!waypoints || waypoints.length === 0)
+  ) {
+    const orthoPoints = computeSelfLoopOrthogonalPoints(
+      start,
+      end,
+      sourceAnchor,
+      targetAnchor,
+      shapeBounds,
+    );
+
+    if (routing === 'orthogonal' || routing === 'straight') {
+      let path = `M ${orthoPoints[0].x} ${orthoPoints[0].y}`;
+      for (let i = 1; i < orthoPoints.length; i++) {
+        path += ` L ${orthoPoints[i].x} ${orthoPoints[i].y}`;
+      }
+
+      let totalLength = 0;
+      const segLengths: number[] = [];
+      for (let i = 0; i < orthoPoints.length - 1; i++) {
+        const len = Math.hypot(
+          orthoPoints[i + 1].x - orthoPoints[i].x,
+          orthoPoints[i + 1].y - orthoPoints[i].y,
+        );
+        segLengths.push(len);
+        totalLength += len;
+      }
+      let mid: CanvasPoint = orthoPoints[0];
+      if (totalLength > 0) {
+        const halfLength = totalLength / 2;
+        let accumulated = 0;
+        for (let i = 0; i < segLengths.length; i++) {
+          const segLen = segLengths[i];
+          if (accumulated + segLen >= halfLength && segLen > 0) {
+            const ratio = (halfLength - accumulated) / segLen;
+            mid = {
+              x: Math.round(orthoPoints[i].x + (orthoPoints[i + 1].x - orthoPoints[i].x) * ratio),
+              y: Math.round(orthoPoints[i].y + (orthoPoints[i + 1].y - orthoPoints[i].y) * ratio),
+            };
+            break;
+          }
+          accumulated += segLen;
+        }
+      }
+      return { path, midpoint: mid, points: orthoPoints };
+    }
+
+    if (routing === 'curved') {
+      // Smooth Catmull-Rom spline passing around the exterior corners of the shape
+      let path = `M ${orthoPoints[0].x} ${orthoPoints[0].y}`;
+      const n = orthoPoints.length;
+      for (let i = 0; i < n - 1; i++) {
+        const p0 = i > 0 ? orthoPoints[i - 1] : orthoPoints[i];
+        const p1 = orthoPoints[i];
+        const p2 = orthoPoints[i + 1];
+        const p3 = i + 2 < n ? orthoPoints[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x} ${p2.y}`;
+      }
+      const midIdx = Math.floor(orthoPoints.length / 2);
+      return { path, midpoint: orthoPoints[midIdx], points: orthoPoints };
+    }
+  }
+
   const pts = [start, ...(waypoints || []), end];
 
   if (routing === 'straight') {
@@ -135,56 +373,102 @@ export function computeConnectionPath(
   }
 
   if (routing === 'curved') {
+    function getAnchorNormal(anchor?: AnchorPosition): { dx: number; dy: number } | null {
+      if (!anchor) return null;
+      switch (anchor) {
+        case 'top':
+          return { dx: 0, dy: -1 };
+        case 'bottom':
+          return { dx: 0, dy: 1 };
+        case 'left':
+          return { dx: -1, dy: 0 };
+        case 'right':
+          return { dx: 1, dy: 0 };
+      }
+    }
+
+    const startNormal = getAnchorNormal(sourceAnchor);
+    const endNormal = getAnchorNormal(targetAnchor);
+
     if (pts.length === 2) {
-      // Direct curved line between start and end
+      // Single continuous Bézier curve exiting perpendicular to shape anchors
+      const dist = Math.hypot(end.x - start.x, end.y - start.y);
+      const minStub = 28;
+      const stubLen = Math.max(minStub, dist * 0.35);
+
       let cx1: number;
       let cy1: number;
+      if (startNormal) {
+        cx1 = start.x + startNormal.dx * stubLen;
+        cy1 = start.y + startNormal.dy * stubLen;
+      } else {
+        cx1 = start.x + (end.x - start.x) * 0.35;
+        cy1 = start.y;
+      }
+
       let cx2: number;
       let cy2: number;
-
-      if (sourceAnchor === 'left' || sourceAnchor === 'right') {
-        const dx = (end.x - start.x) / 2;
-        cx1 = start.x + dx;
-        cy1 = start.y;
-        cx2 = end.x - dx;
-        cy2 = end.y;
-      } else if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
-        const dy = (end.y - start.y) / 2;
-        cx1 = start.x;
-        cy1 = start.y + dy;
-        cx2 = end.x;
-        cy2 = end.y - dy;
+      if (endNormal) {
+        cx2 = end.x + endNormal.dx * stubLen;
+        cy2 = end.y + endNormal.dy * stubLen;
       } else {
-        const dx = end.x - start.x;
-        cx1 = start.x + dx * 0.5;
-        cy1 = start.y;
-        cx2 = start.x + dx * 0.5;
+        cx2 = end.x - (end.x - start.x) * 0.35;
         cy2 = end.y;
       }
 
-      const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
+      const path = `M ${start.x} ${start.y} C ${cx1.toFixed(2)} ${cy1.toFixed(2)}, ${cx2.toFixed(2)} ${cy2.toFixed(2)}, ${end.x} ${end.y}`;
+      // Midpoint on cubic Bézier at t = 0.5
+      const mid = {
+        x: Math.round(0.125 * start.x + 0.375 * cx1 + 0.375 * cx2 + 0.125 * end.x),
+        y: Math.round(0.125 * start.y + 0.375 * cy1 + 0.375 * cy2 + 0.125 * end.y),
+      };
       return {
-        path: `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`,
+        path,
         midpoint: mid,
         points: pts,
       };
     } else {
-      // Smooth Catmull-Rom to Cubic Bézier spline passing exactly through all waypoints
-      let path = `M ${pts[0].x} ${pts[0].y}`;
-      const n = pts.length;
-      for (let i = 0; i < n - 1; i++) {
-        const p0 = i > 0 ? pts[i - 1] : pts[i];
-        const p1 = pts[i];
-        const p2 = pts[i + 1];
-        const p3 = i + 2 < n ? pts[i + 2] : p2;
+      // Smooth Catmull-Rom to Cubic Bézier spline passing exactly through all waypoints,
+      // with end tangents aligned along anchor normals for smooth tangent continuity
+      const allSplinePts = [...pts];
+      const n = allSplinePts.length;
 
-        const cp1x = p1.x + (p2.x - p0.x) / 6;
-        const cp1y = p1.y + (p2.y - p0.y) / 6;
-        const cp2x = p2.x - (p3.x - p1.x) / 6;
-        const cp2y = p2.y - (p3.y - p1.y) / 6;
+      let path = `M ${allSplinePts[0].x} ${allSplinePts[0].y}`;
+      for (let i = 0; i < n - 1; i++) {
+        const p1 = allSplinePts[i];
+        const p2 = allSplinePts[i + 1];
+
+        // Segment distance for proportional tangent scaling
+        const segDist = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const tangentScale = Math.max(28, segDist * 0.4);
+
+        let cp1x: number;
+        let cp1y: number;
+        if (i === 0 && startNormal) {
+          // Tangent at start points strictly outward normal to the source anchor
+          cp1x = p1.x + startNormal.dx * tangentScale;
+          cp1y = p1.y + startNormal.dy * tangentScale;
+        } else {
+          const p0 = i > 0 ? allSplinePts[i - 1] : p1;
+          cp1x = p1.x + (p2.x - p0.x) / 6;
+          cp1y = p1.y + (p2.y - p0.y) / 6;
+        }
+
+        let cp2x: number;
+        let cp2y: number;
+        if (i === n - 2 && endNormal) {
+          // Tangent entering end points strictly outward normal to the target anchor
+          cp2x = p2.x + endNormal.dx * tangentScale;
+          cp2y = p2.y + endNormal.dy * tangentScale;
+        } else {
+          const p3 = i + 2 < n ? allSplinePts[i + 2] : p2;
+          cp2x = p2.x - (p3.x - p1.x) / 6;
+          cp2y = p2.y - (p3.y - p1.y) / 6;
+        }
 
         path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x} ${p2.y}`;
       }
+
       const midIdx = Math.floor(pts.length / 2);
       return { path, midpoint: pts[midIdx], points: pts };
     }
@@ -260,13 +544,36 @@ export function computeConnectionPath(
         points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
       } else {
         // Target is behind or overlapping: step out through stubs then around
-        const midY = (pStartStub.y + pEndStub.y) / 2;
-        points = [start, pStartStub, { x: start.x, y: midY }, { x: end.x, y: midY }, pEndStub, end];
+        const commonX =
+          start.x <= end.x
+            ? Math.min(start.x, end.x) - 2 * STUB
+            : Math.max(start.x, end.x) + 2 * STUB;
+        points = [
+          start,
+          pStartStub,
+          { x: commonX, y: pStartStub.y },
+          { x: commonX, y: pEndStub.y },
+          pEndStub,
+          end,
+        ];
       }
     } else {
-      // Source is vertical, target is horizontal or unassigned
-      // Must come straight out of sourceAnchor by at least STUB length
-      points = [start, pStartStub, { x: start.x, y: end.y }, end];
+      // Source is vertical, target is horizontal ('left' | 'right') or unassigned
+      const isTargetInSourceDirection =
+        sourceAnchor === 'bottom' ? end.y >= pStartStub.y : end.y <= pStartStub.y;
+      const isSourceEnteringTargetStub =
+        targetAnchor === 'left'
+          ? start.x <= pEndStub.x
+          : targetAnchor === 'right'
+            ? start.x >= pEndStub.x
+            : true;
+
+      if (isTargetInSourceDirection && isSourceEnteringTargetStub) {
+        points = [start, { x: start.x, y: end.y }, end];
+      } else {
+        const midY = isTargetInSourceDirection ? (pStartStub.y + end.y) / 2 : pStartStub.y;
+        points = [start, { x: start.x, y: midY }, { x: pEndStub.x, y: midY }, pEndStub, end];
+      }
     }
   } else if (sourceAnchor === 'left' || sourceAnchor === 'right') {
     if (targetAnchor === 'left' || targetAnchor === 'right') {
@@ -281,13 +588,36 @@ export function computeConnectionPath(
         points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
       } else {
         // Target is behind or overlapping: step out through stubs then around
-        const midX = (pStartStub.x + pEndStub.x) / 2;
-        points = [start, pStartStub, { x: midX, y: start.y }, { x: midX, y: end.y }, pEndStub, end];
+        const commonY =
+          start.y <= end.y
+            ? Math.min(start.y, end.y) - 2 * STUB
+            : Math.max(start.y, end.y) + 2 * STUB;
+        points = [
+          start,
+          pStartStub,
+          { x: pStartStub.x, y: commonY },
+          { x: pEndStub.x, y: commonY },
+          pEndStub,
+          end,
+        ];
       }
     } else {
-      // Source is horizontal, target is vertical or unassigned
-      // Must come straight out of sourceAnchor by at least STUB length
-      points = [start, pStartStub, { x: end.x, y: start.y }, end];
+      // Source is horizontal, target is vertical ('top' | 'bottom') or unassigned
+      const isTargetInSourceDirection =
+        sourceAnchor === 'right' ? end.x >= pStartStub.x : end.x <= pStartStub.x;
+      const isSourceEnteringTargetStub =
+        targetAnchor === 'top'
+          ? start.y <= pEndStub.y
+          : targetAnchor === 'bottom'
+            ? start.y >= pEndStub.y
+            : true;
+
+      if (isTargetInSourceDirection && isSourceEnteringTargetStub) {
+        points = [start, { x: end.x, y: start.y }, end];
+      } else {
+        const midX = isTargetInSourceDirection ? (pStartStub.x + end.x) / 2 : pStartStub.x;
+        points = [start, { x: midX, y: start.y }, { x: midX, y: pEndStub.y }, pEndStub, end];
+      }
     }
   } else {
     // Default midpoint step

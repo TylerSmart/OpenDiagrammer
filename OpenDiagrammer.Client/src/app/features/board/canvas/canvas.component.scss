@@ -52,7 +52,7 @@
   pointer-events: auto;
 }
 
-// Connections Layer
+// Connections Layer (underneath shapes)
 .canvas-connections-layer {
   position: absolute;
   top: 0;
@@ -61,7 +61,28 @@
   height: 1px;
   overflow: visible;
   pointer-events: none;
-  z-index: 5;
+  z-index: 2;
+
+  &.is-connecting {
+    pointer-events: none;
+
+    .connection-hit-area,
+    .connection-path {
+      pointer-events: none;
+    }
+  }
+}
+
+// Selected Connection Interactive Handles Overlay (above shapes)
+.canvas-connection-handles-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  overflow: visible;
+  pointer-events: none;
+  z-index: 1000;
 }
 
 .connection-hit-area {
@@ -209,6 +230,16 @@
   box-shadow: var(--mat-sys-level2);
   user-select: none;
   pointer-events: auto;
+
+  &.placement-top {
+    transform: translate(-50%, -100%);
+    margin-top: -12px;
+  }
+
+  &.placement-bottom {
+    transform: translate(-50%, 0);
+    margin-top: 12px;
+  }
 }
 
 .tool-btn.small {
@@ -264,11 +295,16 @@
     border: 1.5px solid var(--mat-sys-primary);
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
-    font-size: 12px;
+    font-size: 11px;
+    font-family: inherit;
+    font-weight: 500;
     outline: none;
     box-shadow: var(--mat-sys-level2);
-    min-width: 100px;
+    min-width: 90px;
+    max-width: 320px;
     text-align: center;
+    box-sizing: border-box;
+    field-sizing: content;
   }
 }
 
@@ -281,55 +317,86 @@
   z-index: 1000;
 }
 
+// OS-Window Style Resize Edges (full long edges with context cursor)
+.resize-edge {
+  position: absolute;
+  pointer-events: auto;
+  box-sizing: border-box;
+  z-index: 10;
+
+  &.edge-n {
+    top: -6px;
+    left: 8px;
+    right: 8px;
+    height: 12px;
+    cursor: ns-resize;
+  }
+
+  &.edge-s {
+    bottom: -6px;
+    left: 8px;
+    right: 8px;
+    height: 12px;
+    cursor: ns-resize;
+  }
+
+  &.edge-w {
+    top: 8px;
+    bottom: 8px;
+    left: -6px;
+    width: 12px;
+    cursor: ew-resize;
+  }
+
+  &.edge-e {
+    top: 8px;
+    bottom: 8px;
+    right: -6px;
+    width: 12px;
+    cursor: ew-resize;
+  }
+
+  &:hover {
+    background-color: rgba(25, 118, 210, 0.15);
+  }
+}
+
+// Corner Resize Grips (bidirectional cursor)
 .resize-handle {
   position: absolute;
-  width: 8px;
-  height: 8px;
+  width: 9px;
+  height: 9px;
   background-color: var(--mat-sys-surface);
   border: 1.5px solid var(--mat-sys-primary);
   border-radius: 1px;
   pointer-events: auto;
   box-sizing: border-box;
+  z-index: 20;
 
   &.handle-nw {
-    top: -4px;
-    left: -4px;
+    top: -4.5px;
+    left: -4.5px;
     cursor: nwse-resize;
-  }
-  &.handle-n {
-    top: -4px;
-    left: calc(50% - 4px);
-    cursor: ns-resize;
   }
   &.handle-ne {
-    top: -4px;
-    right: -4px;
+    top: -4.5px;
+    right: -4.5px;
     cursor: nesw-resize;
-  }
-  &.handle-e {
-    top: calc(50% - 4px);
-    right: -4px;
-    cursor: ew-resize;
   }
   &.handle-se {
-    bottom: -4px;
-    right: -4px;
+    bottom: -4.5px;
+    right: -4.5px;
     cursor: nwse-resize;
   }
-  &.handle-s {
-    bottom: -4px;
-    left: calc(50% - 4px);
-    cursor: ns-resize;
-  }
   &.handle-sw {
-    bottom: -4px;
-    left: -4px;
+    bottom: -4.5px;
+    left: -4.5px;
     cursor: nesw-resize;
   }
-  &.handle-w {
-    top: calc(50% - 4px);
-    left: -4px;
-    cursor: ew-resize;
+
+  &:hover {
+    background-color: var(--mat-sys-primary);
+    transform: scale(1.2);
   }
 }
 

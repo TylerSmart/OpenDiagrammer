@@ -47,18 +47,17 @@ describe('CanvasShapeComponent', () => {
     expect(anchors.length).toBe(4);
   });
 
-  it('should NEVER show anchors when shape is selected (resize handles precedence)', () => {
+  it('should show anchors when shape is selected and hovered (coexisting with resize handles)', () => {
     fixture.componentRef.setInput('isSelected', true);
     component.isHovered.set(true);
-    fixture.componentRef.setInput('showAnchors', true);
     fixture.detectChanges();
 
     const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
-    expect(anchors.length).toBe(0);
+    expect(anchors.length).toBe(4);
   });
 
-  it('should show anchors when showAnchors is true and not selected', () => {
-    fixture.componentRef.setInput('isSelected', false);
+  it('should show anchors when showAnchors is true even if selected', () => {
+    fixture.componentRef.setInput('isSelected', true);
     fixture.componentRef.setInput('showAnchors', true);
     fixture.detectChanges();
 

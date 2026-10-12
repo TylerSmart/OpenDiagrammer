@@ -27,6 +27,21 @@ import {
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
+export interface ReconnectingPreview {
+  connId: string;
+  endpoint: 'source' | 'target';
+  startPoint: CanvasPoint;
+  endPoint: CanvasPoint;
+  currentPoint: CanvasPoint;
+  path: string;
+  startMarker?: boolean;
+  endMarker?: boolean;
+  targetShapeId?: string;
+  targetAnchor?: AnchorPosition;
+  sourceShapeId?: string;
+  sourceAnchor?: AnchorPosition;
+}
+
 @Component({
   imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
   selector: 'app-canvas',
@@ -88,6 +103,7 @@ export class CanvasComponent {
   private isMovingShapes = false;
   private moveStartPoint: CanvasPoint | null = null;
   private shapeInitialPositions = new Map<string, CanvasPoint>();
+  private connectionInitialWaypoints = new Map<string, CanvasPoint[]>();
 
   // Resize state
   private isResizing = false;
@@ -154,6 +170,21 @@ export class CanvasComponent {
         continue;
       }
 
+      const isSelfLoop =
+        conn.targetShapeId === conn.sourceShapeId &&
+        conn.targetAnchor !== undefined &&
+        conn.sourceAnchor !== conn.targetAnchor;
+
+      const shapeBounds =
+        isSelfLoop && sourceShape
+          ? {
+              x: sourceShape.x,
+              y: sourceShape.y,
+              width: sourceShape.width,
+              height: sourceShape.height,
+            }
+          : undefined;
+
       const { path, midpoint, points } = computeConnectionPath(
         start,
         end,
@@ -161,6 +192,8 @@ export class CanvasComponent {
         conn.sourceAnchor,
         conn.targetAnchor,
         conn.waypoints,
+        shapeBounds,
+        isSelfLoop,
       );
 
       let dashArray: string | undefined;
@@ -224,25 +257,228 @@ export class CanvasComponent {
     endpoint: 'source' | 'target';
   } | null>(null);
 
+  readonly reconnectingPreview = signal<ReconnectingPreview | null>(null);
+  private initialReconnectingConn: CanvasConnection | null = null;
+
   // Inline connection text editing state
   readonly editingConnectionId = signal<string | null>(null);
 
   readonly connectionColors = ['#333333', '#1976d2', '#388e3c', '#d32f2f', '#f57c00', '#7b1fa2'];
 
-  readonly connectionToolbarPos = computed<{ x: number; y: number } | null>(() => {
+  readonly connectionToolbarPos = computed<{
+    x: number;
+    y: number;
+    placement: 'top' | 'bottom';
+  } | null>(() => {
     const conn = this.singleSelectedConnection();
     if (!conn) {
       return null;
     }
-    // Return world position of midpoint
+
+    const DOCK_WIDTH = 420;
+    const DOCK_HEIGHT = 44;
+    const HALF_W = DOCK_WIDTH / 2;
+
+    // Collect obstacles to avoid: shapes, endpoint handles, segment handles, waypoints, and connector polyline
+    interface Rect {
+      minX: number;
+      maxX: number;
+      minY: number;
+      maxY: number;
+    }
+
+    const obstacles: Rect[] = [];
+
+    // 1. All shapes on board
+    for (const s of this.shapes()) {
+      obstacles.push({
+        minX: s.x - 8,
+        maxX: s.x + s.width + 8,
+        minY: s.y - 8,
+        maxY: s.y + s.height + 8,
+      });
+    }
+
+    // 2. Connector endpoints (reconnect handles)
+    obstacles.push({
+      minX: conn.startPoint.x - 14,
+      maxX: conn.startPoint.x + 14,
+      minY: conn.startPoint.y - 14,
+      maxY: conn.startPoint.y + 14,
+    });
+    obstacles.push({
+      minX: conn.endPoint.x - 14,
+      maxX: conn.endPoint.x + 14,
+      minY: conn.endPoint.y - 14,
+      maxY: conn.endPoint.y + 14,
+    });
+
+    // 3. Reshaping handles (segment handles or waypoints)
+    if (conn.routing === 'orthogonal' && conn.segments) {
+      for (const seg of conn.segments) {
+        obstacles.push({
+          minX: seg.midpoint.x - 16,
+          maxX: seg.midpoint.x + 16,
+          minY: seg.midpoint.y - 16,
+          maxY: seg.midpoint.y + 16,
+        });
+      }
+    } else {
+      if (conn.waypoints) {
+        for (const wp of conn.waypoints) {
+          obstacles.push({
+            minX: wp.x - 14,
+            maxX: wp.x + 14,
+            minY: wp.y - 14,
+            maxY: wp.y + 14,
+          });
+        }
+      }
+    }
+
+    // 4. Connector polyline bounding box / points (to avoid sitting right on the connector line itself)
+    const pts =
+      conn.points && conn.points.length > 0 ? conn.points : [conn.startPoint, conn.endPoint];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      obstacles.push({
+        minX: Math.min(p1.x, p2.x) - 4,
+        maxX: Math.max(p1.x, p2.x) + 4,
+        minY: Math.min(p1.y, p2.y) - 4,
+        maxY: Math.max(p1.y, p2.y) + 4,
+      });
+    }
+
+    // Helper: test if dock rect [cx - HALF_W, cx + HALF_W] x [dockMinY, dockMaxY] intersects any obstacle
+    function overlaps(cx: number, dockMinY: number, dockMaxY: number): boolean {
+      const dMinX = cx - HALF_W;
+      const dMaxX = cx + HALF_W;
+      for (const obs of obstacles) {
+        const xOverlap = dMinX < obs.maxX && dMaxX > obs.minX;
+        const yOverlap = dockMinY < obs.maxY && dockMaxY > obs.minY;
+        if (xOverlap && yOverlap) {
+          return true;
+        }
+      }
+      return false;
+    }
+
+    // Helper: calculate total overlap area / penalty if no completely clear slot is found
+    function getOverlapPenalty(cx: number, dockMinY: number, dockMaxY: number): number {
+      const dMinX = cx - HALF_W;
+      const dMaxX = cx + HALF_W;
+      let penalty = 0;
+      for (const obs of obstacles) {
+        const xOverlap = Math.max(0, Math.min(dMaxX, obs.maxX) - Math.max(dMinX, obs.minX));
+        const yOverlap = Math.max(0, Math.min(dockMaxY, obs.maxY) - Math.max(dockMinY, obs.minY));
+        if (xOverlap > 0 && yOverlap > 0) {
+          penalty += xOverlap * yOverlap;
+        }
+      }
+      return penalty;
+    }
+
+    const mid = conn.midpoint;
+
+    // Check Candidate Placements:
+    // Placements can try 'top' (dock sits above pos.y - 12) or 'bottom' (dock sits below pos.y + 12)
+    // Candidate distances: default (12px margin), expanded clearances (35px, 60px, 90px, 120px)
+    const offsets = [12, 35, 60, 90, 130];
+    const candidatePlacements: {
+      placement: 'top' | 'bottom';
+      offset: number;
+      x: number;
+      y: number;
+      dockMinY: number;
+      dockMaxY: number;
+    }[] = [];
+
+    // Try both placements with increasing clearance
+    for (const offset of offsets) {
+      // Top candidate
+      const topDockMaxY = mid.y - offset;
+      const topDockMinY = topDockMaxY - DOCK_HEIGHT;
+      candidatePlacements.push({
+        placement: 'top',
+        offset,
+        x: mid.x,
+        y: mid.y - (offset - 12),
+        dockMinY: topDockMinY,
+        dockMaxY: topDockMaxY,
+      });
+
+      // Bottom candidate
+      const btmDockMinY = mid.y + offset;
+      const btmDockMaxY = btmDockMinY + DOCK_HEIGHT;
+      candidatePlacements.push({
+        placement: 'bottom',
+        offset,
+        x: mid.x,
+        y: mid.y + (offset - 12),
+        dockMinY: btmDockMinY,
+        dockMaxY: btmDockMaxY,
+      });
+    }
+
+    // Prefer candidate with 0 overlap (closest to midpoint first)
+    for (const cand of candidatePlacements) {
+      if (!overlaps(cand.x, cand.dockMinY, cand.dockMaxY)) {
+        return {
+          x: cand.x,
+          y: cand.y,
+          placement: cand.placement,
+        };
+      }
+    }
+
+    // If perfectly clear slot is not found at exact mid.x, test slight horizontal shifts (±60px, ±120px)
+    const xShifts = [-60, 60, -120, 120];
+    for (const dx of xShifts) {
+      for (const cand of candidatePlacements) {
+        if (!overlaps(cand.x + dx, cand.dockMinY, cand.dockMaxY)) {
+          return {
+            x: cand.x + dx,
+            y: cand.y,
+            placement: cand.placement,
+          };
+        }
+      }
+    }
+
+    // Fallback: pick the candidate that minimizes total obstacle overlap penalty
+    let bestCand = candidatePlacements[0];
+    let minPenalty = Number.MAX_VALUE;
+    for (const cand of candidatePlacements) {
+      const p = getOverlapPenalty(cand.x, cand.dockMinY, cand.dockMaxY);
+      if (p < minPenalty) {
+        minPenalty = p;
+        bestCand = cand;
+      }
+    }
+
     return {
-      x: conn.midpoint.x,
-      y: conn.midpoint.y - 45,
+      x: bestCand.x,
+      y: bestCand.y,
+      placement: bestCand.placement,
     };
   });
 
   updateConnection(id: string, partial: Partial<CanvasConnection>): void {
-    this.connections.update((list) => list.map((c) => (c.id === id ? { ...c, ...partial } : c)));
+    this.connections.update((list) =>
+      list.map((c) => {
+        if (c.id !== id) return c;
+        const candidate = { ...c, ...partial };
+        if (
+          candidate.targetShapeId &&
+          candidate.sourceShapeId === candidate.targetShapeId &&
+          candidate.sourceAnchor === candidate.targetAnchor
+        ) {
+          return c;
+        }
+        return candidate;
+      }),
+    );
   }
 
   setConnectionRouting(routing: ConnectionRouting): void {
@@ -577,6 +813,10 @@ export class CanvasComponent {
     targetAnchor?: AnchorPosition,
     targetPoint?: CanvasPoint,
   ): CanvasConnection {
+    if (targetShapeId && sourceShapeId === targetShapeId && sourceAnchor === targetAnchor) {
+      throw new Error('A connector cannot loop on the same connector handle');
+    }
+
     const newConn: CanvasConnection = {
       id: `conn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       sourceShapeId,
@@ -613,7 +853,35 @@ export class CanvasComponent {
       return;
     }
     event.stopPropagation();
+
+    const conn = this.connections().find((c) => c.id === connId);
+    if (!conn) {
+      return;
+    }
+
+    this.initialReconnectingConn = {
+      ...conn,
+      waypoints: conn.waypoints ? conn.waypoints.map((p) => ({ ...p })) : undefined,
+    };
     this.draggingEndpoint.set({ connId, endpoint });
+
+    const rendered = this.renderedConnections().find((c) => c.id === connId);
+    if (rendered) {
+      this.reconnectingPreview.set({
+        connId,
+        endpoint,
+        startPoint: rendered.startPoint,
+        endPoint: rendered.endPoint,
+        currentPoint: endpoint === 'source' ? rendered.startPoint : rendered.endPoint,
+        path: rendered.path,
+        startMarker: conn.startMarker === 'arrow',
+        endMarker: conn.endMarker === 'arrow',
+        sourceShapeId: conn.sourceShapeId,
+        sourceAnchor: conn.sourceAnchor,
+        targetShapeId: conn.targetShapeId,
+        targetAnchor: conn.targetAnchor,
+      });
+    }
 
     try {
       (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
@@ -622,11 +890,45 @@ export class CanvasComponent {
     }
   }
 
+  private lastHandleClick: {
+    handleKey: string;
+    time: number;
+    screenX: number;
+    screenY: number;
+  } | null = null;
+
   handleWaypointPointerDown(event: PointerEvent, connId: string, waypointIndex: number): void {
     if (event.button !== 0) {
       return;
     }
     event.stopPropagation();
+
+    const now = Date.now();
+    const handleKey = `waypoint_${connId}_${waypointIndex}`;
+    if (
+      this.lastHandleClick &&
+      this.lastHandleClick.handleKey === handleKey &&
+      now - this.lastHandleClick.time < 350 &&
+      Math.hypot(
+        event.clientX - this.lastHandleClick.screenX,
+        event.clientY - this.lastHandleClick.screenY,
+      ) < 10
+    ) {
+      this.lastHandleClick = null;
+      this.isDraggingWaypoint = false;
+      this.activeWaypointConnId = null;
+      this.activeWaypointIndex = null;
+      this.handleWaypointDblClick(event, connId, waypointIndex);
+      return;
+    }
+
+    this.lastHandleClick = {
+      handleKey,
+      time: now,
+      screenX: event.clientX,
+      screenY: event.clientY,
+    };
+
     this.isDraggingWaypoint = true;
     this.activeWaypointConnId = connId;
     this.activeWaypointIndex = waypointIndex;
@@ -677,6 +979,34 @@ export class CanvasComponent {
       return;
     }
 
+    const now = Date.now();
+    const handleKey = `segment_${connId}_${segment.index}`;
+    if (
+      this.lastHandleClick &&
+      this.lastHandleClick.handleKey === handleKey &&
+      now - this.lastHandleClick.time < 350 &&
+      Math.hypot(
+        event.clientX - this.lastHandleClick.screenX,
+        event.clientY - this.lastHandleClick.screenY,
+      ) < 10
+    ) {
+      this.lastHandleClick = null;
+      this.isDraggingSegment = false;
+      this.activeSegmentConnId = null;
+      this.activeSegmentIndex = null;
+      this.activeSegmentOrientation = null;
+      this.segmentDragInitialPoints = [];
+      this.handleSegmentDblClick(event, connId);
+      return;
+    }
+
+    this.lastHandleClick = {
+      handleKey,
+      time: now,
+      screenX: event.clientX,
+      screenY: event.clientY,
+    };
+
     this.isDraggingSegment = true;
     this.activeSegmentConnId = connId;
     this.activeSegmentIndex = segment.index;
@@ -718,7 +1048,7 @@ export class CanvasComponent {
 
     // If a connection is already in progress (e.g. from a prior click), complete it now!
     if (inProg) {
-      if (inProg.sourceShapeId !== payload.shape.id) {
+      if (inProg.sourceShapeId !== payload.shape.id || inProg.sourceAnchor !== payload.anchor) {
         this.createConnection(
           inProg.sourceShapeId,
           inProg.sourceAnchor,
@@ -730,24 +1060,12 @@ export class CanvasComponent {
         this.activeTool.set('select');
         return;
       } else {
-        // Clicked same shape anchor - update source anchor
-        const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
-        const { path } = computeConnectionPath(
-          startPoint,
-          startPoint,
-          'orthogonal',
-          payload.anchor,
-        );
-        this.inProgressConnection.set({
-          sourceShapeId: payload.shape.id,
-          sourceAnchor: payload.anchor,
-          currentPoint: startPoint,
-          path,
-        });
+        // Clicked exact same shape handle: cannot loop on the same connector handle
         return;
       }
     }
 
+    this.selectedShapeIds.set(new Set());
     const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
     const { path: initialPath } = computeConnectionPath(
       startPoint,
@@ -776,23 +1094,28 @@ export class CanvasComponent {
   }
 
   /**
-   * Finds the nearest anchor point across other shapes within snapping distance.
+   * Finds the nearest anchor point across shapes within snapping distance.
+   * If sourceShapeId and sourceAnchor are provided, allows snapping to other anchors on the same shape
+   * while excluding the exact same anchor (preventing loops on the same handle).
    */
   private findNearestAnchor(
     worldPoint: CanvasPoint,
     sourceShapeId: string,
     snapThreshold = 30,
+    sourceAnchor?: AnchorPosition,
   ): { shape: CanvasShape; anchor: AnchorPosition; point: CanvasPoint } | null {
     const anchors: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
     let nearest: { shape: CanvasShape; anchor: AnchorPosition; point: CanvasPoint } | null = null;
     let minDistance = snapThreshold;
 
     for (const shape of this.shapes()) {
-      if (shape.id === sourceShapeId) {
-        continue;
-      }
-
       for (const anchor of anchors) {
+        if (shape.id === sourceShapeId) {
+          if (!sourceAnchor || anchor === sourceAnchor) {
+            continue;
+          }
+        }
+
         const pt = getShapeAnchorPoint(shape, anchor);
         const dist = Math.hypot(pt.x - worldPoint.x, pt.y - worldPoint.y);
         if (dist < minDistance) {
@@ -816,7 +1139,6 @@ export class CanvasComponent {
     const inProg = this.inProgressConnection();
 
     if (inProg) {
-      // Connect to this target shape at its nearest anchor to the click
       if (inProg.sourceShapeId !== shape.id) {
         const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
         const nearest = this.findNearestAnchor(worldPoint, inProg.sourceShapeId, Infinity);
@@ -824,6 +1146,27 @@ export class CanvasComponent {
           nearest?.shape.id === shape.id ? nearest.anchor : 'left';
 
         this.createConnection(inProg.sourceShapeId, inProg.sourceAnchor, shape.id, targetAnchor);
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+        this.activeTool.set('select');
+        return;
+      } else {
+        // Clicked the same shape: select nearest anchor that is not the starting anchor
+        const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+        const eligibleAnchors = (['top', 'right', 'bottom', 'left'] as AnchorPosition[]).filter(
+          (a) => a !== inProg.sourceAnchor,
+        );
+        let bestAnchor: AnchorPosition = eligibleAnchors[0];
+        let bestDist = Infinity;
+        for (const a of eligibleAnchors) {
+          const pt = getShapeAnchorPoint(shape, a);
+          const d = Math.hypot(pt.x - worldPoint.x, pt.y - worldPoint.y);
+          if (d < bestDist) {
+            bestDist = d;
+            bestAnchor = a;
+          }
+        }
+        this.createConnection(inProg.sourceShapeId, inProg.sourceAnchor, shape.id, bestAnchor);
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;
         this.activeTool.set('select');
@@ -864,6 +1207,21 @@ export class CanvasComponent {
     for (const s of this.shapes()) {
       if (selectedIds.has(s.id)) {
         this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+      }
+    }
+
+    this.connectionInitialWaypoints.clear();
+    for (const c of this.connections()) {
+      if (
+        c.targetShapeId &&
+        c.sourceShapeId === c.targetShapeId &&
+        selectedIds.has(c.sourceShapeId) &&
+        c.waypoints?.length
+      ) {
+        this.connectionInitialWaypoints.set(
+          c.id,
+          c.waypoints.map((p) => ({ ...p })),
+        );
       }
     }
 
@@ -1035,14 +1393,24 @@ export class CanvasComponent {
         let targetShapeId: string | undefined;
         let targetAnchor: AnchorPosition | undefined;
 
-        // 1. Try hoveredAnchor if available
-        if (this.hoveredAnchor && this.hoveredAnchor.shape.id !== inProg.sourceShapeId) {
+        // 1. Try hoveredAnchor if available and not the exact same handle
+        const isHoveredSameHandle =
+          this.hoveredAnchor &&
+          this.hoveredAnchor.shape.id === inProg.sourceShapeId &&
+          this.hoveredAnchor.anchor === inProg.sourceAnchor;
+
+        if (this.hoveredAnchor && !isHoveredSameHandle) {
           endPoint = getShapeAnchorPoint(this.hoveredAnchor.shape, this.hoveredAnchor.anchor);
           targetShapeId = this.hoveredAnchor.shape.id;
           targetAnchor = this.hoveredAnchor.anchor;
         } else {
           // 2. Proximity geometric snapping (within 24px)
-          const snapped = this.findNearestAnchor(currentWorld, inProg.sourceShapeId, 24);
+          const snapped = this.findNearestAnchor(
+            currentWorld,
+            inProg.sourceShapeId,
+            24,
+            inProg.sourceAnchor,
+          );
           if (snapped) {
             endPoint = snapped.point;
             targetShapeId = snapped.shape.id;
@@ -1050,12 +1418,30 @@ export class CanvasComponent {
           }
         }
 
+        const isSelfLoop =
+          targetShapeId === inProg.sourceShapeId &&
+          targetAnchor !== undefined &&
+          targetAnchor !== inProg.sourceAnchor;
+
+        const shapeBounds =
+          isSelfLoop && sourceShape
+            ? {
+                x: sourceShape.x,
+                y: sourceShape.y,
+                width: sourceShape.width,
+                height: sourceShape.height,
+              }
+            : undefined;
+
         const { path } = computeConnectionPath(
           startPoint,
           endPoint,
           'orthogonal',
           inProg.sourceAnchor,
           targetAnchor,
+          undefined,
+          shapeBounds,
+          isSelfLoop,
         );
 
         this.inProgressConnection.set({
@@ -1156,36 +1542,172 @@ export class CanvasComponent {
       return;
     }
 
-    // Endpoint reconnect dragging
+    // Endpoint reconnect dragging preview
     const dragEnd = this.draggingEndpoint();
     if (dragEnd) {
       const conn = this.connections().find((c) => c.id === dragEnd.connId);
       if (conn) {
-        const otherShapeId =
-          dragEnd.endpoint === 'source' ? (conn.targetShapeId ?? '') : conn.sourceShapeId;
-        const snapped = this.findNearestAnchor(currentWorld, otherShapeId, 24);
+        const shapeMap = new Map(this.shapes().map((s) => [s.id, s]));
 
-        if (dragEnd.endpoint === 'source') {
-          if (snapped) {
-            this.updateConnection(conn.id, {
-              sourceShapeId: snapped.shape.id,
-              sourceAnchor: snapped.anchor,
+        if (dragEnd.endpoint === 'target') {
+          // Fixed source
+          const sourceShape = shapeMap.get(conn.sourceShapeId);
+          if (sourceShape) {
+            const startPoint = getShapeAnchorPoint(sourceShape, conn.sourceAnchor);
+            let endPoint = currentWorld;
+            let targetShapeId: string | undefined;
+            let targetAnchor: AnchorPosition | undefined;
+
+            // 1. Try hoveredAnchor if available and not same handle
+            const isHoveredSameHandle =
+              this.hoveredAnchor &&
+              this.hoveredAnchor.shape.id === conn.sourceShapeId &&
+              this.hoveredAnchor.anchor === conn.sourceAnchor;
+
+            if (this.hoveredAnchor && !isHoveredSameHandle) {
+              endPoint = getShapeAnchorPoint(this.hoveredAnchor.shape, this.hoveredAnchor.anchor);
+              targetShapeId = this.hoveredAnchor.shape.id;
+              targetAnchor = this.hoveredAnchor.anchor;
+            } else {
+              // 2. Proximity geometric snapping (within 24px)
+              const snapped = this.findNearestAnchor(
+                currentWorld,
+                conn.sourceShapeId,
+                24,
+                conn.sourceAnchor,
+              );
+              if (snapped) {
+                endPoint = snapped.point;
+                targetShapeId = snapped.shape.id;
+                targetAnchor = snapped.anchor;
+              }
+            }
+
+            const isSelfLoop =
+              targetShapeId === conn.sourceShapeId &&
+              targetAnchor !== undefined &&
+              targetAnchor !== conn.sourceAnchor;
+
+            const shapeBounds =
+              isSelfLoop && sourceShape
+                ? {
+                    x: sourceShape.x,
+                    y: sourceShape.y,
+                    width: sourceShape.width,
+                    height: sourceShape.height,
+                  }
+                : undefined;
+
+            const { path } = computeConnectionPath(
+              startPoint,
+              endPoint,
+              conn.routing,
+              conn.sourceAnchor,
+              targetAnchor,
+              undefined,
+              shapeBounds,
+              isSelfLoop,
+            );
+
+            this.reconnectingPreview.set({
+              connId: conn.id,
+              endpoint: 'target',
+              startPoint,
+              endPoint,
+              currentPoint: endPoint,
+              path,
+              startMarker: conn.startMarker === 'arrow',
+              endMarker: conn.endMarker === 'arrow',
+              sourceShapeId: conn.sourceShapeId,
+              sourceAnchor: conn.sourceAnchor,
+              targetShapeId,
+              targetAnchor,
             });
           }
         } else {
-          if (snapped) {
-            this.updateConnection(conn.id, {
-              targetShapeId: snapped.shape.id,
-              targetAnchor: snapped.anchor,
-              targetPoint: undefined,
-            });
+          // Fixed target (dragging source)
+          let endPoint: CanvasPoint;
+          let targetShape: CanvasShape | undefined;
+          if (conn.targetShapeId && shapeMap.has(conn.targetShapeId) && conn.targetAnchor) {
+            targetShape = shapeMap.get(conn.targetShapeId)!;
+            endPoint = getShapeAnchorPoint(targetShape, conn.targetAnchor);
+          } else if (conn.targetPoint) {
+            endPoint = conn.targetPoint;
           } else {
-            this.updateConnection(conn.id, {
-              targetShapeId: undefined,
-              targetAnchor: undefined,
-              targetPoint: currentWorld,
-            });
+            endPoint = currentWorld;
           }
+
+          let startPoint = currentWorld;
+          let sourceShapeId: string | undefined;
+          let sourceAnchor: AnchorPosition | undefined;
+
+          // 1. Try hoveredAnchor
+          const isHoveredSameHandle =
+            this.hoveredAnchor &&
+            conn.targetShapeId &&
+            this.hoveredAnchor.shape.id === conn.targetShapeId &&
+            this.hoveredAnchor.anchor === conn.targetAnchor;
+
+          if (this.hoveredAnchor && !isHoveredSameHandle) {
+            startPoint = getShapeAnchorPoint(this.hoveredAnchor.shape, this.hoveredAnchor.anchor);
+            sourceShapeId = this.hoveredAnchor.shape.id;
+            sourceAnchor = this.hoveredAnchor.anchor;
+          } else {
+            // 2. Proximity geometric snapping
+            const snapped = this.findNearestAnchor(
+              currentWorld,
+              conn.targetShapeId ?? '',
+              24,
+              conn.targetAnchor,
+            );
+            if (snapped) {
+              startPoint = snapped.point;
+              sourceShapeId = snapped.shape.id;
+              sourceAnchor = snapped.anchor;
+            }
+          }
+
+          const isSelfLoop =
+            sourceShapeId !== undefined &&
+            sourceShapeId === conn.targetShapeId &&
+            sourceAnchor !== undefined &&
+            sourceAnchor !== conn.targetAnchor;
+
+          const shapeBounds =
+            isSelfLoop && targetShape
+              ? {
+                  x: targetShape.x,
+                  y: targetShape.y,
+                  width: targetShape.width,
+                  height: targetShape.height,
+                }
+              : undefined;
+
+          const { path } = computeConnectionPath(
+            startPoint,
+            endPoint,
+            conn.routing,
+            sourceAnchor,
+            conn.targetAnchor,
+            undefined,
+            shapeBounds,
+            isSelfLoop,
+          );
+
+          this.reconnectingPreview.set({
+            connId: conn.id,
+            endpoint: 'source',
+            startPoint,
+            endPoint,
+            currentPoint: startPoint,
+            path,
+            startMarker: conn.startMarker === 'arrow',
+            endMarker: conn.endMarker === 'arrow',
+            sourceShapeId,
+            sourceAnchor,
+            targetShapeId: conn.targetShapeId,
+            targetAnchor: conn.targetAnchor,
+          });
         }
       }
       return;
@@ -1209,6 +1731,24 @@ export class CanvasComponent {
           return shape;
         }),
       );
+
+      if (this.connectionInitialWaypoints.size > 0) {
+        this.connections.update((list) =>
+          list.map((c) => {
+            const initialWps = this.connectionInitialWaypoints.get(c.id);
+            if (initialWps) {
+              return {
+                ...c,
+                waypoints: initialWps.map((p) => ({
+                  x: Math.round(p.x + deltaX),
+                  y: Math.round(p.y + deltaY),
+                })),
+              };
+            }
+            return c;
+          }),
+        );
+      }
       return;
     }
 
@@ -1271,12 +1811,25 @@ export class CanvasComponent {
       if (dragDistance > 5) {
         const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
         if (inProg.targetShapeId && inProg.targetAnchor) {
-          this.createConnection(
-            inProg.sourceShapeId,
-            inProg.sourceAnchor,
-            inProg.targetShapeId,
-            inProg.targetAnchor,
-          );
+          if (
+            inProg.targetShapeId !== inProg.sourceShapeId ||
+            inProg.targetAnchor !== inProg.sourceAnchor
+          ) {
+            this.createConnection(
+              inProg.sourceShapeId,
+              inProg.sourceAnchor,
+              inProg.targetShapeId,
+              inProg.targetAnchor,
+            );
+          } else {
+            this.createConnection(
+              inProg.sourceShapeId,
+              inProg.sourceAnchor,
+              undefined,
+              undefined,
+              currentWorld,
+            );
+          }
         } else {
           // Connect to empty world point
           this.createConnection(
@@ -1310,14 +1863,57 @@ export class CanvasComponent {
       this.isNewWaypoint = false;
     }
 
-    if (this.draggingEndpoint()) {
+    const preview = this.reconnectingPreview();
+    if (preview && this.draggingEndpoint()) {
+      const conn = this.connections().find((c) => c.id === preview.connId);
+      if (conn) {
+        if (preview.endpoint === 'target') {
+          if (preview.targetShapeId && preview.targetAnchor) {
+            this.updateConnection(conn.id, {
+              targetShapeId: preview.targetShapeId,
+              targetAnchor: preview.targetAnchor,
+              targetPoint: undefined,
+              waypoints: undefined,
+            });
+          } else {
+            this.updateConnection(conn.id, {
+              targetShapeId: undefined,
+              targetAnchor: undefined,
+              targetPoint: preview.currentPoint,
+              waypoints: undefined,
+            });
+          }
+        } else {
+          // Dragging source: must connect to a valid shape anchor
+          if (preview.sourceShapeId && preview.sourceAnchor) {
+            this.updateConnection(conn.id, {
+              sourceShapeId: preview.sourceShapeId,
+              sourceAnchor: preview.sourceAnchor,
+              waypoints: undefined,
+            });
+          } else if (this.initialReconnectingConn) {
+            this.updateConnection(conn.id, {
+              sourceShapeId: this.initialReconnectingConn.sourceShapeId,
+              sourceAnchor: this.initialReconnectingConn.sourceAnchor,
+            });
+          }
+        }
+      }
+
+      this.reconnectingPreview.set(null);
       this.draggingEndpoint.set(null);
+      this.initialReconnectingConn = null;
+    } else if (this.draggingEndpoint()) {
+      this.draggingEndpoint.set(null);
+      this.reconnectingPreview.set(null);
+      this.initialReconnectingConn = null;
     }
 
     if (this.isMovingShapes) {
       this.isMovingShapes = false;
       this.moveStartPoint = null;
       this.shapeInitialPositions.clear();
+      this.connectionInitialWaypoints.clear();
     }
 
     if (this.isResizing) {
@@ -1443,6 +2039,20 @@ export class CanvasComponent {
     }
 
     if (event.key === 'Escape') {
+      if (this.draggingEndpoint() && this.initialReconnectingConn) {
+        this.updateConnection(this.initialReconnectingConn.id, {
+          sourceShapeId: this.initialReconnectingConn.sourceShapeId,
+          sourceAnchor: this.initialReconnectingConn.sourceAnchor,
+          targetShapeId: this.initialReconnectingConn.targetShapeId,
+          targetAnchor: this.initialReconnectingConn.targetAnchor,
+          targetPoint: this.initialReconnectingConn.targetPoint,
+          waypoints: this.initialReconnectingConn.waypoints,
+        });
+        this.draggingEndpoint.set(null);
+        this.reconnectingPreview.set(null);
+        this.initialReconnectingConn = null;
+        return;
+      }
       if (this.inProgressConnection()) {
         this.inProgressConnection.set(null);
         this.connectionStartScreenPos = null;

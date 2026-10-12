@@ -33,7 +33,7 @@ export class CanvasShapeComponent {
       transform: `translate(${s.x}px, ${s.y}px)`,
       width: `${s.width}px`,
       height: `${s.height}px`,
-      zIndex: s.zIndex,
+      zIndex: 10 + s.zIndex,
     };
   });
 

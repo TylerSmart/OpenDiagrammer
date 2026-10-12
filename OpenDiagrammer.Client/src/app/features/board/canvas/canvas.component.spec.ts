@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CanvasComponent } from './canvas.component';
 import { CANVAS_CONSTANTS } from './canvas.models';
+import { getShapeAnchorPoint } from './connection.models';
 
 describe('CanvasComponent', () => {
   let component: CanvasComponent;
@@ -321,50 +322,66 @@ describe('CanvasComponent', () => {
     expect(nudgedShape?.x).toBe((movedShape?.x ?? 0) + 1);
   });
 
-  it('should resize shape via resize handle', () => {
+  it('should resize shape via OS-window style edge strips and corner handles', () => {
     const s1 = component.createShape('rectangle', { x: 100, y: 100 });
     component.selectShape(s1.id);
 
-    // Start resize with SE handle
-    const downEvent = new PointerEvent('pointerdown', {
+    // Test East edge resize (horizontal only)
+    const downEast = new PointerEvent('pointerdown', {
       button: 0,
       clientX: s1.x + s1.width,
-      clientY: s1.y + s1.height,
+      clientY: s1.y + s1.height / 2,
     });
-    component.handleResizePointerDown(downEvent, 'se');
+    component.handleResizePointerDown(downEast, 'e');
 
-    // Drag handle outward by 50px
-    const moveEvent = new PointerEvent('pointermove', {
-      clientX: s1.x + s1.width + 50,
-      clientY: s1.y + s1.height + 40,
+    const moveEast = new PointerEvent('pointermove', {
+      clientX: s1.x + s1.width + 30,
+      clientY: s1.y + s1.height / 2 + 25, // vertical movement should be ignored for pure horizontal edge
     });
-    component.handlePointerMove(moveEvent);
-
-    const upEvent = new PointerEvent('pointerup', { button: 0 });
-    component.handlePointerUp(upEvent);
-
-    const resizedShape = component.shapes().find((s) => s.id === s1.id);
-    expect(resizedShape?.width).toBe(s1.width + 50);
-    expect(resizedShape?.height).toBe(s1.height + 40);
-
-    // Resize with Ctrl held to force 1:1 square
-    const downEvent2 = new PointerEvent('pointerdown', {
-      button: 0,
-      clientX: resizedShape!.x + resizedShape!.width,
-      clientY: resizedShape!.y + resizedShape!.height,
-    });
-    component.handleResizePointerDown(downEvent2, 'se');
-
-    const moveEvent2 = new PointerEvent('pointermove', {
-      clientX: resizedShape!.x + resizedShape!.width + 60,
-      clientY: resizedShape!.y + resizedShape!.height + 20,
-      ctrlKey: true,
-    });
-    component.handlePointerMove(moveEvent2);
+    component.handlePointerMove(moveEast);
     component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
 
-    const squareShape = component.shapes().find((s) => s.id === s1.id);
-    expect(squareShape?.width).toBe(squareShape?.height);
+    const shapeAfterEast = component.shapes().find((s) => s.id === s1.id);
+    expect(shapeAfterEast?.width).toBe(s1.width + 30);
+    expect(shapeAfterEast?.height).toBe(s1.height);
+
+    // Test South edge resize (vertical only)
+    const downSouth = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: shapeAfterEast!.x + shapeAfterEast!.width / 2,
+      clientY: shapeAfterEast!.y + shapeAfterEast!.height,
+    });
+    component.handleResizePointerDown(downSouth, 's');
+
+    const moveSouth = new PointerEvent('pointermove', {
+      clientX: shapeAfterEast!.x + shapeAfterEast!.width / 2 + 15, // horizontal movement ignored
+      clientY: shapeAfterEast!.y + shapeAfterEast!.height + 40,
+    });
+    component.handlePointerMove(moveSouth);
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    const shapeAfterSouth = component.shapes().find((s) => s.id === s1.id);
+    expect(shapeAfterSouth?.width).toBe(s1.width + 30);
+    expect(shapeAfterSouth?.height).toBe(s1.height + 40);
+
+    // Test Corner SE resize (both horizontal and vertical)
+    const downSE = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: shapeAfterSouth!.x + shapeAfterSouth!.width,
+      clientY: shapeAfterSouth!.y + shapeAfterSouth!.height,
+    });
+    component.handleResizePointerDown(downSE, 'se');
+
+    const moveSE = new PointerEvent('pointermove', {
+      clientX: shapeAfterSouth!.x + shapeAfterSouth!.width + 20,
+      clientY: shapeAfterSouth!.y + shapeAfterSouth!.height + 20,
+    });
+    component.handlePointerMove(moveSE);
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    const finalShape = component.shapes().find((s) => s.id === s1.id);
+    expect(finalShape?.width).toBe(s1.width + 50);
+    expect(finalShape?.height).toBe(s1.height + 60);
   });
 
   it('should select shapes via marquee drag selection', () => {
@@ -682,6 +699,7 @@ describe('CanvasComponent', () => {
     );
 
     expect(component.draggingEndpoint()).toEqual({ connId: conn.id, endpoint: 'target' });
+    expect(component.reconnectingPreview()).not.toBeNull();
 
     // Drag to s3 top anchor
     const s3TopAnchor = { x: s3.x + s3.width / 2, y: s3.y };
@@ -689,12 +707,94 @@ describe('CanvasComponent', () => {
     component.handlePointerMove(
       new PointerEvent('pointermove', { clientX: s3ScreenPt.x, clientY: s3ScreenPt.y }),
     );
+    fixture.detectChanges();
+
+    // Live reconnecting preview line should be rendered in the DOM
+    const previewEl = fixture.nativeElement.querySelector(
+      '.connection-path.in-progress.reconnecting',
+    );
+    expect(previewEl).not.toBeNull();
+    expect(component.reconnectingPreview()?.targetShapeId).toBe(s3.id);
+    expect(component.reconnectingPreview()?.targetAnchor).toBe('top');
+
     component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
 
     expect(component.draggingEndpoint()).toBeNull();
+    expect(component.reconnectingPreview()).toBeNull();
     const updated = component.connections()[0];
     expect(updated.targetShapeId).toBe(s3.id);
     expect(updated.targetAnchor).toBe('top');
+  });
+
+  it('should show preview line when reconnecting source endpoint and cancel on Escape', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const s3 = component.createShape('rectangle', { x: 100, y: 300 });
+
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+    component.selectConnection(conn.id);
+
+    // Pointer down on source endpoint
+    const s1RightAnchor = { x: s1.x + s1.width, y: s1.y + s1.height / 2 };
+    const s1ScreenPt = component.worldToScreen(s1RightAnchor);
+    component.handleEndpointPointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: s1ScreenPt.x, clientY: s1ScreenPt.y }),
+      conn.id,
+      'source',
+    );
+
+    expect(component.draggingEndpoint()).toEqual({ connId: conn.id, endpoint: 'source' });
+    expect(component.reconnectingPreview()).not.toBeNull();
+
+    // Move towards s3 top anchor
+    const s3TopAnchor = { x: s3.x + s3.width / 2, y: s3.y };
+    const s3ScreenPt = component.worldToScreen(s3TopAnchor);
+    component.handlePointerMove(
+      new PointerEvent('pointermove', { clientX: s3ScreenPt.x, clientY: s3ScreenPt.y }),
+    );
+
+    expect(component.reconnectingPreview()?.sourceShapeId).toBe(s3.id);
+    expect(component.reconnectingPreview()?.sourceAnchor).toBe('top');
+
+    // Press Escape to cancel reconnect
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(component.draggingEndpoint()).toBeNull();
+    expect(component.reconnectingPreview()).toBeNull();
+    // Connection source remains original s1
+    expect(component.connections()[0].sourceShapeId).toBe(s1.id);
+    expect(component.connections()[0].sourceAnchor).toBe('right');
+  });
+
+  it('should render endpoint reconnect handles and reshape handles only when connection is selected', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.clearSelection();
+    component.hoveredConnectionId.set(conn.id);
+    fixture.detectChanges();
+
+    // When connection is only hovered (not selected), handles are not rendered so shape anchors are unobstructed
+    const hoveredEndpoints = fixture.nativeElement.querySelectorAll('.connection-endpoint-handle');
+    expect(hoveredEndpoints.length).toBe(0);
+
+    const hoveredMidpoints = fixture.nativeElement.querySelectorAll(
+      '.connection-segment-handle, .connection-midpoint-handle',
+    );
+    expect(hoveredMidpoints.length).toBe(0);
+
+    // When connection is selected, handles ARE rendered
+    component.selectConnection(conn.id);
+    fixture.detectChanges();
+
+    const selectedEndpoints = fixture.nativeElement.querySelectorAll('.connection-endpoint-handle');
+    expect(selectedEndpoints.length).toBe(2);
+
+    const selectedMidpoints = fixture.nativeElement.querySelectorAll(
+      '.connection-segment-handle, .connection-midpoint-handle',
+    );
+    expect(selectedMidpoints.length).toBeGreaterThan(0);
   });
 
   it('should route orthogonal connections with outward clearance when sharing bottom-to-bottom anchors', () => {
@@ -729,8 +829,9 @@ describe('CanvasComponent', () => {
     expect(rendered).toBeDefined();
     expect(rendered!.routing).toBe('curved');
     expect(rendered!.waypoints.length).toBe(1);
-    // Path contains cubic Bezier curve commands (C)
+    // Path is a smooth continuous cubic Bezier curve (C) exiting perpendicular to anchors without hard linear joints (L)
     expect(rendered!.path).toContain('C');
+    expect(rendered!.path).not.toContain('L');
   });
 
   it('should extract segments on orthogonal connections and support 1D segment dragging', () => {
@@ -862,5 +963,386 @@ describe('CanvasComponent', () => {
     expect(stopSpy).toHaveBeenCalled();
     const resetConn = component.connections().find((c) => c.id === conn.id);
     expect(resetConn?.waypoints?.length).toBe(0);
+  });
+
+  it('should reset connection waypoints when double-clicking segment handle via consecutive pointerdowns', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.updateConnection(conn.id, {
+      waypoints: [{ x: 200, y: 200 }],
+    });
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(rendered?.segments?.length).toBeGreaterThan(0);
+    const targetSegment = rendered!.segments![0];
+
+    // First click
+    const evt1 = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 200,
+      clientY: 150,
+      bubbles: true,
+      cancelable: true,
+    });
+    component.handleSegmentPointerDown(evt1, conn.id, targetSegment);
+
+    // Second click rapidly at same position
+    const evt2 = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 201,
+      clientY: 151,
+      bubbles: true,
+      cancelable: true,
+    });
+    component.handleSegmentPointerDown(evt2, conn.id, targetSegment);
+
+    const resetConn = component.connections().find((c) => c.id === conn.id);
+    expect(resetConn?.waypoints?.length).toBe(0);
+  });
+
+  it('should remove specific waypoint when double-clicking waypoint handle via consecutive pointerdowns', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.updateConnection(conn.id, {
+      routing: 'straight',
+      waypoints: [
+        { x: 150, y: 120 },
+        { x: 250, y: 180 },
+      ],
+    });
+
+    // First click on waypoint 0
+    const evt1 = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 150,
+      clientY: 120,
+      bubbles: true,
+      cancelable: true,
+    });
+    component.handleWaypointPointerDown(evt1, conn.id, 0);
+
+    // Second click rapidly on waypoint 0
+    const evt2 = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 151,
+      clientY: 121,
+      bubbles: true,
+      cancelable: true,
+    });
+    component.handleWaypointPointerDown(evt2, conn.id, 0);
+
+    const updatedConn = component.connections().find((c) => c.id === conn.id);
+    expect(updatedConn?.waypoints?.length).toBe(1);
+    expect(updatedConn?.waypoints?.[0]).toEqual({ x: 250, y: 180 });
+  });
+
+  describe('Self-Loop Connections', () => {
+    it('should create a self-loop connection when source and target are the same shape with different handles', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const bottomPt = getShapeAnchorPoint(s1, 'bottom');
+      const leftPt = getShapeAnchorPoint(s1, 'left');
+
+      const conn = component.createConnection(s1.id, 'bottom', s1.id, 'left');
+
+      expect(conn).toBeDefined();
+      expect(conn.sourceShapeId).toBe(s1.id);
+      expect(conn.targetShapeId).toBe(s1.id);
+      expect(conn.sourceAnchor).toBe('bottom');
+      expect(conn.targetAnchor).toBe('left');
+
+      const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+      expect(rendered).toBeDefined();
+
+      // Points should exit bottom, loop around outside the bottom-left corner, and enter left
+      const pts = rendered!.points;
+      expect(pts.length).toBeGreaterThanOrEqual(4);
+      expect(pts[0]).toEqual(bottomPt);
+      expect(pts[pts.length - 1]).toEqual(leftPt);
+
+      // All intermediate points must stay strictly outside the shape interior
+      for (let i = 1; i < pts.length - 1; i++) {
+        const pt = pts[i];
+        const insideInterior =
+          pt.x > s1.x && pt.x < s1.x + s1.width && pt.y > s1.y && pt.y < s1.y + s1.height;
+        expect(insideInterior).toBe(false);
+      }
+    });
+
+    it('should reject creating a connection on the exact same connector handle', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+
+      expect(() => {
+        component.createConnection(s1.id, 'bottom', s1.id, 'bottom');
+      }).toThrow('A connector cannot loop on the same connector handle');
+    });
+
+    it('should reject updating a connection to loop on the same handle', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const conn = component.createConnection(s1.id, 'bottom', s1.id, 'left');
+
+      component.updateConnection(conn.id, { targetAnchor: 'bottom' });
+
+      const updated = component.connections().find((c) => c.id === conn.id);
+      // Target anchor should remain 'left', update rejected
+      expect(updated?.targetAnchor).toBe('left');
+    });
+
+    it('should complete a self-loop when user clicks a different anchor on the same shape', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const bottomPt = getShapeAnchorPoint(s1, 'bottom');
+      const leftPt = getShapeAnchorPoint(s1, 'left');
+
+      // Start connection on bottom anchor
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: bottomPt.x,
+          clientY: bottomPt.y,
+        }),
+        shape: s1,
+        anchor: 'bottom',
+      });
+
+      expect(component.inProgressConnection()).toBeTruthy();
+      expect(component.inProgressConnection()?.sourceShapeId).toBe(s1.id);
+      expect(component.inProgressConnection()?.sourceAnchor).toBe('bottom');
+
+      // Click left anchor on the same shape
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', { button: 0, clientX: leftPt.x, clientY: leftPt.y }),
+        shape: s1,
+        anchor: 'left',
+      });
+
+      // In-progress connection should be finalized
+      expect(component.inProgressConnection()).toBeNull();
+
+      const conns = component.connections();
+      const selfConn = conns.find((c) => c.sourceShapeId === s1.id && c.targetShapeId === s1.id);
+      expect(selfConn).toBeDefined();
+      expect(selfConn?.sourceAnchor).toBe('bottom');
+      expect(selfConn?.targetAnchor).toBe('left');
+    });
+
+    it('should NOT complete a connection when user clicks the exact same anchor', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const bottomPt = getShapeAnchorPoint(s1, 'bottom');
+
+      // Start connection on bottom anchor
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: bottomPt.x,
+          clientY: bottomPt.y,
+        }),
+        shape: s1,
+        anchor: 'bottom',
+      });
+
+      expect(component.inProgressConnection()).toBeTruthy();
+
+      // Click same bottom anchor again
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: bottomPt.x,
+          clientY: bottomPt.y,
+        }),
+        shape: s1,
+        anchor: 'bottom',
+      });
+
+      // No connection should be created on the same handle
+      expect(component.connections().length).toBe(0);
+    });
+
+    it('should snap to different anchors on the same shape during dragging, but not the same handle', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const bottomPt = getShapeAnchorPoint(s1, 'bottom');
+      const leftPt = getShapeAnchorPoint(s1, 'left');
+
+      // Start connection at bottom anchor
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: bottomPt.x,
+          clientY: bottomPt.y,
+        }),
+        shape: s1,
+        anchor: 'bottom',
+      });
+
+      // Move near the starting bottom anchor - should NOT snap to bottom anchor
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: bottomPt.x, clientY: bottomPt.y - 2 }),
+      );
+      const inProgNearSame = component.inProgressConnection();
+      expect(inProgNearSame?.targetAnchor).toBeUndefined();
+
+      // Move near the left anchor - should snap to left anchor
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: leftPt.x + 2, clientY: leftPt.y }),
+      );
+      const inProgNearLeft = component.inProgressConnection();
+      expect(inProgNearLeft?.targetShapeId).toBe(s1.id);
+      expect(inProgNearLeft?.targetAnchor).toBe('left');
+    });
+
+    it('should render a curved self-loop outside the shape boundaries', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const conn = component.createConnection(s1.id, 'bottom', s1.id, 'left');
+      component.updateConnection(conn.id, { routing: 'curved' });
+
+      const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+      expect(rendered).toBeDefined();
+      expect(rendered?.routing).toBe('curved');
+      expect(rendered?.path).toContain('C');
+      // Midpoint should be outside below the shape
+      expect(rendered?.midpoint.x).toBeLessThan(s1.x + s1.width / 2);
+      expect(rendered?.midpoint.y).toBeGreaterThan(s1.y + s1.height);
+    });
+
+    it('should move self-loop waypoints when the parent shape is moved', () => {
+      const s1 = component.createShape('rectangle', { x: 160, y: 140 });
+      const conn = component.createConnection(s1.id, 'bottom', s1.id, 'left');
+      component.updateConnection(conn.id, {
+        waypoints: [{ x: 50, y: 220 }],
+      });
+
+      // Select s1 and drag it by delta (+50, +50)
+      component.selectShape(s1.id);
+
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 150, clientY: 150 }),
+        s1,
+      );
+
+      component.handlePointerMove(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }));
+
+      const updatedConn = component.connections().find((c) => c.id === conn.id);
+      expect(updatedConn?.waypoints?.[0]).toEqual({ x: 100, y: 270 });
+    });
+
+    it('should allow initiating a new connection from an anchor that already has an existing connection emerging from it', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+      component.createConnection(s1.id, 'right', s2.id, 'left');
+
+      expect(component.connections().length).toBe(1);
+
+      // Deselect connection so user is interacting with shapes
+      component.clearSelection();
+      fixture.detectChanges();
+
+      // Shape anchor for right side should be accessible
+      const rightPt = getShapeAnchorPoint(s1, 'right');
+      const anchorEvent = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: rightPt.x,
+        clientY: rightPt.y,
+      });
+
+      // Pointer down on the right anchor of s1
+      component.handleAnchorPointerDown({
+        event: anchorEvent,
+        shape: s1,
+        anchor: 'right',
+      });
+
+      // A new connection must be in progress from s1 right anchor
+      const inProg = component.inProgressConnection();
+      expect(inProg).not.toBeNull();
+      expect(inProg?.sourceShapeId).toBe(s1.id);
+      expect(inProg?.sourceAnchor).toBe('right');
+
+      // Now click on a different anchor on s1 to create a self-loop
+      const bottomPt = getShapeAnchorPoint(s1, 'bottom');
+      component.handleAnchorPointerDown({
+        event: new PointerEvent('pointerdown', {
+          button: 0,
+          clientX: bottomPt.x,
+          clientY: bottomPt.y,
+        }),
+        shape: s1,
+        anchor: 'bottom',
+      });
+
+      // Now 2 connections exist: the original one and the new self loop!
+      expect(component.connections().length).toBe(2);
+      const newConn = component.connections()[1];
+      expect(newConn.sourceShapeId).toBe(s1.id);
+      expect(newConn.sourceAnchor).toBe('right');
+      expect(newConn.targetShapeId).toBe(s1.id);
+      expect(newConn.targetAnchor).toBe('bottom');
+    });
+
+    it('should route orthogonal line entering top anchor from above when source is lower on the left', () => {
+      // Shape 1 on the left and lower
+      const s1 = component.createShape('rectangle', { x: 100, y: 300 });
+      // Shape 2 on the right and higher
+      const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'top');
+      const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+
+      expect(rendered).toBeDefined();
+      const pts = rendered!.points;
+      expect(pts.length).toBeGreaterThanOrEqual(4);
+
+      const s2TopAnchor = getShapeAnchorPoint(s2, 'top');
+      // The last point must be the top anchor of s2
+      const lastPt = pts[pts.length - 1];
+      expect(lastPt).toEqual(s2TopAnchor);
+
+      // The second to last point must be directly above the top anchor (pEndStub: y < s2TopAnchor.y)
+      const secondToLastPt = pts[pts.length - 2];
+      expect(secondToLastPt.x).toBe(s2TopAnchor.x);
+      expect(secondToLastPt.y).toBe(s2TopAnchor.y - 20);
+
+      // Verify the final segment enters the top anchor from above (moving downward)
+      expect(secondToLastPt.y).toBeLessThan(lastPt.y);
+    });
+
+    it('should position connection toolbar below shape when connection midpoint sits below the shape', () => {
+      // Shape at (100, 100), width 120, height 80 (bottom at y=180)
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      // Create self-loop connection from left to right (looping below the shape)
+      const conn = component.createConnection(s1.id, 'left', s1.id, 'right');
+      component.selectConnection(conn.id);
+
+      const pos = component.connectionToolbarPos();
+      expect(pos).not.toBeNull();
+      // Midpoint of self loop left-to-right runs below the shape (y >= 180)
+      expect(pos!.placement).toBe('bottom');
+      expect(pos!.y).toBeGreaterThan(s1.y + s1.height);
+    });
+
+    it('should not show shape anchors simply when a connection is selected', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+      // Clear shape selection and select the connection
+      component.clearSelection();
+      component.selectConnection(conn.id);
+      expect(component.selectedConnectionIds().size).toBe(1);
+      expect(component.selectedShapeIds().size).toBe(0);
+
+      fixture.detectChanges();
+
+      // Check canvas-shape component instances in fixture
+      const shapeElements = fixture.nativeElement.querySelectorAll('app-canvas-shape');
+      expect(shapeElements.length).toBe(2);
+
+      // Verify showAnchors input on the child component is false
+      const shapeDebugEls = fixture.debugElement.queryAll((de) => de.name === 'app-canvas-shape');
+      for (const de of shapeDebugEls) {
+        expect(de.componentInstance.showAnchors()).toBe(false);
+      }
+    });
   });
 });

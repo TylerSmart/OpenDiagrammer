@@ -19,8 +19,13 @@
   <div class="canvas-content-layer" [style.transform]="contentTransform()">
     <ng-content></ng-content>
 
-    <!-- Rendered SVG Connections Layer -->
-    <svg class="canvas-connections-layer" overflow="visible" aria-hidden="true">
+    <!-- Rendered SVG Connections Layer (positioned underneath shapes) -->
+    <svg
+      class="canvas-connections-layer"
+      [class.is-connecting]="activeTool() === 'connection' || inProgressConnection() !== null"
+      overflow="visible"
+      aria-hidden="true"
+    >
       <defs>
         <marker
           id="arrow-marker"
@@ -47,86 +52,155 @@
       </defs>
 
       @for (conn of renderedConnections(); track conn.id) {
-        <g
-          class="connection-group"
-          (pointerenter)="hoveredConnectionId.set(conn.id)"
-          (pointerleave)="hoveredConnectionId.set(null)"
-        >
-          <path
-            class="connection-hit-area"
-            [attr.d]="conn.path"
-            (pointerdown)="handleConnectionPointerDown($event, conn.id)"
-            (dblclick)="startEditingConnectionText(conn.id)"
-          />
-          <path
-            class="connection-path"
-            [class.is-selected]="isConnectionSelected(conn.id)"
-            [class.is-hovered]="hoveredConnectionId() === conn.id"
-            [attr.d]="conn.path"
-            [attr.stroke]="
-              isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
-            "
-            [attr.stroke-width]="conn.strokeWidth"
-            [attr.stroke-dasharray]="conn.dashArray || null"
-            [attr.marker-start]="
-              conn.startMarker === 'arrow'
-                ? isConnectionSelected(conn.id)
-                  ? 'url(#arrow-marker-selected)'
-                  : 'url(#arrow-marker)'
-                : null
-            "
-            [attr.marker-end]="
-              conn.endMarker === 'arrow'
-                ? isConnectionSelected(conn.id)
-                  ? 'url(#arrow-marker-selected)'
-                  : 'url(#arrow-marker)'
-                : null
-            "
-            (pointerdown)="handleConnectionPointerDown($event, conn.id)"
-            (dblclick)="startEditingConnectionText(conn.id)"
-          />
-
-          <!-- Connection Text Label Badge -->
-          @if (conn.text && editingConnectionId() !== conn.id) {
-            <g
-              class="connection-label-group"
-              [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+        @if (reconnectingPreview()?.connId !== conn.id) {
+          <g
+            class="connection-group"
+            (pointerenter)="hoveredConnectionId.set(conn.id)"
+            (pointerleave)="hoveredConnectionId.set(null)"
+          >
+            <path
+              class="connection-hit-area"
+              [attr.d]="conn.path"
+              (pointerdown)="handleConnectionPointerDown($event, conn.id)"
               (dblclick)="startEditingConnectionText(conn.id)"
-            >
-              <rect
-                class="connection-label-bg"
-                [attr.x]="-(conn.text.length * 4.5 + 8)"
-                y="-12"
-                [attr.width]="conn.text.length * 9 + 16"
-                height="24"
-                rx="4"
-              />
-              <text class="connection-label-text" text-anchor="middle" dy="4">
-                {{ conn.text }}
-              </text>
-            </g>
-          }
-
-          <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles (on hover or selection) -->
-          @if (isConnectionSelected(conn.id) || hoveredConnectionId() === conn.id) {
-            <!-- Source Endpoint Reconnect Handle -->
-            <circle
-              class="connection-endpoint-handle source-endpoint"
-              [attr.cx]="conn.startPoint.x"
-              [attr.cy]="conn.startPoint.y"
-              r="6.5"
-              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+            />
+            <path
+              class="connection-path"
+              [class.is-selected]="isConnectionSelected(conn.id)"
+              [class.is-hovered]="hoveredConnectionId() === conn.id"
+              [attr.d]="conn.path"
+              [attr.stroke]="
+                isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
+              "
+              [attr.stroke-width]="conn.strokeWidth"
+              [attr.stroke-dasharray]="conn.dashArray || null"
+              [attr.marker-start]="
+                conn.startMarker === 'arrow'
+                  ? isConnectionSelected(conn.id)
+                    ? 'url(#arrow-marker-selected)'
+                    : 'url(#arrow-marker)'
+                  : null
+              "
+              [attr.marker-end]="
+                conn.endMarker === 'arrow'
+                  ? isConnectionSelected(conn.id)
+                    ? 'url(#arrow-marker-selected)'
+                    : 'url(#arrow-marker)'
+                  : null
+              "
+              (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+              (dblclick)="startEditingConnectionText(conn.id)"
             />
 
-            <!-- Target Endpoint Reconnect Handle -->
-            <circle
-              class="connection-endpoint-handle target-endpoint"
-              [attr.cx]="conn.endPoint.x"
-              [attr.cy]="conn.endPoint.y"
-              r="6.5"
-              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
-            />
+            <!-- Connection Text Label Badge -->
+            @if (conn.text && editingConnectionId() !== conn.id) {
+              <g
+                class="connection-label-group"
+                [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+                (dblclick)="startEditingConnectionText(conn.id)"
+              >
+                <rect
+                  class="connection-label-bg"
+                  [attr.x]="-(conn.text.length * 3.4 + 8)"
+                  y="-12"
+                  [attr.width]="conn.text.length * 6.8 + 16"
+                  height="24"
+                  rx="4"
+                />
+                <text class="connection-label-text" text-anchor="middle" dy="4">
+                  {{ conn.text }}
+                </text>
+              </g>
+            }
+          </g>
+        }
+      }
 
+      @if (inProgressConnection(); as inProg) {
+        <path
+          class="connection-path in-progress"
+          [attr.d]="inProg.path"
+          [attr.stroke]="'var(--mat-sys-primary, #1976d2)'"
+          [attr.stroke-width]="2"
+          stroke-dasharray="5,5"
+          marker-end="url(#arrow-marker-selected)"
+        />
+      }
+
+      @if (reconnectingPreview(); as preview) {
+        <path
+          class="connection-path in-progress reconnecting"
+          [attr.d]="preview.path"
+          [attr.stroke]="'var(--mat-sys-primary, #1976d2)'"
+          [attr.stroke-width]="2"
+          stroke-dasharray="5,5"
+          [attr.marker-start]="preview.startMarker ? 'url(#arrow-marker-selected)' : null"
+          [attr.marker-end]="preview.endMarker ? 'url(#arrow-marker-selected)' : null"
+        />
+      }
+    </svg>
+
+    <!-- Rendered Shapes -->
+    @for (shape of shapes(); track shape.id) {
+      <app-canvas-shape
+        [shape]="shape"
+        [isSelected]="isShapeSelected(shape.id)"
+        [showAnchors]="
+          activeTool() === 'connection' ||
+          inProgressConnection() !== null ||
+          isShapeSelected(shape.id) ||
+          draggingEndpoint() !== null
+        "
+        (pointerdown)="handleShapePointerDown($event, shape)"
+        (anchorPointerDown)="handleAnchorPointerDown($event)"
+        (anchorHover)="handleAnchorHover($event)"
+      ></app-canvas-shape>
+    }
+
+    <!-- Interactive Selected Connection Handles Overlay (Endpoints, Waypoints, Segments placed above shapes) -->
+    <svg class="canvas-connection-handles-layer" overflow="visible" aria-hidden="true">
+      @for (conn of renderedConnections(); track conn.id) {
+        @if (isConnectionSelected(conn.id)) {
+          <!-- Source Endpoint Reconnect Handle -->
+          <circle
+            class="connection-endpoint-handle source-endpoint"
+            [attr.cx]="
+              reconnectingPreview()?.connId === conn.id &&
+              reconnectingPreview()?.endpoint === 'source'
+                ? reconnectingPreview()!.currentPoint.x
+                : conn.startPoint.x
+            "
+            [attr.cy]="
+              reconnectingPreview()?.connId === conn.id &&
+              reconnectingPreview()?.endpoint === 'source'
+                ? reconnectingPreview()!.currentPoint.y
+                : conn.startPoint.y
+            "
+            r="6.5"
+            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+          />
+
+          <!-- Target Endpoint Reconnect Handle -->
+          <circle
+            class="connection-endpoint-handle target-endpoint"
+            [attr.cx]="
+              reconnectingPreview()?.connId === conn.id &&
+              reconnectingPreview()?.endpoint === 'target'
+                ? reconnectingPreview()!.currentPoint.x
+                : conn.endPoint.x
+            "
+            [attr.cy]="
+              reconnectingPreview()?.connId === conn.id &&
+              reconnectingPreview()?.endpoint === 'target'
+                ? reconnectingPreview()!.currentPoint.y
+                : conn.endPoint.y
+            "
+            r="6.5"
+            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
+          />
+
+          <!-- Reshaping handles (hidden while actively dragging an endpoint) -->
+          @if (reconnectingPreview()?.connId !== conn.id) {
             <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
             @if (conn.routing !== 'orthogonal') {
               @for (wp of conn.waypoints; track $index) {
@@ -176,39 +250,11 @@
               }
             }
           }
-        </g>
-      }
-
-      @if (inProgressConnection(); as inProg) {
-        <path
-          class="connection-path in-progress"
-          [attr.d]="inProg.path"
-          [attr.stroke]="'var(--mat-sys-primary, #1976d2)'"
-          [attr.stroke-width]="2"
-          stroke-dasharray="5,5"
-          marker-end="url(#arrow-marker-selected)"
-        />
+        }
       }
     </svg>
 
-    <!-- Rendered Shapes -->
-    @for (shape of shapes(); track shape.id) {
-      <app-canvas-shape
-        [shape]="shape"
-        [isSelected]="isShapeSelected(shape.id)"
-        [showAnchors]="
-          activeTool() === 'connection' ||
-          inProgressConnection() !== null ||
-          selectedConnectionIds().size > 0 ||
-          draggingEndpoint() !== null
-        "
-        (pointerdown)="handleShapePointerDown($event, shape)"
-        (anchorPointerDown)="handleAnchorPointerDown($event)"
-        (anchorHover)="handleAnchorHover($event)"
-      ></app-canvas-shape>
-    }
-
-    <!-- Selection Bounding Box & Resize Handles -->
+    <!-- Selection Bounding Box & Resize Handles (OS-window style edges + corner grips) -->
     @if (selectionBox(); as box) {
       <div
         class="selection-box"
@@ -218,12 +264,41 @@
         [style.height.px]="box.height"
       >
         @if (selectedShapeIds().size === 1) {
-          @for (pos of resizeHandles; track pos) {
-            <div
-              class="resize-handle handle-{{ pos }}"
-              (pointerdown)="handleResizePointerDown($event, pos)"
-            ></div>
-          }
+          <!-- Full-length OS-window edge resize strips -->
+          <div
+            class="resize-edge edge-n"
+            (pointerdown)="handleResizePointerDown($event, 'n')"
+          ></div>
+          <div
+            class="resize-edge edge-s"
+            (pointerdown)="handleResizePointerDown($event, 's')"
+          ></div>
+          <div
+            class="resize-edge edge-w"
+            (pointerdown)="handleResizePointerDown($event, 'w')"
+          ></div>
+          <div
+            class="resize-edge edge-e"
+            (pointerdown)="handleResizePointerDown($event, 'e')"
+          ></div>
+
+          <!-- Corner resize grips -->
+          <div
+            class="resize-handle handle-nw"
+            (pointerdown)="handleResizePointerDown($event, 'nw')"
+          ></div>
+          <div
+            class="resize-handle handle-ne"
+            (pointerdown)="handleResizePointerDown($event, 'ne')"
+          ></div>
+          <div
+            class="resize-handle handle-se"
+            (pointerdown)="handleResizePointerDown($event, 'se')"
+          ></div>
+          <div
+            class="resize-handle handle-sw"
+            (pointerdown)="handleResizePointerDown($event, 'sw')"
+          ></div>
         }
       </div>
     }
@@ -243,6 +318,8 @@
       @if (connectionToolbarPos(); as pos) {
         <div
           class="connection-tools-dock"
+          [class.placement-top]="pos.placement === 'top'"
+          [class.placement-bottom]="pos.placement === 'bottom'"
           role="toolbar"
           aria-label="Connection line customization"
           [style.left.px]="pos.x"
@@ -406,6 +483,7 @@
             #textInput
             type="text"
             [value]="selConn.text || ''"
+            [style.width.ch]="(textInput.value || selConn.text || '').length + 3"
             (blur)="finishEditingConnectionText(editConnId, textInput.value)"
             (keydown.enter)="finishEditingConnectionText(editConnId, textInput.value)"
             (keydown.escape)="editingConnectionId.set(null)"
