@@ -51,11 +51,14 @@
           class="connection-hit-area"
           [attr.d]="conn.path"
           (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+          (pointerenter)="hoveredConnectionId.set(conn.id)"
+          (pointerleave)="hoveredConnectionId.set(null)"
           (dblclick)="startEditingConnectionText(conn.id)"
         />
         <path
           class="connection-path"
           [class.is-selected]="isConnectionSelected(conn.id)"
+          [class.is-hovered]="hoveredConnectionId() === conn.id"
           [attr.d]="conn.path"
           [attr.stroke]="
             isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
@@ -77,6 +80,8 @@
               : null
           "
           (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+          (pointerenter)="hoveredConnectionId.set(conn.id)"
+          (pointerleave)="hoveredConnectionId.set(null)"
           (dblclick)="startEditingConnectionText(conn.id)"
         />
 
@@ -101,8 +106,8 @@
           </g>
         }
 
-        <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles for Selected Connection -->
-        @if (isConnectionSelected(conn.id)) {
+        <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles (on hover or selection) -->
+        @if (isConnectionSelected(conn.id) || hoveredConnectionId() === conn.id) {
           <!-- Source Endpoint Reconnect Handle -->
           <circle
             class="connection-endpoint-handle source-endpoint"

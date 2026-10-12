@@ -134,14 +134,16 @@ export function computeConnectionPath(
   // Orthogonal routing (step lines)
   if (waypoints && waypoints.length > 0) {
     let path = `M ${pts[0].x} ${pts[0].y}`;
+    const allStepPoints: CanvasPoint[] = [pts[0]];
     for (let i = 1; i < pts.length; i++) {
       const pPrev = pts[i - 1];
       const pCurr = pts[i];
       const midX = (pPrev.x + pCurr.x) / 2;
       path += ` L ${midX} ${pPrev.y} L ${midX} ${pCurr.y} L ${pCurr.x} ${pCurr.y}`;
+      allStepPoints.push({ x: midX, y: pPrev.y }, { x: midX, y: pCurr.y }, pCurr);
     }
-    const midIdx = Math.floor(pts.length / 2);
-    return { path, midpoint: pts[midIdx], points: pts };
+    const midIdx = Math.floor(allStepPoints.length / 2);
+    return { path, midpoint: allStepPoints[midIdx], points: allStepPoints };
   }
 
   const midX = (start.x + end.x) / 2;
@@ -149,14 +151,17 @@ export function computeConnectionPath(
 
   let path: string;
   let mid: CanvasPoint;
+  let points: CanvasPoint[];
 
   if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
     path = `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`;
     mid = { x: (start.x + end.x) / 2, y: midY };
+    points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
   } else {
     path = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
     mid = { x: midX, y: (start.y + end.y) / 2 };
+    points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
   }
 
-  return { path, midpoint: mid, points: [start, mid, end] };
+  return { path, midpoint: mid, points };
 }

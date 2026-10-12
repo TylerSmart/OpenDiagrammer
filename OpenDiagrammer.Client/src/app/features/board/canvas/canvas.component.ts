@@ -74,6 +74,8 @@ export class CanvasComponent {
     path: string;
   } | null>(null);
 
+  readonly hoveredConnectionId = signal<string | null>(null);
+
   private hoveredAnchor: { shape: CanvasShape; anchor: AnchorPosition } | null = null;
 
   // Marquee selection state
