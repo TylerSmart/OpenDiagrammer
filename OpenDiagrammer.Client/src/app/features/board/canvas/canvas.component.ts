@@ -270,6 +270,8 @@ export class CanvasComponent {
     return this.renderedConnections().find((c) => c.id === id) || null;
   });
 
+  readonly hasSelectedConnection = computed<boolean>(() => this.selectedConnectionIds().size > 0);
+
   // Connection Waypoint Dragging State
   private isDraggingWaypoint = false;
   private activeWaypointConnId: string | null = null;

@@ -11,6 +11,7 @@ export class CanvasShapeComponent {
   readonly shape = input.required<CanvasShape>();
   readonly isSelected = input<boolean>(false);
   readonly showAnchors = input<boolean>(false);
+  readonly allowHoverAnchors = input<boolean>(true);
 
   readonly isHovered = signal<boolean>(false);
 

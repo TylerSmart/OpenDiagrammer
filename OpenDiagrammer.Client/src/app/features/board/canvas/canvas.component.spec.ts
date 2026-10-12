@@ -1357,7 +1357,7 @@ describe('CanvasComponent', () => {
       expect(pos!.y).toBeGreaterThan(s1.y + s1.height);
     });
 
-    it('should not show shape anchors simply when a connection is selected', () => {
+    it('should not show shape anchors simply when a connection is selected, even on hover', () => {
       const s1 = component.createShape('rectangle', { x: 100, y: 100 });
       const s2 = component.createShape('rectangle', { x: 300, y: 100 });
       const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
@@ -1374,11 +1374,18 @@ describe('CanvasComponent', () => {
       const shapeElements = fixture.nativeElement.querySelectorAll('app-canvas-shape');
       expect(shapeElements.length).toBe(2);
 
-      // Verify showAnchors input on the child component is false
+      // Verify showAnchors input and allowHoverAnchors on child components
       const shapeDebugEls = fixture.debugElement.queryAll((de) => de.name === 'app-canvas-shape');
       for (const de of shapeDebugEls) {
         expect(de.componentInstance.showAnchors()).toBe(false);
+        expect(de.componentInstance.allowHoverAnchors()).toBe(false);
       }
+
+      // Hovering over a shape should NOT show shape anchors when a connection is selected
+      shapeDebugEls[0].componentInstance.isHovered.set(true);
+      fixture.detectChanges();
+      const anchorsOnHover = fixture.nativeElement.querySelectorAll('.shape-anchor');
+      expect(anchorsOnHover.length).toBe(0);
     });
   });
 

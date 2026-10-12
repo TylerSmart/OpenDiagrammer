@@ -152,6 +152,7 @@
           isShapeSelected(shape.id) ||
           draggingEndpoint() !== null
         "
+        [allowHoverAnchors]="!hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"

@@ -64,4 +64,13 @@ describe('CanvasShapeComponent', () => {
     const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
     expect(anchors.length).toBe(4);
   });
+
+  it('should not show anchors on hover when allowHoverAnchors is false', () => {
+    fixture.componentRef.setInput('allowHoverAnchors', false);
+    component.isHovered.set(true);
+    fixture.detectChanges();
+
+    const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
+    expect(anchors.length).toBe(0);
+  });
 });
