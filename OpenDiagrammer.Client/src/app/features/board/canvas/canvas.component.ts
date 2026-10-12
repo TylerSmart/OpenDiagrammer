@@ -1,4 +1,5 @@
 import { Component, ElementRef, computed, inject, input, output, signal } from '@angular/core';
+import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
@@ -7,6 +8,10 @@ import { CANVAS_CONSTANTS, CanvasPoint, CanvasTransform } from './canvas.models'
 import {
   AnchorPosition,
   CanvasConnection,
+  ConnectionMarker,
+  ConnectionPattern,
+  ConnectionRouting,
+  RenderedConnection,
   computeConnectionPath,
   getShapeAnchorPoint,
 } from './connection.models';
@@ -20,17 +25,8 @@ import {
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
-interface RenderedConnection {
-  id: string;
-  path: string;
-  strokeColor: string;
-  strokeWidth: number;
-  dashArray?: string;
-  endMarker?: string;
-}
-
 @Component({
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
+  imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
   selector: 'app-canvas',
   styleUrl: './canvas.component.scss',
   templateUrl: './canvas.component.html',
@@ -154,12 +150,13 @@ export class CanvasComponent {
         continue;
       }
 
-      const path = computeConnectionPath(
+      const { path, midpoint, points } = computeConnectionPath(
         start,
         end,
         conn.routing,
         conn.sourceAnchor,
         conn.targetAnchor,
+        conn.waypoints,
       );
 
       let dashArray: string | undefined;
@@ -174,12 +171,114 @@ export class CanvasComponent {
         path,
         strokeColor: conn.strokeColor,
         strokeWidth: conn.strokeWidth,
+        pattern: conn.pattern,
+        routing: conn.routing,
         dashArray,
+        startMarker: conn.startMarker,
+        endMarker: conn.endMarker,
+        midpoint,
+        text: conn.text,
+        waypoints: conn.waypoints || [],
+        points,
       });
     }
 
     return result;
   });
+
+  // Single selected connection for contextual toolbar & waypoint handles
+  readonly singleSelectedConnection = computed<RenderedConnection | null>(() => {
+    const selectedIds = this.selectedConnectionIds();
+    if (selectedIds.size !== 1) {
+      return null;
+    }
+    const id = Array.from(selectedIds)[0];
+    return this.renderedConnections().find((c) => c.id === id) || null;
+  });
+
+  // Connection Waypoint Dragging State
+  private isDraggingWaypoint = false;
+  private activeWaypointConnId: string | null = null;
+  private activeWaypointIndex: number | null = null;
+  private isNewWaypoint = false;
+
+  // Inline connection text editing state
+  readonly editingConnectionId = signal<string | null>(null);
+
+  readonly connectionColors = ['#333333', '#1976d2', '#388e3c', '#d32f2f', '#f57c00', '#7b1fa2'];
+
+  readonly connectionToolbarPos = computed<{ x: number; y: number } | null>(() => {
+    const conn = this.singleSelectedConnection();
+    if (!conn) {
+      return null;
+    }
+    // Return world position of midpoint
+    return {
+      x: conn.midpoint.x,
+      y: conn.midpoint.y - 45,
+    };
+  });
+
+  updateConnection(id: string, partial: Partial<CanvasConnection>): void {
+    this.connections.update((list) => list.map((c) => (c.id === id ? { ...c, ...partial } : c)));
+  }
+
+  setConnectionRouting(routing: ConnectionRouting): void {
+    const conn = this.singleSelectedConnection();
+    if (conn) {
+      this.updateConnection(conn.id, { routing, waypoints: [] });
+    }
+  }
+
+  setConnectionPattern(pattern: ConnectionPattern): void {
+    const conn = this.singleSelectedConnection();
+    if (conn) {
+      this.updateConnection(conn.id, { pattern });
+    }
+  }
+
+  setConnectionMarkers(mode: 'none' | 'end' | 'start' | 'both'): void {
+    const conn = this.singleSelectedConnection();
+    if (!conn) {
+      return;
+    }
+    let startMarker: ConnectionMarker = 'none';
+    let endMarker: ConnectionMarker = 'none';
+
+    if (mode === 'end') {
+      endMarker = 'arrow';
+    } else if (mode === 'start') {
+      startMarker = 'arrow';
+    } else if (mode === 'both') {
+      startMarker = 'arrow';
+      endMarker = 'arrow';
+    }
+
+    this.updateConnection(conn.id, { startMarker, endMarker });
+  }
+
+  setConnectionColor(color: string): void {
+    const conn = this.singleSelectedConnection();
+    if (conn) {
+      this.updateConnection(conn.id, { strokeColor: color });
+    }
+  }
+
+  setConnectionWidth(width: number): void {
+    const conn = this.singleSelectedConnection();
+    if (conn) {
+      this.updateConnection(conn.id, { strokeWidth: width });
+    }
+  }
+
+  startEditingConnectionText(connId: string): void {
+    this.editingConnectionId.set(connId);
+  }
+
+  finishEditingConnectionText(connId: string, text: string): void {
+    this.updateConnection(connId, { text: text.trim() || undefined });
+    this.editingConnectionId.set(null);
+  }
 
   // Interaction tracking state
   readonly isPanning = signal<boolean>(false);
@@ -473,6 +572,62 @@ export class CanvasComponent {
     this.selectConnection(connId, event.shiftKey);
   }
 
+  handleWaypointPointerDown(event: PointerEvent, connId: string, waypointIndex: number): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.stopPropagation();
+    this.isDraggingWaypoint = true;
+    this.activeWaypointConnId = connId;
+    this.activeWaypointIndex = waypointIndex;
+    this.isNewWaypoint = false;
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  handleMidpointPointerDown(event: PointerEvent, connId: string, segmentIndex: number): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.stopPropagation();
+    const conn = this.connections().find((c) => c.id === connId);
+    if (!conn) {
+      return;
+    }
+
+    const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    const currentWaypoints = [...(conn.waypoints || [])];
+    currentWaypoints.splice(segmentIndex, 0, worldPoint);
+
+    this.updateConnection(connId, { waypoints: currentWaypoints });
+
+    this.isDraggingWaypoint = true;
+    this.activeWaypointConnId = connId;
+    this.activeWaypointIndex = segmentIndex;
+    this.isNewWaypoint = true;
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  handleWaypointDblClick(event: MouseEvent, connId: string, waypointIndex: number): void {
+    event.stopPropagation();
+    const conn = this.connections().find((c) => c.id === connId);
+    if (!conn || !conn.waypoints) {
+      return;
+    }
+
+    const updatedWaypoints = conn.waypoints.filter((_, idx) => idx !== waypointIndex);
+    this.updateConnection(connId, { waypoints: updatedWaypoints });
+  }
+
   private connectionStartScreenPos: CanvasPoint | null = null;
 
   handleAnchorPointerDown(payload: {
@@ -504,7 +659,12 @@ export class CanvasComponent {
       } else {
         // Clicked same shape anchor - update source anchor
         const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
-        const path = computeConnectionPath(startPoint, startPoint, 'orthogonal', payload.anchor);
+        const { path } = computeConnectionPath(
+          startPoint,
+          startPoint,
+          'orthogonal',
+          payload.anchor,
+        );
         this.inProgressConnection.set({
           sourceShapeId: payload.shape.id,
           sourceAnchor: payload.anchor,
@@ -516,7 +676,12 @@ export class CanvasComponent {
     }
 
     const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
-    const initialPath = computeConnectionPath(startPoint, startPoint, 'orthogonal', payload.anchor);
+    const { path: initialPath } = computeConnectionPath(
+      startPoint,
+      startPoint,
+      'orthogonal',
+      payload.anchor,
+    );
 
     this.connectionStartScreenPos = { x: payload.event.clientX, y: payload.event.clientY };
     this.inProgressConnection.set({
@@ -812,7 +977,7 @@ export class CanvasComponent {
           }
         }
 
-        const path = computeConnectionPath(
+        const { path } = computeConnectionPath(
           startPoint,
           endPoint,
           'orthogonal',
@@ -827,6 +992,20 @@ export class CanvasComponent {
           targetAnchor,
           path,
         });
+      }
+      return;
+    }
+
+    // Waypoint dragging
+    if (this.isDraggingWaypoint && this.activeWaypointConnId && this.activeWaypointIndex !== null) {
+      const conn = this.connections().find((c) => c.id === this.activeWaypointConnId);
+      if (conn && conn.waypoints) {
+        const updatedWaypoints = [...conn.waypoints];
+        updatedWaypoints[this.activeWaypointIndex] = {
+          x: Math.round(currentWorld.x),
+          y: Math.round(currentWorld.y),
+        };
+        this.updateConnection(conn.id, { waypoints: updatedWaypoints });
       }
       return;
     }
@@ -933,6 +1112,13 @@ export class CanvasComponent {
       }
       // If dragDistance <= 5px, it was a click to start! Keep inProgressConnection active
       // so user can click a target anchor or shape to complete the connection.
+    }
+
+    if (this.isDraggingWaypoint) {
+      this.isDraggingWaypoint = false;
+      this.activeWaypointConnId = null;
+      this.activeWaypointIndex = null;
+      this.isNewWaypoint = false;
     }
 
     if (this.isMovingShapes) {

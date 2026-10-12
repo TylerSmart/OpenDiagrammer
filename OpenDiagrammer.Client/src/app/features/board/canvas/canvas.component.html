@@ -20,7 +20,7 @@
     <ng-content></ng-content>
 
     <!-- Rendered SVG Connections Layer -->
-    <svg class="canvas-connections-layer" aria-hidden="true">
+    <svg class="canvas-connections-layer" overflow="visible" aria-hidden="true">
       <defs>
         <marker
           id="arrow-marker"
@@ -51,29 +51,91 @@
           class="connection-hit-area"
           [attr.d]="conn.path"
           (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+          (dblclick)="startEditingConnectionText(conn.id)"
         />
         <path
           class="connection-path"
           [class.is-selected]="isConnectionSelected(conn.id)"
           [attr.d]="conn.path"
           [attr.stroke]="
-            isConnectionSelected(conn.id) ? 'var(--mat-sys-primary)' : conn.strokeColor
+            isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
           "
           [attr.stroke-width]="conn.strokeWidth"
-          [attr.stroke-dasharray]="conn.dashArray || ''"
+          [attr.stroke-dasharray]="conn.dashArray || null"
+          [attr.marker-start]="
+            conn.startMarker === 'arrow'
+              ? isConnectionSelected(conn.id)
+                ? 'url(#arrow-marker-selected)'
+                : 'url(#arrow-marker)'
+              : null
+          "
           [attr.marker-end]="
-            isConnectionSelected(conn.id) ? 'url(#arrow-marker-selected)' : 'url(#arrow-marker)'
+            conn.endMarker === 'arrow'
+              ? isConnectionSelected(conn.id)
+                ? 'url(#arrow-marker-selected)'
+                : 'url(#arrow-marker)'
+              : null
           "
           (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+          (dblclick)="startEditingConnectionText(conn.id)"
         />
+
+        <!-- Connection Text Label Badge -->
+        @if (conn.text && editingConnectionId() !== conn.id) {
+          <g
+            class="connection-label-group"
+            [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+            (dblclick)="startEditingConnectionText(conn.id)"
+          >
+            <rect
+              class="connection-label-bg"
+              [attr.x]="-(conn.text.length * 4.5 + 8)"
+              y="-12"
+              [attr.width]="conn.text.length * 9 + 16"
+              height="24"
+              rx="4"
+            />
+            <text class="connection-label-text" text-anchor="middle" dy="4">
+              {{ conn.text }}
+            </text>
+          </g>
+        }
+
+        <!-- Interactive Miro-Style Waypoint Handles for Selected Connection -->
+        @if (isConnectionSelected(conn.id)) {
+          <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) -->
+          @for (wp of conn.waypoints; track $index) {
+            <circle
+              class="connection-waypoint-handle"
+              [attr.cx]="wp.x"
+              [attr.cy]="wp.y"
+              r="6"
+              (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
+              (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
+            />
+          }
+
+          <!-- Segment Midpoint Handles (allow dragging to insert new waypoint) -->
+          @for (p of conn.points; track $index) {
+            @if ($index < conn.points.length - 1) {
+              <circle
+                class="connection-midpoint-handle"
+                [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
+                [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
+                r="4.5"
+                (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+              />
+            }
+          }
+        }
       }
 
       @if (inProgressConnection(); as inProg) {
         <path
           class="connection-path in-progress"
           [attr.d]="inProg.path"
-          stroke="var(--mat-sys-primary)"
-          stroke-width="2"
+          [attr.stroke]="'var(--mat-sys-primary, #1976d2)'"
+          [attr.stroke-width]="2"
           stroke-dasharray="5,5"
           marker-end="url(#arrow-marker-selected)"
         />
@@ -121,6 +183,167 @@
         [style.width.px]="marquee.width"
         [style.height.px]="marquee.height"
       ></div>
+    }
+    <!-- Contextual Connection Customization Toolbar -->
+    @if (singleSelectedConnection(); as selConn) {
+      @if (connectionToolbarPos(); as pos) {
+        <div
+          class="connection-tools-dock"
+          role="toolbar"
+          aria-label="Connection line customization"
+          [style.left.px]="pos.x"
+          [style.top.px]="pos.y"
+          (pointerdown)="$event.stopPropagation()"
+        >
+          <!-- Routing Type: Straight, Orthogonal, Curved -->
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.routing === 'orthogonal'"
+            (click)="setConnectionRouting('orthogonal')"
+            matTooltip="Cornered / Step Line"
+            aria-label="Cornered line"
+          >
+            <mat-icon>polyline</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.routing === 'straight'"
+            (click)="setConnectionRouting('straight')"
+            matTooltip="Straight Line"
+            aria-label="Straight line"
+          >
+            <mat-icon>straighten</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.routing === 'curved'"
+            (click)="setConnectionRouting('curved')"
+            matTooltip="Curved Line"
+            aria-label="Curved line"
+          >
+            <mat-icon>gesture</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <!-- Line Pattern: Solid, Dashed, Dotted -->
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.pattern === 'solid'"
+            (click)="setConnectionPattern('solid')"
+            matTooltip="Solid Line"
+            aria-label="Solid line"
+          >
+            <mat-icon>remove</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.pattern === 'dashed'"
+            (click)="setConnectionPattern('dashed')"
+            matTooltip="Dashed Line"
+            aria-label="Dashed line"
+          >
+            <mat-icon>more_horiz</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.pattern === 'dotted'"
+            (click)="setConnectionPattern('dotted')"
+            matTooltip="Dotted Line"
+            aria-label="Dotted line"
+          >
+            <mat-icon>drag_handle</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <!-- Arrowheads: None, Single (End), Start, Both -->
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.startMarker !== 'arrow' && selConn.endMarker !== 'arrow'"
+            (click)="setConnectionMarkers('none')"
+            matTooltip="No Arrows"
+            aria-label="No arrows"
+          >
+            <mat-icon>horizontal_rule</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.startMarker !== 'arrow' && selConn.endMarker === 'arrow'"
+            (click)="setConnectionMarkers('end')"
+            matTooltip="End Arrow"
+            aria-label="End arrow"
+          >
+            <mat-icon>trending_flat</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selConn.startMarker === 'arrow' && selConn.endMarker === 'arrow'"
+            (click)="setConnectionMarkers('both')"
+            matTooltip="Bidirectional Arrow"
+            aria-label="Bidirectional arrow"
+          >
+            <mat-icon>sync_alt</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <!-- Color swatch picker -->
+          @for (color of connectionColors; track color) {
+            <button
+              class="color-swatch-btn"
+              [class.active]="selConn.strokeColor === color"
+              [style.backgroundColor]="color"
+              (click)="setConnectionColor(color)"
+              [attr.aria-label]="'Set color ' + color"
+            ></button>
+          }
+
+          <div class="dock-divider"></div>
+
+          <!-- Add / Edit Label -->
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            (click)="startEditingConnectionText(selConn.id)"
+            matTooltip="Edit Label Text"
+            aria-label="Edit label"
+          >
+            <mat-icon>title</mat-icon>
+          </button>
+        </div>
+      }
+    }
+
+    <!-- Inline Connection Text Editor -->
+    @if (editingConnectionId(); as editConnId) {
+      @if (singleSelectedConnection(); as selConn) {
+        <div
+          class="connection-text-editor"
+          [style.left.px]="selConn.midpoint.x"
+          [style.top.px]="selConn.midpoint.y"
+          (pointerdown)="$event.stopPropagation()"
+        >
+          <input
+            #textInput
+            type="text"
+            [value]="selConn.text || ''"
+            (blur)="finishEditingConnectionText(editConnId, textInput.value)"
+            (keydown.enter)="finishEditingConnectionText(editConnId, textInput.value)"
+            (keydown.escape)="editingConnectionId.set(null)"
+            placeholder="Label text..."
+          />
+        </div>
+      }
     }
   </div>
 

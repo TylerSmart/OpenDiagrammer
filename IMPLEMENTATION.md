@@ -33,7 +33,18 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 *Implement the drawing canvas and basic diagramming tools.*
 - [x] Implement infinite canvas with zoom/pan controls and grid/dot backgrounds
 - [x] Implement shape rendering, selection, and resizing
-- [x] Implement connections (lines, arrows, anchors, routing)
+- [x] Implement connections foundation (anchors, snapping, arrows, basic orthogonal routing)
+- [x] Implement connection customization floating toolbar / popover:
+  - Line stroke color and stroke width
+  - Line pattern (solid, dashed, dotted)
+  - End markers (none, arrow, reverse arrow, bidirectional)
+  - Routing type selection (straight, orthogonal/cornered, curved)
+  - Connection text label (centered text badge, double-click inline editor)
+- [x] Implement interactive Miro-style connection adjustment handles & waypoints:
+  - Waypoints / inflection points data structure on connections
+  - Segment midpoint drag handles to create and divert lines (straight & curved)
+  - Orthogonal corner drag handles to shift corner positions and add steps
+  - Waypoint deletion (double click handle or drag back in-line)
 - [ ] Implement node snapping, alignment, and fine adjustment (arrow keys)
 - [ ] Implement basic grouping and layer management (bring forward/backward)
 - [ ] Implement Copy/Paste within the board

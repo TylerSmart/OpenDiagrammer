@@ -584,4 +584,81 @@ describe('CanvasComponent', () => {
     expect(component.inProgressConnection()).toBeNull();
     expect(component.activeTool()).toBe('select');
   });
+
+  it('should customize connection routing, pattern, markers, color, and stroke width', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    expect(component.singleSelectedConnection()?.id).toBe(conn.id);
+
+    // Change routing
+    component.setConnectionRouting('curved');
+    expect(component.connections()[0].routing).toBe('curved');
+
+    component.setConnectionRouting('straight');
+    expect(component.connections()[0].routing).toBe('straight');
+
+    // Change pattern
+    component.setConnectionPattern('dashed');
+    expect(component.connections()[0].pattern).toBe('dashed');
+
+    // Change markers
+    component.setConnectionMarkers('both');
+    expect(component.connections()[0].startMarker).toBe('arrow');
+    expect(component.connections()[0].endMarker).toBe('arrow');
+
+    component.setConnectionMarkers('none');
+    expect(component.connections()[0].startMarker).toBe('none');
+    expect(component.connections()[0].endMarker).toBe('none');
+
+    // Change color and width
+    component.setConnectionColor('#1976d2');
+    component.setConnectionWidth(4);
+    expect(component.connections()[0].strokeColor).toBe('#1976d2');
+    expect(component.connections()[0].strokeWidth).toBe(4);
+  });
+
+  it('should support connection text labels and editing', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.startEditingConnectionText(conn.id);
+    expect(component.editingConnectionId()).toBe(conn.id);
+
+    component.finishEditingConnectionText(conn.id, 'Connects Service A to B');
+    expect(component.editingConnectionId()).toBeNull();
+    expect(component.connections()[0].text).toBe('Connects Service A to B');
+  });
+
+  it('should insert, drag, and remove waypoints on selected connection', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    // Drag midpoint handle to insert waypoint
+    const screenPt = component.worldToScreen({ x: 250, y: 100 });
+    component.handleMidpointPointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: screenPt.x, clientY: screenPt.y }),
+      conn.id,
+      0,
+    );
+
+    expect(component.connections()[0].waypoints?.length).toBe(1);
+
+    // Drag the waypoint down
+    const newScreenPt = component.worldToScreen({ x: 250, y: 220 });
+    component.handlePointerMove(
+      new PointerEvent('pointermove', { clientX: newScreenPt.x, clientY: newScreenPt.y }),
+    );
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    const updatedConn = component.connections()[0];
+    expect(updatedConn.waypoints?.[0].y).toBeCloseTo(220, 0);
+
+    // Remove waypoint via dblclick
+    component.handleWaypointDblClick(new MouseEvent('dblclick'), conn.id, 0);
+    expect(component.connections()[0].waypoints?.length).toBe(0);
+  });
 });
