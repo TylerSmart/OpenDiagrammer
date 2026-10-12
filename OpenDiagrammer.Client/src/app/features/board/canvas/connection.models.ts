@@ -274,18 +274,21 @@ export function computeConnectionPath(
     points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
   }
 
-  // Simplify collinear points
+  // Simplify collinear points (with 4px tolerance so close alignments merge cleanly)
+  const COLLINEAR_TOLERANCE = 4;
   const simplified: CanvasPoint[] = [];
   for (const pt of points) {
     if (simplified.length >= 2) {
       const p1 = simplified[simplified.length - 2];
       const p2 = simplified[simplified.length - 1];
-      // Check if p1, p2, pt are collinear
+      // Check if p1, p2, pt are collinear within tolerance
       if (
-        (Math.abs(p1.x - p2.x) < 0.5 && Math.abs(p2.x - pt.x) < 0.5) ||
-        (Math.abs(p1.y - p2.y) < 0.5 && Math.abs(p2.y - pt.y) < 0.5)
+        (Math.abs(p1.x - p2.x) <= COLLINEAR_TOLERANCE &&
+          Math.abs(p2.x - pt.x) <= COLLINEAR_TOLERANCE) ||
+        (Math.abs(p1.y - p2.y) <= COLLINEAR_TOLERANCE &&
+          Math.abs(p2.y - pt.y) <= COLLINEAR_TOLERANCE)
       ) {
-        // Replace p2 with pt
+        // Replace p2 with pt to collapse intermediate collinear bend
         simplified[simplified.length - 1] = pt;
         continue;
       }

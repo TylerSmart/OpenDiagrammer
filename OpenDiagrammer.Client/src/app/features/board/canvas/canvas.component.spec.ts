@@ -789,4 +789,38 @@ describe('CanvasComponent', () => {
     expect(pts[1].x).toBeGreaterThanOrEqual(180);
     expect(pts[1].y).toBe(100);
   });
+
+  it('should magnetically snap to align with neighboring points when dragging within threshold', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'bottom', s2.id, 'bottom');
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    const horizSeg = rendered!.segments.find((s) => s.orientation === 'horizontal');
+    expect(horizSeg).toBeDefined();
+
+    // Bottom anchor y is 140. Start dragging horizontal segment near 140 (e.g. y = 145, which is within 12px)
+    const segScreenPt = component.worldToScreen(horizSeg!.midpoint);
+    component.handleSegmentPointerDown(
+      new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: segScreenPt.x,
+        clientY: segScreenPt.y,
+      }),
+      conn.id,
+      horizSeg!,
+    );
+
+    const nearScreenPt = component.worldToScreen({ x: horizSeg!.midpoint.x, y: 145 });
+    component.handlePointerMove(
+      new PointerEvent('pointermove', { clientX: nearScreenPt.x, clientY: nearScreenPt.y }),
+    );
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    // The segment should snap directly to y = 140, collapsing corners into a straight alignment
+    const updated = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(updated).toBeDefined();
+    // After collapsing, points will align at y = 140
+    expect(updated!.points.every((p) => p.y === 140)).toBe(true);
+  });
 });

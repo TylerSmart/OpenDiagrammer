@@ -1059,7 +1059,7 @@ export class CanvasComponent {
       return;
     }
 
-    // Orthogonal Segment dragging (Miro-style 1D displacement)
+    // Orthogonal Segment dragging (Miro-style 1D displacement with magnetic alignment snapping)
     if (
       this.isDraggingSegment &&
       this.activeSegmentConnId &&
@@ -1072,14 +1072,54 @@ export class CanvasComponent {
         const segIdx = this.activeSegmentIndex;
         const pts = this.segmentDragInitialPoints.map((p) => ({ ...p }));
         if (segIdx < pts.length - 1) {
+          const SNAP_THRESHOLD = 12;
+
           if (this.activeSegmentOrientation === 'horizontal') {
-            // Horizontal segment moves vertically (delta y)
-            const targetY = Math.round(currentWorld.y);
+            // Horizontal segment moves vertically (targetY)
+            let targetY = Math.round(currentWorld.y);
+
+            // Snap targets: check neighboring horizontal coordinates (e.g. endpoints or neighboring bends)
+            const snapTargets: number[] = [];
+            if (segIdx > 1) {
+              snapTargets.push(pts[segIdx - 2].y);
+            }
+            if (segIdx + 2 < pts.length) {
+              snapTargets.push(pts[segIdx + 2].y);
+            }
+            // Also check start and end points
+            snapTargets.push(pts[0].y, pts[pts.length - 1].y);
+
+            for (const snapY of snapTargets) {
+              if (Math.abs(targetY - snapY) <= SNAP_THRESHOLD) {
+                targetY = snapY;
+                break;
+              }
+            }
+
             pts[segIdx].y = targetY;
             pts[segIdx + 1].y = targetY;
           } else {
-            // Vertical segment moves horizontally (delta x)
-            const targetX = Math.round(currentWorld.x);
+            // Vertical segment moves horizontally (targetX)
+            let targetX = Math.round(currentWorld.x);
+
+            // Snap targets: check neighboring vertical coordinates
+            const snapTargets: number[] = [];
+            if (segIdx > 1) {
+              snapTargets.push(pts[segIdx - 2].x);
+            }
+            if (segIdx + 2 < pts.length) {
+              snapTargets.push(pts[segIdx + 2].x);
+            }
+            // Also check start and end points
+            snapTargets.push(pts[0].x, pts[pts.length - 1].x);
+
+            for (const snapX of snapTargets) {
+              if (Math.abs(targetX - snapX) <= SNAP_THRESHOLD) {
+                targetX = snapX;
+                break;
+              }
+            }
+
             pts[segIdx].x = targetX;
             pts[segIdx + 1].x = targetX;
           }
