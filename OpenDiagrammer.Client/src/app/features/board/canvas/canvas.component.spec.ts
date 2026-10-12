@@ -2140,6 +2140,72 @@ describe('CanvasComponent', () => {
       expect(labelRect.getAttribute('stroke')).toBe('var(--canvas-color-purple-stroke)');
       expect(labelText.getAttribute('fill')).toBe('var(--canvas-color-purple-stroke)');
     });
+
+    it('should provide all 12 expanded theme-aware color presets', () => {
+      expect(component.canvasColorPresets.length).toBe(12);
+      const expectedIds = [
+        'default',
+        'stone',
+        'blue',
+        'teal',
+        'green',
+        'lime',
+        'yellow',
+        'amber',
+        'orange',
+        'red',
+        'pink',
+        'purple',
+      ];
+      expect(component.canvasColorPresets.map((p) => p.id)).toEqual(expectedIds);
+      for (const preset of component.canvasColorPresets) {
+        expect(preset.fill).toContain(`--canvas-color-${preset.id}-fill`);
+        expect(preset.stroke).toContain(`--canvas-color-${preset.id}-stroke`);
+      }
+    });
+
+    it('should compute current selected shape fill and stroke colors correctly', () => {
+      expect(component.currentSelectedShapeStrokeColor()).toBe(
+        'var(--canvas-color-default-stroke)',
+      );
+      expect(component.currentSelectedShapeFillColor()).toBe('var(--canvas-color-default-fill)');
+
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.selectShape(s1.id);
+
+      const tealPreset = component.canvasColorPresets.find((p) => p.id === 'teal')!;
+      component.setSelectedShapesColor(tealPreset);
+
+      expect(component.currentSelectedShapeStrokeColor()).toBe('var(--canvas-color-teal-stroke)');
+      expect(component.currentSelectedShapeFillColor()).toBe('var(--canvas-color-teal-fill)');
+    });
+
+    it('should render color picker trigger in selection toolbar dock and connection dock', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      component.selectShape(s1.id);
+      fixture.detectChanges();
+
+      const shapeTrigger = fixture.nativeElement.querySelector(
+        '.selection-tools-dock .color-picker-trigger',
+      );
+      expect(shapeTrigger).not.toBeNull();
+      const shapeIndicator = shapeTrigger.querySelector('.color-circle-indicator');
+      expect(shapeIndicator).not.toBeNull();
+
+      // Test connection dock trigger
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+      component.clearSelection();
+      component.selectConnection(conn.id);
+      fixture.detectChanges();
+
+      const connTrigger = fixture.nativeElement.querySelector(
+        '.connection-tools-dock .color-picker-trigger',
+      );
+      expect(connTrigger).not.toBeNull();
+      const connIndicator = connTrigger.querySelector('.color-circle-indicator');
+      expect(connIndicator).not.toBeNull();
+    });
   });
 
   describe('Control / Command Key Multi-Selection', () => {

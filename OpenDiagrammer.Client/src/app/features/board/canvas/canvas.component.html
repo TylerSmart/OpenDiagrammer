@@ -330,17 +330,40 @@
         [style.top.px]="sPos.y"
         (pointerdown)="$event.stopPropagation()"
       >
-        <!-- Shape Color Swatches -->
-        @for (preset of canvasColorPresets; track preset.id) {
-          <button
-            class="color-swatch-btn"
-            [class.active]="isShapeColorActive(preset)"
-            [style.backgroundColor]="preset.swatch"
-            (click)="setSelectedShapesColor(preset)"
-            [attr.aria-label]="'Set color ' + preset.label"
-            [matTooltip]="preset.label"
-          ></button>
-        }
+        <!-- Shape Color Picker Trigger -->
+        <button
+          type="button"
+          class="color-picker-trigger"
+          [matMenuTriggerFor]="shapePaletteMenu"
+          matTooltip="Change color"
+          aria-label="Change shape color"
+        >
+          <span
+            class="color-circle-indicator"
+            [style.backgroundColor]="currentSelectedShapeFillColor()"
+            [style.borderColor]="currentSelectedShapeStrokeColor()"
+          ></span>
+        </button>
+
+        <mat-menu #shapePaletteMenu="matMenu" class="color-palette-menu">
+          <div class="color-palette-grid" (pointerdown)="$event.stopPropagation()">
+            @for (preset of canvasColorPresets; track preset.id) {
+              <button
+                type="button"
+                class="palette-swatch-btn"
+                [class.active]="isShapeColorActive(preset)"
+                [style.backgroundColor]="preset.swatch"
+                (click)="setSelectedShapesColor(preset)"
+                [attr.aria-label]="'Set color ' + preset.label"
+                [matTooltip]="preset.label"
+              >
+                @if (isShapeColorActive(preset)) {
+                  <mat-icon class="swatch-check-icon">check</mat-icon>
+                }
+              </button>
+            }
+          </div>
+        </mat-menu>
 
         <div class="dock-divider"></div>
 
@@ -640,17 +663,40 @@
 
           <div class="dock-divider"></div>
 
-          <!-- Color swatch picker -->
-          @for (preset of canvasColorPresets; track preset.id) {
-            <button
-              class="color-swatch-btn"
-              [class.active]="selConn.strokeColor === preset.stroke"
-              [style.backgroundColor]="preset.swatch"
-              (click)="setConnectionColor(preset.stroke)"
-              [attr.aria-label]="'Set color ' + preset.label"
-              [matTooltip]="preset.label"
-            ></button>
-          }
+          <!-- Connection Color Picker Trigger -->
+          <button
+            type="button"
+            class="color-picker-trigger"
+            [matMenuTriggerFor]="connectionPaletteMenu"
+            matTooltip="Change line color"
+            aria-label="Change connector line color"
+          >
+            <span
+              class="color-circle-indicator connector-indicator"
+              [style.backgroundColor]="selConn.strokeColor"
+              [style.borderColor]="selConn.strokeColor"
+            ></span>
+          </button>
+
+          <mat-menu #connectionPaletteMenu="matMenu" class="color-palette-menu">
+            <div class="color-palette-grid" (pointerdown)="$event.stopPropagation()">
+              @for (preset of canvasColorPresets; track preset.id) {
+                <button
+                  type="button"
+                  class="palette-swatch-btn"
+                  [class.active]="selConn.strokeColor === preset.stroke"
+                  [style.backgroundColor]="preset.swatch"
+                  (click)="setConnectionColor(preset.stroke)"
+                  [attr.aria-label]="'Set color ' + preset.label"
+                  [matTooltip]="preset.label"
+                >
+                  @if (selConn.strokeColor === preset.stroke) {
+                    <mat-icon class="swatch-check-icon">check</mat-icon>
+                  }
+                </button>
+              }
+            </div>
+          </mat-menu>
 
           <div class="dock-divider"></div>
 

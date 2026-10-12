@@ -303,22 +303,36 @@
   }
 }
 
-.color-swatch-btn {
-  width: 16px;
-  height: 16px;
+.color-picker-trigger {
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
   border-radius: 50%;
-  border: 1.5px solid var(--mat-sys-outline-variant);
   cursor: pointer;
   padding: 0;
-  transition: transform 0.1s ease;
+  transition:
+    transform 0.1s ease,
+    background-color 0.15s ease;
 
   &:hover {
-    transform: scale(1.2);
+    background-color: var(--mat-sys-secondary-container);
+    transform: scale(1.08);
   }
 
-  &.active {
-    border-color: var(--mat-sys-primary);
-    box-shadow: 0 0 0 2px var(--mat-sys-primary);
+  .color-circle-indicator {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--mat-sys-outline);
+    box-sizing: border-box;
+    display: block;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+    transition: transform 0.1s ease;
   }
 }
 

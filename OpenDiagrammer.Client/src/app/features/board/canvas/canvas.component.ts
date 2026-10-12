@@ -12,6 +12,7 @@ import {
 import { FormsModule } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
+import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
@@ -63,7 +64,14 @@ export interface ReconnectingPreview {
 }
 
 @Component({
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
+  imports: [
+    FormsModule,
+    MatButtonModule,
+    MatIconModule,
+    MatMenuModule,
+    MatTooltipModule,
+    CanvasShapeComponent,
+  ],
   selector: 'app-canvas',
   styleUrl: './canvas.component.scss',
   templateUrl: './canvas.component.html',
@@ -181,6 +189,30 @@ export class CanvasComponent {
       x: box.minX + box.width / 2,
       y: box.minY - 14,
     };
+  });
+
+  readonly currentSelectedShapeStrokeColor = computed<string>(() => {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return 'var(--canvas-color-default-stroke)';
+    }
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    if (selectedShapes.length === 0) {
+      return 'var(--canvas-color-default-stroke)';
+    }
+    return selectedShapes[0].strokeColor;
+  });
+
+  readonly currentSelectedShapeFillColor = computed<string>(() => {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return 'var(--canvas-color-default-fill)';
+    }
+    const selectedShapes = this.shapes().filter((s) => selected.has(s.id));
+    if (selectedShapes.length === 0) {
+      return 'var(--canvas-color-default-fill)';
+    }
+    return selectedShapes[0].fillColor;
   });
 
   readonly hasSelectedGroup = computed<boolean>(() => {
@@ -322,7 +354,7 @@ export class CanvasComponent {
       return null;
     }
 
-    const DOCK_WIDTH = 420;
+    const DOCK_WIDTH = 340;
     const DOCK_HEIGHT = 44;
     const HALF_W = DOCK_WIDTH / 2;
 
