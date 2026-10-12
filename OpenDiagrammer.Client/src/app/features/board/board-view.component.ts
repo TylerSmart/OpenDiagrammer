@@ -18,6 +18,7 @@ import {
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeMode, ThemeService } from '../../core/services/theme/theme.service';
+import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
 import { CanvasComponent } from './canvas/canvas.component';
 import {
   BoardMembersDialogComponent,
@@ -60,6 +61,7 @@ export class BoardViewComponent implements OnInit {
   private readonly boardService = inject(BoardService);
   protected readonly authService = inject(AuthService);
   protected readonly themeService = inject(ThemeService);
+  protected readonly fullscreenService = inject(FullscreenService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
 

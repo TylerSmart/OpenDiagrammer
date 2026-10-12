@@ -825,5 +825,15 @@
     >
       <mat-icon>filter_center_focus</mat-icon>
     </button>
+
+    <button
+      mat-icon-button
+      class="control-btn"
+      (click)="fullscreenService.toggleFullscreen()"
+      [attr.aria-label]="fullscreenService.isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+      [matTooltip]="fullscreenService.isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+    >
+      <mat-icon>{{ fullscreenService.isFullscreen() ? 'fullscreen_exit' : 'fullscreen' }}</mat-icon>
+    </button>
   </div>
 </div>

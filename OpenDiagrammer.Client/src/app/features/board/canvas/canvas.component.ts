@@ -4,6 +4,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BoardBackgroundType } from '../../../core/models/board.models';
+import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
 import {
   CANVAS_CONSTANTS,
   CanvasClipboardData,
@@ -591,6 +592,7 @@ export class CanvasComponent {
 
   // View child references
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
+  readonly fullscreenService = inject(FullscreenService);
 
   // Computed zoom percentage formatted string
   readonly zoomPercentage = computed(() => `${Math.round(this.zoom() * 100)}%`);

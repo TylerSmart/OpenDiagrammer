@@ -56,6 +56,19 @@ describe('CanvasComponent', () => {
     expect(component.panY()).toBe(0);
   });
 
+  it('should toggle fullscreen from controls dock using FullscreenService', async () => {
+    const toggleSpy = vi
+      .spyOn(component.fullscreenService, 'toggleFullscreen')
+      .mockResolvedValue(undefined);
+    const fullscreenBtn: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+      '.canvas-controls-dock button[aria-label="Fullscreen"]',
+    );
+    expect(fullscreenBtn).toBeTruthy();
+
+    fullscreenBtn?.click();
+    expect(toggleSpy).toHaveBeenCalled();
+  });
+
   it('should pan canvas when panBy is invoked', () => {
     component.panBy(50, 100);
     expect(component.panX()).toBe(50);

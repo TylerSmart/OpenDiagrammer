@@ -12,6 +12,7 @@ import {
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeService } from '../../core/services/theme/theme.service';
+import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
 import { BoardViewComponent } from './board-view.component';
 
 describe('BoardViewComponent', () => {
@@ -101,6 +102,7 @@ describe('BoardViewComponent', () => {
           },
         },
         ThemeService,
+        FullscreenService,
       ],
     }).compileComponents();
 
@@ -125,5 +127,18 @@ describe('BoardViewComponent', () => {
 
     component.loadBoard('non-existent');
     expect(component['errorMessage']()).toBe('Board not found.');
+  });
+
+  it('should toggle fullscreen using FullscreenService', async () => {
+    const fullscreenService = TestBed.inject(FullscreenService);
+    const toggleSpy = vi.spyOn(fullscreenService, 'toggleFullscreen').mockResolvedValue(undefined);
+
+    const fullscreenBtn: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+      'button[aria-label="Fullscreen"]',
+    );
+    expect(fullscreenBtn).toBeTruthy();
+
+    fullscreenBtn?.click();
+    expect(toggleSpy).toHaveBeenCalled();
   });
 });

@@ -69,6 +69,18 @@
           </button>
         }
 
+        <!-- Fullscreen toggle button -->
+        <button
+          mat-icon-button
+          (click)="fullscreenService.toggleFullscreen()"
+          [attr.aria-label]="fullscreenService.isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+          [matTooltip]="fullscreenService.isFullscreen() ? 'Exit fullscreen' : 'Fullscreen'"
+        >
+          <mat-icon>{{
+            fullscreenService.isFullscreen() ? 'fullscreen_exit' : 'fullscreen'
+          }}</mat-icon>
+        </button>
+
         <!-- Theme menu -->
         <button
           mat-icon-button
