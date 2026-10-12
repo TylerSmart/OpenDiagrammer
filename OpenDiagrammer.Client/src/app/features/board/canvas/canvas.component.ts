@@ -176,6 +176,8 @@ export class CanvasComponent {
         dashArray,
         startMarker: conn.startMarker,
         endMarker: conn.endMarker,
+        startPoint: start,
+        endPoint: end,
         midpoint,
         text: conn.text,
         waypoints: conn.waypoints || [],
@@ -201,6 +203,12 @@ export class CanvasComponent {
   private activeWaypointConnId: string | null = null;
   private activeWaypointIndex: number | null = null;
   private isNewWaypoint = false;
+
+  // Connection Endpoint Reconnecting State
+  readonly draggingEndpoint = signal<{
+    connId: string;
+    endpoint: 'source' | 'target';
+  } | null>(null);
 
   // Inline connection text editing state
   readonly editingConnectionId = signal<string | null>(null);
@@ -570,6 +578,24 @@ export class CanvasComponent {
     }
     event.stopPropagation();
     this.selectConnection(connId, event.shiftKey);
+  }
+
+  handleEndpointPointerDown(
+    event: PointerEvent,
+    connId: string,
+    endpoint: 'source' | 'target',
+  ): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.stopPropagation();
+    this.draggingEndpoint.set({ connId, endpoint });
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
   }
 
   handleWaypointPointerDown(event: PointerEvent, connId: string, waypointIndex: number): void {
@@ -1010,6 +1036,41 @@ export class CanvasComponent {
       return;
     }
 
+    // Endpoint reconnect dragging
+    const dragEnd = this.draggingEndpoint();
+    if (dragEnd) {
+      const conn = this.connections().find((c) => c.id === dragEnd.connId);
+      if (conn) {
+        const otherShapeId =
+          dragEnd.endpoint === 'source' ? (conn.targetShapeId ?? '') : conn.sourceShapeId;
+        const snapped = this.findNearestAnchor(currentWorld, otherShapeId, 24);
+
+        if (dragEnd.endpoint === 'source') {
+          if (snapped) {
+            this.updateConnection(conn.id, {
+              sourceShapeId: snapped.shape.id,
+              sourceAnchor: snapped.anchor,
+            });
+          }
+        } else {
+          if (snapped) {
+            this.updateConnection(conn.id, {
+              targetShapeId: snapped.shape.id,
+              targetAnchor: snapped.anchor,
+              targetPoint: undefined,
+            });
+          } else {
+            this.updateConnection(conn.id, {
+              targetShapeId: undefined,
+              targetAnchor: undefined,
+              targetPoint: currentWorld,
+            });
+          }
+        }
+      }
+      return;
+    }
+
     // Moving shapes
     if (this.isMovingShapes && this.moveStartPoint) {
       const deltaX = currentWorld.x - this.moveStartPoint.x;
@@ -1119,6 +1180,10 @@ export class CanvasComponent {
       this.activeWaypointConnId = null;
       this.activeWaypointIndex = null;
       this.isNewWaypoint = false;
+    }
+
+    if (this.draggingEndpoint()) {
+      this.draggingEndpoint.set(null);
     }
 
     if (this.isMovingShapes) {

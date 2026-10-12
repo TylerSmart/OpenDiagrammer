@@ -101,8 +101,26 @@
           </g>
         }
 
-        <!-- Interactive Miro-Style Waypoint Handles for Selected Connection -->
+        <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles for Selected Connection -->
         @if (isConnectionSelected(conn.id)) {
+          <!-- Source Endpoint Reconnect Handle -->
+          <circle
+            class="connection-endpoint-handle source-endpoint"
+            [attr.cx]="conn.startPoint.x"
+            [attr.cy]="conn.startPoint.y"
+            r="6.5"
+            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+          />
+
+          <!-- Target Endpoint Reconnect Handle -->
+          <circle
+            class="connection-endpoint-handle target-endpoint"
+            [attr.cx]="conn.endPoint.x"
+            [attr.cy]="conn.endPoint.y"
+            r="6.5"
+            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
+          />
+
           <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) -->
           @for (wp of conn.waypoints; track $index) {
             <circle
@@ -147,7 +165,12 @@
       <app-canvas-shape
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
-        [showAnchors]="activeTool() === 'connection' || inProgressConnection() !== null"
+        [showAnchors]="
+          activeTool() === 'connection' ||
+          inProgressConnection() !== null ||
+          selectedConnectionIds().size > 0 ||
+          draggingEndpoint() !== null
+        "
         (pointerdown)="handleShapePointerDown($event, shape)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"

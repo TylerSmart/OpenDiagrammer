@@ -661,4 +661,39 @@ describe('CanvasComponent', () => {
     component.handleWaypointDblClick(new MouseEvent('dblclick'), conn.id, 0);
     expect(component.connections()[0].waypoints?.length).toBe(0);
   });
+
+  it('should reconnect connection target to another shape via endpoint handle drag', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const s3 = component.createShape('rectangle', { x: 400, y: 300 });
+
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+    component.selectConnection(conn.id);
+
+    expect(component.connections()[0].targetShapeId).toBe(s2.id);
+
+    // Pointer down on target endpoint handle
+    const s2LeftAnchor = { x: s2.x, y: s2.y + s2.height / 2 };
+    const s2ScreenPt = component.worldToScreen(s2LeftAnchor);
+    component.handleEndpointPointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: s2ScreenPt.x, clientY: s2ScreenPt.y }),
+      conn.id,
+      'target',
+    );
+
+    expect(component.draggingEndpoint()).toEqual({ connId: conn.id, endpoint: 'target' });
+
+    // Drag to s3 top anchor
+    const s3TopAnchor = { x: s3.x + s3.width / 2, y: s3.y };
+    const s3ScreenPt = component.worldToScreen(s3TopAnchor);
+    component.handlePointerMove(
+      new PointerEvent('pointermove', { clientX: s3ScreenPt.x, clientY: s3ScreenPt.y }),
+    );
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    expect(component.draggingEndpoint()).toBeNull();
+    const updated = component.connections()[0];
+    expect(updated.targetShapeId).toBe(s3.id);
+    expect(updated.targetAnchor).toBe('top');
+  });
 });

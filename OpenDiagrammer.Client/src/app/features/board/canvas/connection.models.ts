@@ -49,6 +49,8 @@ export interface RenderedConnection {
   dashArray?: string;
   startMarker?: ConnectionMarker;
   endMarker: ConnectionMarker;
+  startPoint: CanvasPoint;
+  endPoint: CanvasPoint;
   midpoint: CanvasPoint;
   text?: string;
   waypoints: CanvasPoint[];
