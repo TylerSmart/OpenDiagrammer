@@ -11,8 +11,10 @@ import {
   ConnectionMarker,
   ConnectionPattern,
   ConnectionRouting,
+  ConnectionSegment,
   RenderedConnection,
   computeConnectionPath,
+  extractConnectionSegments,
   getShapeAnchorPoint,
 } from './connection.models';
 import {
@@ -168,6 +170,8 @@ export class CanvasComponent {
         dashArray = '2,3';
       }
 
+      const segments = extractConnectionSegments(points, 30);
+
       result.push({
         id: conn.id,
         path,
@@ -184,6 +188,7 @@ export class CanvasComponent {
         text: conn.text,
         waypoints: conn.waypoints || [],
         points,
+        segments,
       });
     }
 
@@ -205,6 +210,13 @@ export class CanvasComponent {
   private activeWaypointConnId: string | null = null;
   private activeWaypointIndex: number | null = null;
   private isNewWaypoint = false;
+
+  // Orthogonal Segment Dragging State
+  private isDraggingSegment = false;
+  private activeSegmentConnId: string | null = null;
+  private activeSegmentIndex: number | null = null;
+  private activeSegmentOrientation: 'horizontal' | 'vertical' | null = null;
+  private segmentDragInitialPoints: CanvasPoint[] = [];
 
   // Connection Endpoint Reconnecting State
   readonly draggingEndpoint = signal<{
@@ -645,6 +657,29 @@ export class CanvasComponent {
     }
   }
 
+  handleSegmentPointerDown(event: PointerEvent, connId: string, segment: ConnectionSegment): void {
+    if (event.button !== 0) {
+      return;
+    }
+    event.stopPropagation();
+    const rendered = this.renderedConnections().find((c) => c.id === connId);
+    if (!rendered) {
+      return;
+    }
+
+    this.isDraggingSegment = true;
+    this.activeSegmentConnId = connId;
+    this.activeSegmentIndex = segment.index;
+    this.activeSegmentOrientation = segment.orientation;
+    this.segmentDragInitialPoints = rendered.points.map((p) => ({ ...p }));
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
   handleWaypointDblClick(event: MouseEvent, connId: string, waypointIndex: number): void {
     event.stopPropagation();
     const conn = this.connections().find((c) => c.id === connId);
@@ -1024,7 +1059,40 @@ export class CanvasComponent {
       return;
     }
 
-    // Waypoint dragging
+    // Orthogonal Segment dragging (Miro-style 1D displacement)
+    if (
+      this.isDraggingSegment &&
+      this.activeSegmentConnId &&
+      this.activeSegmentIndex !== null &&
+      this.activeSegmentOrientation &&
+      this.segmentDragInitialPoints.length >= 2
+    ) {
+      const conn = this.connections().find((c) => c.id === this.activeSegmentConnId);
+      if (conn) {
+        const segIdx = this.activeSegmentIndex;
+        const pts = this.segmentDragInitialPoints.map((p) => ({ ...p }));
+        if (segIdx < pts.length - 1) {
+          if (this.activeSegmentOrientation === 'horizontal') {
+            // Horizontal segment moves vertically (delta y)
+            const targetY = Math.round(currentWorld.y);
+            pts[segIdx].y = targetY;
+            pts[segIdx + 1].y = targetY;
+          } else {
+            // Vertical segment moves horizontally (delta x)
+            const targetX = Math.round(currentWorld.x);
+            pts[segIdx].x = targetX;
+            pts[segIdx + 1].x = targetX;
+          }
+
+          // Extract inner points as waypoints (exclude start and end endpoints)
+          const newWaypoints = pts.slice(1, -1);
+          this.updateConnection(conn.id, { waypoints: newWaypoints });
+        }
+      }
+      return;
+    }
+
+    // Waypoint dragging (for curved and straight lines)
     if (this.isDraggingWaypoint && this.activeWaypointConnId && this.activeWaypointIndex !== null) {
       const conn = this.connections().find((c) => c.id === this.activeWaypointConnId);
       if (conn && conn.waypoints) {
@@ -1175,6 +1243,14 @@ export class CanvasComponent {
       }
       // If dragDistance <= 5px, it was a click to start! Keep inProgressConnection active
       // so user can click a target anchor or shape to complete the connection.
+    }
+
+    if (this.isDraggingSegment) {
+      this.isDraggingSegment = false;
+      this.activeSegmentConnId = null;
+      this.activeSegmentIndex = null;
+      this.activeSegmentOrientation = null;
+      this.segmentDragInitialPoints = [];
     }
 
     if (this.isDraggingWaypoint) {

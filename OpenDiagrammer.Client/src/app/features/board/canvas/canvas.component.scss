@@ -146,6 +146,36 @@
   }
 }
 
+.connection-segment-handle {
+  fill: var(--mat-sys-surface);
+  stroke: var(--mat-sys-outline);
+  stroke-width: 1.5px;
+  opacity: 0.75;
+  pointer-events: all;
+  transition: opacity 0.15s ease;
+
+  &.is-horizontal {
+    cursor: ns-resize;
+  }
+
+  &.is-vertical {
+    cursor: ew-resize;
+  }
+
+  &:hover {
+    opacity: 1;
+    fill: var(--mat-sys-primary);
+    stroke: var(--mat-sys-primary);
+    stroke-width: 2px;
+  }
+
+  &:active {
+    opacity: 1;
+    fill: var(--mat-sys-primary);
+    stroke: var(--mat-sys-primary);
+  }
+}
+
 .connection-midpoint-handle {
   fill: var(--mat-sys-surface);
   stroke: var(--mat-sys-outline);

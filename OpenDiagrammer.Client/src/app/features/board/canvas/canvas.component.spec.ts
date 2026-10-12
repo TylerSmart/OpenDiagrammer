@@ -732,4 +732,41 @@ describe('CanvasComponent', () => {
     // Path contains cubic Bezier curve commands (C)
     expect(rendered!.path).toContain('C');
   });
+
+  it('should extract segments on orthogonal connections and support 1D segment dragging', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'bottom', s2.id, 'bottom');
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(rendered).toBeDefined();
+    // Segment 1 is the bottom horizontal line connecting the two legs (length = 300 >= 30)
+    expect(rendered!.segments.length).toBeGreaterThan(0);
+    const horizSeg = rendered!.segments.find((s) => s.orientation === 'horizontal');
+    expect(horizSeg).toBeDefined();
+
+    // Start dragging horizontal segment down (delta y to y = 220)
+    const segScreenPt = component.worldToScreen(horizSeg!.midpoint);
+    component.handleSegmentPointerDown(
+      new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: segScreenPt.x,
+        clientY: segScreenPt.y,
+      }),
+      conn.id,
+      horizSeg!,
+    );
+
+    const movedScreenPt = component.worldToScreen({ x: horizSeg!.midpoint.x, y: 220 });
+    component.handlePointerMove(
+      new PointerEvent('pointermove', { clientX: movedScreenPt.x, clientY: movedScreenPt.y }),
+    );
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+
+    // Recomputed connection should have stepped down to y = 220
+    const updated = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(updated).toBeDefined();
+    const updatedPoints = updated!.points;
+    expect(updatedPoints.some((p) => p.y === 220)).toBe(true);
+  });
 });

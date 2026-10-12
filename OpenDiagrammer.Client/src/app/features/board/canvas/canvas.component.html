@@ -126,28 +126,51 @@
             (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
           />
 
-          <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) -->
-          @for (wp of conn.waypoints; track $index) {
-            <circle
-              class="connection-waypoint-handle"
-              [attr.cx]="wp.x"
-              [attr.cy]="wp.y"
-              r="6"
-              (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
-              (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
-            />
+          <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
+          @if (conn.routing !== 'orthogonal') {
+            @for (wp of conn.waypoints; track $index) {
+              <circle
+                class="connection-waypoint-handle"
+                [attr.cx]="wp.x"
+                [attr.cy]="wp.y"
+                r="6"
+                (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
+                (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
+              />
+            }
           }
 
-          <!-- Segment Midpoint Handles (allow dragging to insert new waypoint) -->
-          @for (p of conn.points; track $index) {
-            @if ($index < conn.points.length - 1) {
-              <circle
-                class="connection-midpoint-handle"
-                [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
-                [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
-                r="4.5"
-                (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+          <!-- Miro-style Orthogonal Segment Drag Handles (1D displacement on segments >= 30px) -->
+          @if (conn.routing === 'orthogonal') {
+            @for (seg of conn.segments; track seg.index) {
+              <rect
+                class="connection-segment-handle"
+                [class.is-horizontal]="seg.orientation === 'horizontal'"
+                [class.is-vertical]="seg.orientation === 'vertical'"
+                [attr.x]="
+                  seg.orientation === 'horizontal' ? seg.midpoint.x - 10 : seg.midpoint.x - 4
+                "
+                [attr.y]="
+                  seg.orientation === 'horizontal' ? seg.midpoint.y - 4 : seg.midpoint.y - 10
+                "
+                [attr.width]="seg.orientation === 'horizontal' ? 20 : 8"
+                [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
+                rx="3"
+                (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
               />
+            }
+          } @else {
+            <!-- Segment Midpoint Handles for straight / curved connections -->
+            @for (p of conn.points; track $index) {
+              @if ($index < conn.points.length - 1) {
+                <circle
+                  class="connection-midpoint-handle"
+                  [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
+                  [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
+                  r="4.5"
+                  (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+                />
+              }
             }
           }
         }

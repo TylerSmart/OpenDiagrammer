@@ -39,6 +39,15 @@ export interface InProgressConnection {
   targetAnchor?: AnchorPosition;
 }
 
+export interface ConnectionSegment {
+  index: number;
+  orientation: 'horizontal' | 'vertical';
+  midpoint: CanvasPoint;
+  start: CanvasPoint;
+  end: CanvasPoint;
+  length: number;
+}
+
 export interface RenderedConnection {
   id: string;
   path: string;
@@ -55,6 +64,7 @@ export interface RenderedConnection {
   text?: string;
   waypoints: CanvasPoint[];
   points: CanvasPoint[];
+  segments: ConnectionSegment[];
 }
 
 export const CONNECTION_CONSTANTS = {
@@ -160,20 +170,6 @@ export function computeConnectionPath(
   }
 
   // Orthogonal routing (step lines)
-  if (waypoints && waypoints.length > 0) {
-    let path = `M ${pts[0].x} ${pts[0].y}`;
-    const allStepPoints: CanvasPoint[] = [pts[0]];
-    for (let i = 1; i < pts.length; i++) {
-      const pPrev = pts[i - 1];
-      const pCurr = pts[i];
-      const midX = (pPrev.x + pCurr.x) / 2;
-      path += ` L ${midX} ${pPrev.y} L ${midX} ${pCurr.y} L ${pCurr.x} ${pCurr.y}`;
-      allStepPoints.push({ x: midX, y: pPrev.y }, { x: midX, y: pCurr.y }, pCurr);
-    }
-    const midIdx = Math.floor(allStepPoints.length / 2);
-    return { path, midpoint: allStepPoints[midIdx], points: allStepPoints };
-  }
-
   // Anchor normal vectors & clearance stub distance (20px)
   const STUB = 20;
 
@@ -194,11 +190,28 @@ export function computeConnectionPath(
   const pStartStub = getAnchorOffset(start, sourceAnchor);
   const pEndStub = getAnchorOffset(end, targetAnchor);
 
-  // When both anchors face the same direction, step around them
-  if (sourceAnchor && targetAnchor && sourceAnchor === targetAnchor) {
-    let commonCoord: number;
-    let points: CanvasPoint[];
+  let points: CanvasPoint[];
 
+  if (waypoints && waypoints.length > 0) {
+    // If explicit waypoints are defined, route orthogonally through them
+    const allPts = [start, ...waypoints, end];
+    points = [start];
+    for (let i = 1; i < allPts.length; i++) {
+      const pPrev = allPts[i - 1];
+      const pCurr = allPts[i];
+      if (!pPrev || !pCurr) continue;
+      // If segment is diagonal, make an orthogonal step between them
+      if (Math.abs(pPrev.x - pCurr.x) > 1 && Math.abs(pPrev.y - pCurr.y) > 1) {
+        // Step horizontally then vertically or vice versa
+        const midX = (pPrev.x + pCurr.x) / 2;
+        points.push({ x: midX, y: pPrev.y });
+        points.push({ x: midX, y: pCurr.y });
+      }
+      points.push(pCurr);
+    }
+  } else if (sourceAnchor && targetAnchor && sourceAnchor === targetAnchor) {
+    // When both anchors face the same direction, step around them
+    let commonCoord: number;
     if (sourceAnchor === 'bottom') {
       commonCoord = Math.max(start.y, end.y) + STUB;
       points = [start, { x: start.x, y: commonCoord }, { x: end.x, y: commonCoord }, end];
@@ -213,21 +226,7 @@ export function computeConnectionPath(
       commonCoord = Math.max(start.x, end.x) + STUB;
       points = [start, { x: commonCoord, y: start.y }, { x: commonCoord, y: end.y }, end];
     }
-
-    let path = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      path += ` L ${points[i].x} ${points[i].y}`;
-    }
-    const mid = {
-      x: (points[1].x + points[2].x) / 2,
-      y: (points[1].y + points[2].y) / 2,
-    };
-    return { path, midpoint: mid, points };
-  }
-
-  // Opposite anchors facing each other or general orthogonal routing
-  let points: CanvasPoint[];
-  if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
+  } else if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
     if (targetAnchor === 'top' || targetAnchor === 'bottom') {
       // Both vertical
       const midY = (pStartStub.y + pEndStub.y) / 2;
@@ -251,6 +250,26 @@ export function computeConnectionPath(
     points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
   }
 
+  // Simplify collinear points
+  const simplified: CanvasPoint[] = [];
+  for (const pt of points) {
+    if (simplified.length >= 2) {
+      const p1 = simplified[simplified.length - 2];
+      const p2 = simplified[simplified.length - 1];
+      // Check if p1, p2, pt are collinear
+      if (
+        (Math.abs(p1.x - p2.x) < 0.5 && Math.abs(p2.x - pt.x) < 0.5) ||
+        (Math.abs(p1.y - p2.y) < 0.5 && Math.abs(p2.y - pt.y) < 0.5)
+      ) {
+        // Replace p2 with pt
+        simplified[simplified.length - 1] = pt;
+        continue;
+      }
+    }
+    simplified.push(pt);
+  }
+  points = simplified.length >= 2 ? simplified : points;
+
   let path = `M ${points[0].x} ${points[0].y}`;
   for (let i = 1; i < points.length; i++) {
     path += ` L ${points[i].x} ${points[i].y}`;
@@ -262,4 +281,45 @@ export function computeConnectionPath(
       : points[midIdx];
 
   return { path, midpoint: mid, points };
+}
+
+/**
+ * Extracts orthogonal or straight segments suitable for Miro-style reshaping handles.
+ * Only segments that meet minLength (default 30px) are included.
+ */
+export function extractConnectionSegments(
+  points: CanvasPoint[],
+  minLength = 30,
+): ConnectionSegment[] {
+  const segments: ConnectionSegment[] = [];
+  if (!points || points.length < 2) return segments;
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+    if (!p1 || !p2) continue;
+
+    const dx = Math.abs(p2.x - p1.x);
+    const dy = Math.abs(p2.y - p1.y);
+    const length = Math.hypot(p2.x - p1.x, p2.y - p1.y);
+
+    if (length < minLength) continue;
+
+    const orientation = dx >= dy ? 'horizontal' : 'vertical';
+    const midpoint: CanvasPoint = {
+      x: Math.round((p1.x + p2.x) / 2),
+      y: Math.round((p1.y + p2.y) / 2),
+    };
+
+    segments.push({
+      index: i,
+      orientation,
+      midpoint,
+      start: p1,
+      end: p2,
+      length,
+    });
+  }
+
+  return segments;
 }
