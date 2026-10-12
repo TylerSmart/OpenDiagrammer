@@ -4,9 +4,18 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CANVAS_CONSTANTS, CanvasPoint, CanvasTransform } from './canvas.models';
+import {
+  ActiveTool,
+  BoundingBox,
+  CanvasShape,
+  ResizeHandlePosition,
+  SHAPE_CONSTANTS,
+  ShapeType,
+} from './shape.models';
+import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
 @Component({
-  imports: [MatButtonModule, MatIconModule, MatTooltipModule],
+  imports: [MatButtonModule, MatIconModule, MatTooltipModule, CanvasShapeComponent],
   selector: 'app-canvas',
   styleUrl: './canvas.component.scss',
   templateUrl: './canvas.component.html',
@@ -36,6 +45,62 @@ export class CanvasComponent {
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
   readonly panX = signal<number>(0);
   readonly panY = signal<number>(0);
+
+  // Shapes & Diagramming State
+  readonly shapes = signal<CanvasShape[]>([]);
+  readonly selectedShapeIds = signal<Set<string>>(new Set<string>());
+  readonly activeTool = signal<ActiveTool>('select');
+
+  // Marquee selection state
+  readonly marqueeBox = signal<BoundingBox | null>(null);
+  private marqueeStart: CanvasPoint | null = null;
+
+  // Node movement state
+  private isMovingShapes = false;
+  private moveStartPoint: CanvasPoint | null = null;
+  private shapeInitialPositions = new Map<string, CanvasPoint>();
+
+  // Resize state
+  private isResizing = false;
+  private activeResizeHandle: ResizeHandlePosition | null = null;
+  private resizeStartPoint: CanvasPoint | null = null;
+  private resizeInitialShape: CanvasShape | null = null;
+
+  readonly resizeHandles: ResizeHandlePosition[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+
+  // Selection Bounding Box computation
+  readonly selectionBox = computed<BoundingBox | null>(() => {
+    const selectedIds = this.selectedShapeIds();
+    if (selectedIds.size === 0) {
+      return null;
+    }
+
+    const selectedShapes = this.shapes().filter((s) => selectedIds.has(s.id));
+    if (selectedShapes.length === 0) {
+      return null;
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+
+    for (const s of selectedShapes) {
+      minX = Math.min(minX, s.x);
+      minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.width);
+      maxY = Math.max(maxY, s.y + s.height);
+    }
+
+    return {
+      minX,
+      minY,
+      maxX,
+      maxY,
+      width: maxX - minX,
+      height: maxY - minY,
+    };
+  });
 
   // Interaction tracking state
   readonly isPanning = signal<boolean>(false);
@@ -72,9 +137,6 @@ export class CanvasComponent {
           ? CANVAS_CONSTANTS.GRID_SIZE
           : CANVAS_CONSTANTS.DOT_GRID_SIZE;
 
-      // Adaptive step: Keep screen grid interval between 18px and 72px
-      // As zoom changes, multiply or divide baseSize by powers of 2 (or 5)
-      // screenInterval = baseSize * scale * multiplier
       let multiplier = 1;
       while (baseSize * scale * multiplier < 18) {
         multiplier *= 2;
@@ -159,10 +221,6 @@ export class CanvasComponent {
       y: this.elementRef.nativeElement.clientHeight / 2,
     };
 
-    // Keep world coordinate under focal point fixed:
-    // focalScreen = world * currentZoom + currentPan
-    // => world = (focalScreen - currentPan) / currentZoom
-    // newPan = focalScreen - world * newZoom
     const worldX = (focal.x - this.panX()) / currentZoom;
     const worldY = (focal.y - this.panY()) / currentZoom;
 
@@ -183,7 +241,6 @@ export class CanvasComponent {
 
   // Event handlers
   handleContextMenu(event: MouseEvent): void {
-    // Prevent default context menu when panning or immediately after right-click dragging
     if (this.isPanning() || Date.now() < this.preventContextMenuUntil) {
       event.preventDefault();
     }
@@ -193,23 +250,140 @@ export class CanvasComponent {
     event.preventDefault();
 
     if (event.ctrlKey || event.metaKey) {
-      // Zoom with ctrl + wheel (or pinch gesture on trackpads)
       const rect = this.elementRef.nativeElement.getBoundingClientRect();
       const focalPoint: CanvasPoint = {
         x: event.clientX - rect.left,
         y: event.clientY - rect.top,
       };
 
-      // Zoom factor calculation
       const zoomFactor = Math.exp(-event.deltaY * 0.005);
       this.zoomTo(this.zoom() * zoomFactor, focalPoint);
     } else if (event.shiftKey) {
-      // Shift + vertical wheel scroll converts vertical wheel movement into horizontal pan
       const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
       this.panBy(-delta, 0);
     } else {
-      // Pan with normal wheel / two-finger scroll
       this.panBy(-event.deltaX, -event.deltaY);
+    }
+  }
+
+  // Shape Management & Selection API
+  isShapeSelected(id: string): boolean {
+    return this.selectedShapeIds().has(id);
+  }
+
+  setActiveTool(tool: ActiveTool): void {
+    this.activeTool.set(tool);
+  }
+
+  clearSelection(): void {
+    this.selectedShapeIds.set(new Set<string>());
+  }
+
+  selectShape(id: string, multiSelect = false): void {
+    const current = new Set(this.selectedShapeIds());
+    if (multiSelect) {
+      if (current.has(id)) {
+        current.delete(id);
+      } else {
+        current.add(id);
+      }
+    } else {
+      current.clear();
+      current.add(id);
+    }
+    this.selectedShapeIds.set(current);
+  }
+
+  createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
+    const newShape: CanvasShape = {
+      id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type,
+      x: Math.round(worldPoint.x - SHAPE_CONSTANTS.DEFAULT_WIDTH / 2),
+      y: Math.round(worldPoint.y - SHAPE_CONSTANTS.DEFAULT_HEIGHT / 2),
+      width: SHAPE_CONSTANTS.DEFAULT_WIDTH,
+      height: SHAPE_CONSTANTS.DEFAULT_HEIGHT,
+      fillColor: SHAPE_CONSTANTS.DEFAULT_FILL,
+      strokeColor: SHAPE_CONSTANTS.DEFAULT_STROKE,
+      strokeWidth: SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
+      zIndex: this.shapes().length + 1,
+    };
+
+    this.shapes.update((list) => [...list, newShape]);
+    this.selectShape(newShape.id);
+    this.activeTool.set('select');
+    return newShape;
+  }
+
+  deleteSelectedShapes(): void {
+    const selected = this.selectedShapeIds();
+    if (selected.size === 0) {
+      return;
+    }
+    this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
+    this.clearSelection();
+  }
+
+  // Pointer event handlers on shapes
+  handleShapePointerDown(event: PointerEvent, shape: CanvasShape): void {
+    if (event.button !== 0 || this.isSpacePressed) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    if (!this.isShapeSelected(shape.id)) {
+      this.selectShape(shape.id, event.shiftKey);
+    } else if (event.shiftKey) {
+      this.selectShape(shape.id, true);
+      return;
+    }
+
+    this.isMovingShapes = true;
+    this.moveStartPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    this.shapeInitialPositions.clear();
+
+    const selectedIds = this.selectedShapeIds();
+    for (const s of this.shapes()) {
+      if (selectedIds.has(s.id)) {
+        this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+      }
+    }
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  // Pointer event handlers on resize handles
+  handleResizePointerDown(event: PointerEvent, handle: ResizeHandlePosition): void {
+    if (event.button !== 0) {
+      return;
+    }
+
+    event.stopPropagation();
+
+    const selectedIds = this.selectedShapeIds();
+    if (selectedIds.size !== 1) {
+      return;
+    }
+
+    const shapeId = Array.from(selectedIds)[0];
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+
+    this.isResizing = true;
+    this.activeResizeHandle = handle;
+    this.resizeStartPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    this.resizeInitialShape = { ...shape };
+
+    try {
+      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
     }
   }
 
@@ -225,8 +399,6 @@ export class CanvasComponent {
       return;
     }
 
-    // Pan with middle click (button 1), right click (button 2), or spacebar held + left click (button 0)
-    // Left-click dragging without space is reserved for box/drag selection in diagramming
     const isMiddleClick = event.button === 1;
     const isRightClick = event.button === 2;
     const isSpaceLeftDrag = event.button === 0 && this.isSpacePressed;
@@ -239,6 +411,38 @@ export class CanvasComponent {
         (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
       } catch {
         // Ignored if capture unsupported
+      }
+      return;
+    }
+
+    // Left click on empty canvas
+    if (event.button === 0) {
+      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      const currentTool = this.activeTool();
+
+      if (currentTool !== 'select') {
+        this.createShape(currentTool as ShapeType, worldPoint);
+        return;
+      }
+
+      if (!event.shiftKey) {
+        this.clearSelection();
+      }
+
+      this.marqueeStart = worldPoint;
+      this.marqueeBox.set({
+        minX: worldPoint.x,
+        minY: worldPoint.y,
+        maxX: worldPoint.x,
+        maxY: worldPoint.y,
+        width: 0,
+        height: 0,
+      });
+
+      try {
+        (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
+      } catch {
+        // Ignored
       }
     }
   }
@@ -263,19 +467,70 @@ export class CanvasComponent {
       return;
     }
 
-    if (!this.isPanning() || !this.lastPointerPos) {
+    // Canvas Panning
+    if (this.isPanning() && this.lastPointerPos) {
+      const deltaX = event.clientX - this.lastPointerPos.x;
+      const deltaY = event.clientY - this.lastPointerPos.y;
+
+      if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+        this.hasDraggedDuringPan = true;
+      }
+
+      this.panBy(deltaX, deltaY);
+      this.lastPointerPos = { x: event.clientX, y: event.clientY };
       return;
     }
 
-    const deltaX = event.clientX - this.lastPointerPos.x;
-    const deltaY = event.clientY - this.lastPointerPos.y;
+    const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
 
-    if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
-      this.hasDraggedDuringPan = true;
+    // Moving shapes
+    if (this.isMovingShapes && this.moveStartPoint) {
+      const deltaX = currentWorld.x - this.moveStartPoint.x;
+      const deltaY = currentWorld.y - this.moveStartPoint.y;
+
+      this.shapes.update((list) =>
+        list.map((shape) => {
+          const initial = this.shapeInitialPositions.get(shape.id);
+          if (initial) {
+            return {
+              ...shape,
+              x: Math.round(initial.x + deltaX),
+              y: Math.round(initial.y + deltaY),
+            };
+          }
+          return shape;
+        }),
+      );
+      return;
     }
 
-    this.panBy(deltaX, deltaY);
-    this.lastPointerPos = { x: event.clientX, y: event.clientY };
+    // Resizing shape
+    if (
+      this.isResizing &&
+      this.resizeStartPoint &&
+      this.resizeInitialShape &&
+      this.activeResizeHandle
+    ) {
+      this.applyResize(currentWorld, event.shiftKey);
+      return;
+    }
+
+    // Drag selection marquee
+    if (this.marqueeStart) {
+      const minX = Math.min(this.marqueeStart.x, currentWorld.x);
+      const minY = Math.min(this.marqueeStart.y, currentWorld.y);
+      const maxX = Math.max(this.marqueeStart.x, currentWorld.x);
+      const maxY = Math.max(this.marqueeStart.y, currentWorld.y);
+
+      this.marqueeBox.set({
+        minX,
+        minY,
+        maxX,
+        maxY,
+        width: maxX - minX,
+        height: maxY - minY,
+      });
+    }
   }
 
   handlePointerUp(event: PointerEvent): void {
@@ -287,12 +542,112 @@ export class CanvasComponent {
 
     if (this.activePointers.size === 0) {
       if (this.hasDraggedDuringPan && event.button === 2) {
-        // Prevent context menu from firing after right-click drag pan release
         this.preventContextMenuUntil = Date.now() + 400;
       }
       this.isPanning.set(false);
       this.lastPointerPos = null;
     }
+
+    if (this.isMovingShapes) {
+      this.isMovingShapes = false;
+      this.moveStartPoint = null;
+      this.shapeInitialPositions.clear();
+    }
+
+    if (this.isResizing) {
+      this.isResizing = false;
+      this.activeResizeHandle = null;
+      this.resizeStartPoint = null;
+      this.resizeInitialShape = null;
+    }
+
+    if (this.marqueeStart) {
+      const box = this.marqueeBox();
+      if (box && box.width > 2 && box.height > 2) {
+        const matchingIds = new Set<string>(event.shiftKey ? this.selectedShapeIds() : []);
+        for (const shape of this.shapes()) {
+          const intersects =
+            shape.x < box.maxX &&
+            shape.x + shape.width > box.minX &&
+            shape.y < box.maxY &&
+            shape.y + shape.height > box.minY;
+
+          if (intersects) {
+            matchingIds.add(shape.id);
+          }
+        }
+        this.selectedShapeIds.set(matchingIds);
+      }
+      this.marqueeStart = null;
+      this.marqueeBox.set(null);
+    }
+  }
+
+  private applyResize(currentWorld: CanvasPoint, maintainAspectRatio: boolean): void {
+    if (!this.resizeInitialShape || !this.resizeStartPoint || !this.activeResizeHandle) {
+      return;
+    }
+
+    const init = this.resizeInitialShape;
+    const deltaX = currentWorld.x - this.resizeStartPoint.x;
+    const deltaY = currentWorld.y - this.resizeStartPoint.y;
+    const handle = this.activeResizeHandle;
+
+    let newX = init.x;
+    let newY = init.y;
+    let newWidth = init.width;
+    let newHeight = init.height;
+
+    if (handle.includes('e')) {
+      newWidth = Math.max(SHAPE_CONSTANTS.MIN_WIDTH, init.width + deltaX);
+    } else if (handle.includes('w')) {
+      const potentialWidth = init.width - deltaX;
+      if (potentialWidth >= SHAPE_CONSTANTS.MIN_WIDTH) {
+        newWidth = potentialWidth;
+        newX = init.x + deltaX;
+      } else {
+        newWidth = SHAPE_CONSTANTS.MIN_WIDTH;
+        newX = init.x + (init.width - SHAPE_CONSTANTS.MIN_WIDTH);
+      }
+    }
+
+    if (handle.includes('s')) {
+      newHeight = Math.max(SHAPE_CONSTANTS.MIN_HEIGHT, init.height + deltaY);
+    } else if (handle.includes('n')) {
+      const potentialHeight = init.height - deltaY;
+      if (potentialHeight >= SHAPE_CONSTANTS.MIN_HEIGHT) {
+        newHeight = potentialHeight;
+        newY = init.y + deltaY;
+      } else {
+        newHeight = SHAPE_CONSTANTS.MIN_HEIGHT;
+        newY = init.y + (init.height - SHAPE_CONSTANTS.MIN_HEIGHT);
+      }
+    }
+
+    if (maintainAspectRatio && init.width > 0 && init.height > 0) {
+      const aspectRatio = init.width / init.height;
+      if (handle === 'e' || handle === 'w') {
+        newHeight = newWidth / aspectRatio;
+      } else if (handle === 'n' || handle === 's') {
+        newWidth = newHeight * aspectRatio;
+      } else {
+        newHeight = newWidth / aspectRatio;
+      }
+    }
+
+    this.shapes.update((list) =>
+      list.map((s) =>
+        s.id === init.id
+          ? {
+              ...s,
+              x: Math.round(newX),
+              y: Math.round(newY),
+              width: Math.round(newWidth),
+              height: Math.round(newHeight),
+            }
+          : s,
+      ),
+    );
   }
 
   handleKeyDown(event: KeyboardEvent): void {
@@ -300,42 +655,94 @@ export class CanvasComponent {
       this.isSpacePressed = true;
     }
 
-    // Zoom in with Ctrl + '+' or '='
+    if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === 'v' || event.key === 'V') {
+        this.setActiveTool('select');
+        return;
+      }
+      if (event.key === 'r' || event.key === 'R') {
+        this.setActiveTool('rectangle');
+        return;
+      }
+      if (event.key === 'o' || event.key === 'O') {
+        this.setActiveTool('ellipse');
+        return;
+      }
+      if (event.key === 'd' || event.key === 'D') {
+        this.setActiveTool('diamond');
+        return;
+      }
+      if (event.key === 'Delete' || event.key === 'Backspace') {
+        this.deleteSelectedShapes();
+        return;
+      }
+    }
+
     if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '=')) {
       event.preventDefault();
       this.zoomIn();
       return;
     }
 
-    // Zoom out with Ctrl + '-'
     if ((event.ctrlKey || event.metaKey) && event.key === '-') {
       event.preventDefault();
       this.zoomOut();
       return;
     }
 
-    // Reset zoom with Ctrl + '0'
     if ((event.ctrlKey || event.metaKey) && event.key === '0') {
       event.preventDefault();
       this.resetZoom();
       return;
     }
 
-    // Arrow keys pan
-    const panStep = event.shiftKey ? 50 : 20;
-    if (event.key === 'ArrowUp') {
-      event.preventDefault();
-      this.panBy(0, panStep);
-    } else if (event.key === 'ArrowDown') {
-      event.preventDefault();
-      this.panBy(0, -panStep);
-    } else if (event.key === 'ArrowLeft') {
-      event.preventDefault();
-      this.panBy(panStep, 0);
-    } else if (event.key === 'ArrowRight') {
-      event.preventDefault();
-      this.panBy(-panStep, 0);
+    const selectedCount = this.selectedShapeIds().size;
+    const step = event.shiftKey ? 10 : 1;
+
+    if (selectedCount > 0) {
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.nudgeSelectedShapes(0, -step);
+        return;
+      }
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.nudgeSelectedShapes(0, step);
+        return;
+      }
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.nudgeSelectedShapes(-step, 0);
+        return;
+      }
+      if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.nudgeSelectedShapes(step, 0);
+        return;
+      }
+    } else {
+      const panStep = event.shiftKey ? 50 : 20;
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        this.panBy(0, panStep);
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        this.panBy(0, -panStep);
+      } else if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.panBy(panStep, 0);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.panBy(-panStep, 0);
+      }
     }
+  }
+
+  private nudgeSelectedShapes(deltaX: number, deltaY: number): void {
+    const selected = this.selectedShapeIds();
+    this.shapes.update((list) =>
+      list.map((s) => (selected.has(s.id) ? { ...s, x: s.x + deltaX, y: s.y + deltaY } : s)),
+    );
   }
 
   handleKeyUp(event: KeyboardEvent): void {

@@ -52,6 +52,116 @@
   pointer-events: auto;
 }
 
+// Selection Bounding Box & Handles
+.selection-box {
+  position: absolute;
+  pointer-events: none;
+  border: 1.5px solid var(--mat-sys-primary);
+  box-sizing: border-box;
+  z-index: 1000;
+}
+
+.resize-handle {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  background-color: var(--mat-sys-surface);
+  border: 1.5px solid var(--mat-sys-primary);
+  border-radius: 1px;
+  pointer-events: auto;
+  box-sizing: border-box;
+
+  &.handle-nw {
+    top: -4px;
+    left: -4px;
+    cursor: nwse-resize;
+  }
+  &.handle-n {
+    top: -4px;
+    left: calc(50% - 4px);
+    cursor: ns-resize;
+  }
+  &.handle-ne {
+    top: -4px;
+    right: -4px;
+    cursor: nesw-resize;
+  }
+  &.handle-e {
+    top: calc(50% - 4px);
+    right: -4px;
+    cursor: ew-resize;
+  }
+  &.handle-se {
+    bottom: -4px;
+    right: -4px;
+    cursor: nwse-resize;
+  }
+  &.handle-s {
+    bottom: -4px;
+    left: calc(50% - 4px);
+    cursor: ns-resize;
+  }
+  &.handle-sw {
+    bottom: -4px;
+    left: -4px;
+    cursor: nesw-resize;
+  }
+  &.handle-w {
+    top: calc(50% - 4px);
+    left: -4px;
+    cursor: ew-resize;
+  }
+}
+
+// Selection Marquee Rectangle
+.marquee-rectangle {
+  position: absolute;
+  pointer-events: none;
+  border: 1px solid var(--mat-sys-primary);
+  background-color: rgba(var(--mat-sys-primary-rgb, 33, 150, 243), 0.12);
+  box-sizing: border-box;
+  z-index: 999;
+}
+
+// Top Center Tools Dock
+.canvas-tools-dock {
+  position: absolute;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.5rem;
+  background-color: var(--mat-sys-surface-container);
+  border: 1px solid var(--mat-sys-outline-variant);
+  border-radius: 9999px;
+  box-shadow: var(--mat-sys-level2);
+  user-select: none;
+}
+
+.tool-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--mat-sys-on-surface-variant);
+
+  mat-icon {
+    font-size: 1.25rem;
+    width: 1.25rem;
+    height: 1.25rem;
+  }
+
+  &.active {
+    background-color: var(--mat-sys-secondary-container);
+    color: var(--mat-sys-on-secondary-container);
+  }
+}
+
+// Floating Canvas Controls Dock (Bottom Left)
 .canvas-controls-dock {
   position: absolute;
   bottom: 1.5rem;

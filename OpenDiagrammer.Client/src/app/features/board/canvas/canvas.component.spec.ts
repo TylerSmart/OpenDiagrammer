@@ -242,4 +242,137 @@ describe('CanvasComponent', () => {
     expect(zoomedInSize).toBeGreaterThanOrEqual(18);
     expect(zoomedInSize).toBeLessThanOrEqual(72);
   });
+
+  it('should create and select shapes using tools', () => {
+    component.setActiveTool('rectangle');
+    expect(component.activeTool()).toBe('rectangle');
+
+    const shape = component.createShape('rectangle', { x: 200, y: 150 });
+    expect(component.shapes().length).toBe(1);
+    expect(shape.type).toBe('rectangle');
+    expect(component.isShapeSelected(shape.id)).toBe(true);
+    expect(component.activeTool()).toBe('select');
+
+    // Selection bounding box should match shape bounds
+    const box = component.selectionBox();
+    expect(box).not.toBeNull();
+    expect(box?.minX).toBe(shape.x);
+    expect(box?.minY).toBe(shape.y);
+  });
+
+  it('should select multiple shapes and clear selection', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('ellipse', { x: 300, y: 200 });
+
+    component.selectShape(s1.id, false);
+    expect(component.selectedShapeIds().size).toBe(1);
+    expect(component.isShapeSelected(s1.id)).toBe(true);
+
+    // Multi-select s2
+    component.selectShape(s2.id, true);
+    expect(component.selectedShapeIds().size).toBe(2);
+    expect(component.isShapeSelected(s1.id)).toBe(true);
+    expect(component.isShapeSelected(s2.id)).toBe(true);
+
+    // Clear selection
+    component.clearSelection();
+    expect(component.selectedShapeIds().size).toBe(0);
+    expect(component.selectionBox()).toBeNull();
+  });
+
+  it('should delete selected shapes', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.selectShape(s1.id);
+    component.deleteSelectedShapes();
+
+    expect(component.shapes().length).toBe(0);
+    expect(component.selectedShapeIds().size).toBe(0);
+  });
+
+  it('should move shapes with pointer drag and nudge with arrow keys', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.selectShape(s1.id);
+
+    // Pointer down on shape
+    const downEvent = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 100,
+      clientY: 100,
+    });
+    component.handleShapePointerDown(downEvent, s1);
+
+    // Pointer move
+    const moveEvent = new PointerEvent('pointermove', {
+      clientX: 140,
+      clientY: 130,
+    });
+    component.handlePointerMove(moveEvent);
+
+    const upEvent = new PointerEvent('pointerup', { button: 0 });
+    component.handlePointerUp(upEvent);
+
+    const movedShape = component.shapes().find((s) => s.id === s1.id);
+    expect(movedShape?.x).toBe(s1.x + 40);
+    expect(movedShape?.y).toBe(s1.y + 30);
+
+    // Nudge with Arrow keys
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'ArrowRight' }));
+    const nudgedShape = component.shapes().find((s) => s.id === s1.id);
+    expect(nudgedShape?.x).toBe((movedShape?.x ?? 0) + 1);
+  });
+
+  it('should resize shape via resize handle', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.selectShape(s1.id);
+
+    // Start resize with SE handle
+    const downEvent = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: s1.x + s1.width,
+      clientY: s1.y + s1.height,
+    });
+    component.handleResizePointerDown(downEvent, 'se');
+
+    // Drag handle outward by 50px
+    const moveEvent = new PointerEvent('pointermove', {
+      clientX: s1.x + s1.width + 50,
+      clientY: s1.y + s1.height + 40,
+    });
+    component.handlePointerMove(moveEvent);
+
+    const upEvent = new PointerEvent('pointerup', { button: 0 });
+    component.handlePointerUp(upEvent);
+
+    const resizedShape = component.shapes().find((s) => s.id === s1.id);
+    expect(resizedShape?.width).toBe(s1.width + 50);
+    expect(resizedShape?.height).toBe(s1.height + 40);
+  });
+
+  it('should select shapes via marquee drag selection', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('diamond', { x: 400, y: 400 });
+    component.clearSelection();
+
+    // Drag marquee covering s1 but not s2
+    const downEvent = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+    });
+    component.handlePointerDown(downEvent);
+
+    const moveEvent = new PointerEvent('pointermove', {
+      clientX: 250,
+      clientY: 250,
+    });
+    component.handlePointerMove(moveEvent);
+    expect(component.marqueeBox()).not.toBeNull();
+
+    const upEvent = new PointerEvent('pointerup', { button: 0 });
+    component.handlePointerUp(upEvent);
+
+    expect(component.marqueeBox()).toBeNull();
+    expect(component.isShapeSelected(s1.id)).toBe(true);
+    expect(component.isShapeSelected(s2.id)).toBe(false);
+  });
 });

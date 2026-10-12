@@ -18,9 +18,109 @@
   <!-- Transformable content layer -->
   <div class="canvas-content-layer" [style.transform]="contentTransform()">
     <ng-content></ng-content>
+
+    <!-- Rendered Shapes -->
+    @for (shape of shapes(); track shape.id) {
+      <app-canvas-shape
+        [shape]="shape"
+        [isSelected]="isShapeSelected(shape.id)"
+        (pointerdown)="handleShapePointerDown($event, shape)"
+      ></app-canvas-shape>
+    }
+
+    <!-- Selection Bounding Box & Resize Handles -->
+    @if (selectionBox(); as box) {
+      <div
+        class="selection-box"
+        [style.left.px]="box.minX"
+        [style.top.px]="box.minY"
+        [style.width.px]="box.width"
+        [style.height.px]="box.height"
+      >
+        @if (selectedShapeIds().size === 1) {
+          @for (pos of resizeHandles; track pos) {
+            <div
+              class="resize-handle handle-{{ pos }}"
+              (pointerdown)="handleResizePointerDown($event, pos)"
+            ></div>
+          }
+        }
+      </div>
+    }
+
+    <!-- Drag Selection Marquee Rectangle -->
+    @if (marqueeBox(); as marquee) {
+      <div
+        class="marquee-rectangle"
+        [style.left.px]="marquee.minX"
+        [style.top.px]="marquee.minY"
+        [style.width.px]="marquee.width"
+        [style.height.px]="marquee.height"
+      ></div>
+    }
   </div>
 
-  <!-- Floating Canvas Controls Dock -->
+  <!-- Top Shape Creation Tool Palette Dock -->
+  <div class="canvas-tools-dock" role="toolbar" aria-label="Shape creation tools">
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'select'"
+      (click)="setActiveTool('select')"
+      aria-label="Selection Tool"
+      matTooltip="Select tool (V)"
+    >
+      <mat-icon>near_me</mat-icon>
+    </button>
+
+    <div class="dock-divider"></div>
+
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'rectangle'"
+      (click)="setActiveTool('rectangle')"
+      aria-label="Add Rectangle"
+      matTooltip="Rectangle (R)"
+    >
+      <mat-icon>crop_square</mat-icon>
+    </button>
+
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'rounded-rectangle'"
+      (click)="setActiveTool('rounded-rectangle')"
+      aria-label="Add Rounded Rectangle"
+      matTooltip="Rounded Rectangle"
+    >
+      <mat-icon>square</mat-icon>
+    </button>
+
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'ellipse'"
+      (click)="setActiveTool('ellipse')"
+      aria-label="Add Ellipse/Circle"
+      matTooltip="Circle / Ellipse (O)"
+    >
+      <mat-icon>panorama_fish_eye</mat-icon>
+    </button>
+
+    <button
+      mat-icon-button
+      class="tool-btn"
+      [class.active]="activeTool() === 'diamond'"
+      (click)="setActiveTool('diamond')"
+      aria-label="Add Diamond"
+      matTooltip="Diamond / Decision (D)"
+    >
+      <mat-icon>change_history</mat-icon>
+    </button>
+  </div>
+
+  <!-- Floating Canvas Controls Dock (Bottom Left) -->
   <div class="canvas-controls-dock" role="toolbar" aria-label="Canvas zoom and view controls">
     <button
       mat-icon-button

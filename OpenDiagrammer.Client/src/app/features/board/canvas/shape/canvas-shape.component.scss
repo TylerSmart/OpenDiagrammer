@@ -1,0 +1,41 @@
+:host {
+  display: contents;
+}
+
+.shape-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
+  box-sizing: border-box;
+
+  &.is-selected {
+    // Subtle shadow when selected
+    filter: drop-shadow(0 0 2px var(--mat-sys-primary));
+  }
+}
+
+.shape-svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+}
+
+.shape-text-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  text-align: center;
+  pointer-events: none;
+  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+}
