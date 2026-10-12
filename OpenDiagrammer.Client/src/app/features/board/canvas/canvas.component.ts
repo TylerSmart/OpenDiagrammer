@@ -116,6 +116,8 @@ export class CanvasComponent {
   private moveStartPoint: CanvasPoint | null = null;
   private shapeInitialPositions = new Map<string, CanvasPoint>();
   private connectionInitialWaypoints = new Map<string, CanvasPoint[]>();
+  private isAltDragPending = false;
+  private hasClonedForAltDrag = false;
 
   // Resize state
   private isResizing = false;
@@ -990,25 +992,18 @@ export class CanvasComponent {
     return copied;
   }
 
-  paste(): boolean {
-    if (
-      !this.clipboard ||
-      (this.clipboard.shapes.length === 0 && this.clipboard.connections.length === 0)
-    ) {
-      return false;
-    }
-
-    this.pasteOffsetCount++;
-    const OFFSET_STEP = 24;
-    const deltaX = OFFSET_STEP * this.pasteOffsetCount;
-    const deltaY = OFFSET_STEP * this.pasteOffsetCount;
-
+  duplicateShapesAndConnections(
+    shapesToClone: CanvasShape[],
+    connectionsToClone: CanvasConnection[],
+    deltaX = 0,
+    deltaY = 0,
+  ): { newShapes: CanvasShape[]; newConnections: CanvasConnection[] } {
     const idMap = new Map<string, string>();
     const groupMap = new Map<string, string>();
 
     const maxZ = this.shapes().reduce((max, s) => Math.max(max, s.zIndex), 0);
 
-    const newShapes: CanvasShape[] = this.clipboard.shapes.map((s, idx) => {
+    const newShapes: CanvasShape[] = shapesToClone.map((s, idx) => {
       const newId = `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${idx}`;
       idMap.set(s.id, newId);
 
@@ -1033,7 +1028,7 @@ export class CanvasComponent {
       };
     });
 
-    const newConns: CanvasConnection[] = this.clipboard.connections.map((c, idx) => {
+    const newConnections: CanvasConnection[] = connectionsToClone.map((c, idx) => {
       const newId = `conn_${Date.now()}_${Math.random().toString(36).substring(2, 7)}_${idx}`;
       const newSourceShapeId = idMap.get(c.sourceShapeId) ?? c.sourceShapeId;
       const newTargetShapeId = c.targetShapeId
@@ -1056,17 +1051,107 @@ export class CanvasComponent {
       };
     });
 
+    return { newShapes, newConnections };
+  }
+
+  paste(): boolean {
+    if (
+      !this.clipboard ||
+      (this.clipboard.shapes.length === 0 && this.clipboard.connections.length === 0)
+    ) {
+      return false;
+    }
+
+    this.pasteOffsetCount++;
+    const OFFSET_STEP = 24;
+    const deltaX = OFFSET_STEP * this.pasteOffsetCount;
+    const deltaY = OFFSET_STEP * this.pasteOffsetCount;
+
+    const { newShapes, newConnections } = this.duplicateShapesAndConnections(
+      this.clipboard.shapes,
+      this.clipboard.connections,
+      deltaX,
+      deltaY,
+    );
+
     this.shapes.update((list) => [...list, ...newShapes]);
-    this.connections.update((list) => [...list, ...newConns]);
+    this.connections.update((list) => [...list, ...newConnections]);
 
     this.clearSelection();
     if (newShapes.length > 0) {
       this.selectedShapeIds.set(new Set(newShapes.map((s) => s.id)));
-    } else if (newConns.length > 0) {
-      this.selectedConnectionIds.set(new Set(newConns.map((c) => c.id)));
+    } else if (newConnections.length > 0) {
+      this.selectedConnectionIds.set(new Set(newConnections.map((c) => c.id)));
     }
 
     return true;
+  }
+
+  private performAltDragClone(): void {
+    this.hasClonedForAltDrag = true;
+    const selectedIds = this.selectedShapeIds();
+    if (selectedIds.size === 0) {
+      return;
+    }
+
+    const shapesToClone = this.shapes().filter((s) => selectedIds.has(s.id));
+    if (shapesToClone.length === 0) {
+      return;
+    }
+
+    const connsToClone = this.connections().filter(
+      (c) =>
+        c.targetShapeId && selectedIds.has(c.sourceShapeId) && selectedIds.has(c.targetShapeId),
+    );
+
+    const { newShapes, newConnections } = this.duplicateShapesAndConnections(
+      shapesToClone,
+      connsToClone,
+      0,
+      0,
+    );
+
+    this.shapes.update((list) => [...list, ...newShapes]);
+    this.connections.update((list) => [...list, ...newConnections]);
+
+    const newShapeIds = new Set(newShapes.map((s) => s.id));
+    this.selectedShapeIds.set(newShapeIds);
+    this.selectedConnectionIds.set(new Set());
+
+    this.shapeInitialPositions.clear();
+    for (const s of newShapes) {
+      this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+    }
+
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const s of newShapes) {
+      minX = Math.min(minX, s.x);
+      minY = Math.min(minY, s.y);
+      maxX = Math.max(maxX, s.x + s.width);
+      maxY = Math.max(maxY, s.y + s.height);
+    }
+    this.initialMovingBounds =
+      isFinite(minX) && isFinite(minY)
+        ? { minX, minY, maxX, maxY, width: maxX - minX, height: maxY - minY }
+        : null;
+
+    this.connectionInitialWaypoints.clear();
+    for (const c of newConnections) {
+      const isSelfLoop =
+        c.targetShapeId && c.sourceShapeId === c.targetShapeId && newShapeIds.has(c.sourceShapeId);
+      const isBothEndpoints =
+        c.targetShapeId && newShapeIds.has(c.sourceShapeId) && newShapeIds.has(c.targetShapeId);
+
+      if ((isSelfLoop || isBothEndpoints) && c.waypoints?.length) {
+        this.connectionInitialWaypoints.set(
+          c.id,
+          c.waypoints.map((p) => ({ ...p })),
+        );
+      }
+    }
   }
 
   duplicate(): boolean {
@@ -1491,6 +1576,8 @@ export class CanvasComponent {
     this.isMovingShapes = true;
     this.moveStartPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
     this.shapeInitialPositions.clear();
+    this.isAltDragPending = event.altKey;
+    this.hasClonedForAltDrag = false;
 
     const selectedIds = this.selectedShapeIds();
     let minX = Infinity;
@@ -1624,6 +1711,8 @@ export class CanvasComponent {
         this.moveStartPoint = worldPoint;
         this.shapeInitialPositions.clear();
         this.shapeInitialPositions.set(newShape.id, { x: newShape.x, y: newShape.y });
+        this.isAltDragPending = false;
+        this.hasClonedForAltDrag = false;
         this.initialMovingBounds = {
           minX: newShape.x,
           minY: newShape.y,
@@ -2035,10 +2124,19 @@ export class CanvasComponent {
       const rawDeltaX = currentWorld.x - this.moveStartPoint.x;
       const rawDeltaY = currentWorld.y - this.moveStartPoint.y;
 
+      if (this.isAltDragPending && !this.hasClonedForAltDrag) {
+        if (Math.hypot(rawDeltaX, rawDeltaY) >= 3) {
+          this.performAltDragClone();
+        } else {
+          return;
+        }
+      }
+
       let deltaX = rawDeltaX;
       let deltaY = rawDeltaY;
 
-      if (this.initialMovingBounds && !event.altKey) {
+      const shouldSnap = !event.altKey || this.hasClonedForAltDrag;
+      if (this.initialMovingBounds && shouldSnap) {
         const selectedIds = this.selectedShapeIds();
         const otherShapes = this.shapes().filter((s) => !selectedIds.has(s.id));
         const gridSize =
@@ -2261,6 +2359,8 @@ export class CanvasComponent {
       this.shapeInitialPositions.clear();
       this.connectionInitialWaypoints.clear();
     }
+    this.isAltDragPending = false;
+    this.hasClonedForAltDrag = false;
 
     if (this.isResizing) {
       this.isResizing = false;

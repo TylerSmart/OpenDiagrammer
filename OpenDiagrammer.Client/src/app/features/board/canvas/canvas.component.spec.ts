@@ -1803,4 +1803,149 @@ describe('CanvasComponent', () => {
       expect(component.shapes().length).toBe(1);
     });
   });
+
+  describe('Alt+Click+Drag to duplicate (Miro-style)', () => {
+    it('should duplicate a single shape when Alt key is held during drag and move the clone', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.updateShape(s1.id, { x: 100, y: 100 });
+      component.clearSelection();
+
+      // Pointer down on s1 with altKey: true
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100, altKey: true }),
+        s1,
+      );
+
+      // Drag to (250, 300) (distance > 3px threshold)
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: 250, clientY: 300, altKey: true }),
+      );
+
+      // Should have created a clone; total shapes is 2
+      expect(component.shapes().length).toBe(2);
+
+      const original = component.shapes().find((s) => s.id === s1.id);
+      const clone = component.shapes().find((s) => s.id !== s1.id);
+
+      expect(original).toBeDefined();
+      expect(clone).toBeDefined();
+
+      // Original shape position remains undisturbed at (100, 100)
+      expect(original?.x).toBe(100);
+      expect(original?.y).toBe(100);
+
+      // Cloned shape has moved to the dragged position
+      expect(clone?.x).toBe(250);
+      expect(clone?.y).toBe(300);
+
+      // Selection is now on the clone
+      expect(component.selectedShapeIds().has(clone!.id)).toBe(true);
+      expect(component.selectedShapeIds().has(s1.id)).toBe(false);
+
+      // Finish drag
+      component.handlePointerUp(new PointerEvent('pointerup'));
+    });
+
+    it('should not duplicate a shape if drag distance does not exceed threshold', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100, altKey: true }),
+        s1,
+      );
+
+      // Move only 1px (below 3px threshold)
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: 101, clientY: 100, altKey: true }),
+      );
+
+      // Total shapes should still be 1 (no duplicate spawned)
+      expect(component.shapes().length).toBe(1);
+
+      component.handlePointerUp(new PointerEvent('pointerup'));
+      expect(component.shapes().length).toBe(1);
+    });
+
+    it('should duplicate a multi-selection of shapes along with inter-shape connections', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.updateShape(s1.id, { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      component.updateShape(s2.id, { x: 300, y: 100 });
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+
+      // Alt-drag starting on s1 from (100, 100) to (200, 250) (deltaX = 100, deltaY = 150)
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100, altKey: true }),
+        s1,
+      );
+
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: 200, clientY: 250, altKey: true }),
+      );
+
+      expect(component.shapes().length).toBe(4);
+      expect(component.connections().length).toBe(2);
+
+      const originalS1 = component.shapes().find((s) => s.id === s1.id);
+      const originalS2 = component.shapes().find((s) => s.id === s2.id);
+      expect(originalS1?.x).toBe(100);
+      expect(originalS1?.y).toBe(100);
+      expect(originalS2?.x).toBe(300);
+      expect(originalS2?.y).toBe(100);
+
+      const clonedShapes = component.shapes().filter((s) => s.id !== s1.id && s.id !== s2.id);
+      expect(clonedShapes.length).toBe(2);
+
+      // Delta is +100, +150
+      const clone1 = clonedShapes.find((s) => s.x === 200 && s.y === 250);
+      const clone2 = clonedShapes.find((s) => s.x === 400 && s.y === 250);
+      expect(clone1).toBeDefined();
+      expect(clone2).toBeDefined();
+
+      // Cloned connection connects the cloned shapes
+      const clonedConn = component.connections().find((c) => c.id !== conn.id);
+      expect(clonedConn).toBeDefined();
+      expect(clonedConn?.sourceShapeId).toBe(clone1?.id);
+      expect(clonedConn?.targetShapeId).toBe(clone2?.id);
+
+      // Selection has moved to the clones
+      expect(component.selectedShapeIds().has(clone1!.id)).toBe(true);
+      expect(component.selectedShapeIds().has(clone2!.id)).toBe(true);
+
+      component.handlePointerUp(new PointerEvent('pointerup'));
+    });
+
+    it('should assign a new groupId when duplicating grouped shapes via Alt+Drag', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+
+      component.clearSelection();
+      component.selectShape(s1.id);
+      component.selectShape(s2.id, true);
+      const originalGroupId = component.groupSelectedShapes();
+      expect(originalGroupId).toBeDefined();
+
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 100, clientY: 100, altKey: true }),
+        s1,
+      );
+
+      component.handlePointerMove(
+        new PointerEvent('pointermove', { clientX: 150, clientY: 150, altKey: true }),
+      );
+
+      const clonedShapes = component.shapes().filter((s) => s.id !== s1.id && s.id !== s2.id);
+      expect(clonedShapes.length).toBe(2);
+      expect(clonedShapes[0].groupId).toBeDefined();
+      expect(clonedShapes[0].groupId).not.toBe(originalGroupId);
+      expect(clonedShapes[0].groupId).toBe(clonedShapes[1].groupId);
+
+      component.handlePointerUp(new PointerEvent('pointerup'));
+    });
+  });
 });
