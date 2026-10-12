@@ -47,133 +47,135 @@
       </defs>
 
       @for (conn of renderedConnections(); track conn.id) {
-        <path
-          class="connection-hit-area"
-          [attr.d]="conn.path"
-          (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+        <g
+          class="connection-group"
           (pointerenter)="hoveredConnectionId.set(conn.id)"
           (pointerleave)="hoveredConnectionId.set(null)"
-          (dblclick)="startEditingConnectionText(conn.id)"
-        />
-        <path
-          class="connection-path"
-          [class.is-selected]="isConnectionSelected(conn.id)"
-          [class.is-hovered]="hoveredConnectionId() === conn.id"
-          [attr.d]="conn.path"
-          [attr.stroke]="
-            isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
-          "
-          [attr.stroke-width]="conn.strokeWidth"
-          [attr.stroke-dasharray]="conn.dashArray || null"
-          [attr.marker-start]="
-            conn.startMarker === 'arrow'
-              ? isConnectionSelected(conn.id)
-                ? 'url(#arrow-marker-selected)'
-                : 'url(#arrow-marker)'
-              : null
-          "
-          [attr.marker-end]="
-            conn.endMarker === 'arrow'
-              ? isConnectionSelected(conn.id)
-                ? 'url(#arrow-marker-selected)'
-                : 'url(#arrow-marker)'
-              : null
-          "
-          (pointerdown)="handleConnectionPointerDown($event, conn.id)"
-          (pointerenter)="hoveredConnectionId.set(conn.id)"
-          (pointerleave)="hoveredConnectionId.set(null)"
-          (dblclick)="startEditingConnectionText(conn.id)"
-        />
-
-        <!-- Connection Text Label Badge -->
-        @if (conn.text && editingConnectionId() !== conn.id) {
-          <g
-            class="connection-label-group"
-            [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+        >
+          <path
+            class="connection-hit-area"
+            [attr.d]="conn.path"
+            (pointerdown)="handleConnectionPointerDown($event, conn.id)"
             (dblclick)="startEditingConnectionText(conn.id)"
-          >
-            <rect
-              class="connection-label-bg"
-              [attr.x]="-(conn.text.length * 4.5 + 8)"
-              y="-12"
-              [attr.width]="conn.text.length * 9 + 16"
-              height="24"
-              rx="4"
-            />
-            <text class="connection-label-text" text-anchor="middle" dy="4">
-              {{ conn.text }}
-            </text>
-          </g>
-        }
-
-        <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles (on hover or selection) -->
-        @if (isConnectionSelected(conn.id) || hoveredConnectionId() === conn.id) {
-          <!-- Source Endpoint Reconnect Handle -->
-          <circle
-            class="connection-endpoint-handle source-endpoint"
-            [attr.cx]="conn.startPoint.x"
-            [attr.cy]="conn.startPoint.y"
-            r="6.5"
-            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+          />
+          <path
+            class="connection-path"
+            [class.is-selected]="isConnectionSelected(conn.id)"
+            [class.is-hovered]="hoveredConnectionId() === conn.id"
+            [attr.d]="conn.path"
+            [attr.stroke]="
+              isConnectionSelected(conn.id) ? 'var(--mat-sys-primary, #1976d2)' : conn.strokeColor
+            "
+            [attr.stroke-width]="conn.strokeWidth"
+            [attr.stroke-dasharray]="conn.dashArray || null"
+            [attr.marker-start]="
+              conn.startMarker === 'arrow'
+                ? isConnectionSelected(conn.id)
+                  ? 'url(#arrow-marker-selected)'
+                  : 'url(#arrow-marker)'
+                : null
+            "
+            [attr.marker-end]="
+              conn.endMarker === 'arrow'
+                ? isConnectionSelected(conn.id)
+                  ? 'url(#arrow-marker-selected)'
+                  : 'url(#arrow-marker)'
+                : null
+            "
+            (pointerdown)="handleConnectionPointerDown($event, conn.id)"
+            (dblclick)="startEditingConnectionText(conn.id)"
           />
 
-          <!-- Target Endpoint Reconnect Handle -->
-          <circle
-            class="connection-endpoint-handle target-endpoint"
-            [attr.cx]="conn.endPoint.x"
-            [attr.cy]="conn.endPoint.y"
-            r="6.5"
-            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
-          />
-
-          <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
-          @if (conn.routing !== 'orthogonal') {
-            @for (wp of conn.waypoints; track $index) {
-              <circle
-                class="connection-waypoint-handle"
-                [attr.cx]="wp.x"
-                [attr.cy]="wp.y"
-                r="6"
-                (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
-                (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
+          <!-- Connection Text Label Badge -->
+          @if (conn.text && editingConnectionId() !== conn.id) {
+            <g
+              class="connection-label-group"
+              [attr.transform]="'translate(' + conn.midpoint.x + ',' + conn.midpoint.y + ')'"
+              (dblclick)="startEditingConnectionText(conn.id)"
+            >
+              <rect
+                class="connection-label-bg"
+                [attr.x]="-(conn.text.length * 4.5 + 8)"
+                y="-12"
+                [attr.width]="conn.text.length * 9 + 16"
+                height="24"
+                rx="4"
               />
-            }
+              <text class="connection-label-text" text-anchor="middle" dy="4">
+                {{ conn.text }}
+              </text>
+            </g>
           }
 
-          <!-- Miro-style Orthogonal Segment Drag Handles (1D displacement on segments >= 30px) -->
-          @if (conn.routing === 'orthogonal') {
-            @for (seg of conn.segments; track seg.index) {
-              <rect
-                class="connection-segment-handle"
-                [class.is-horizontal]="seg.orientation === 'horizontal'"
-                [class.is-vertical]="seg.orientation === 'vertical'"
-                [attr.x]="
-                  seg.orientation === 'horizontal' ? seg.midpoint.x - 10 : seg.midpoint.x - 4
-                "
-                [attr.y]="
-                  seg.orientation === 'horizontal' ? seg.midpoint.y - 4 : seg.midpoint.y - 10
-                "
-                [attr.width]="seg.orientation === 'horizontal' ? 20 : 8"
-                [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
-                rx="3"
-                (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
-              />
-            }
-          } @else {
-            <!-- Segment Midpoint Handles for straight / curved connections -->
-            @for (p of conn.points; track $index) {
-              @if ($index < conn.points.length - 1) {
+          <!-- Interactive Miro-Style Waypoint Handles & Reconnect Endpoint Handles (on hover or selection) -->
+          @if (isConnectionSelected(conn.id) || hoveredConnectionId() === conn.id) {
+            <!-- Source Endpoint Reconnect Handle -->
+            <circle
+              class="connection-endpoint-handle source-endpoint"
+              [attr.cx]="conn.startPoint.x"
+              [attr.cy]="conn.startPoint.y"
+              r="6.5"
+              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+            />
+
+            <!-- Target Endpoint Reconnect Handle -->
+            <circle
+              class="connection-endpoint-handle target-endpoint"
+              [attr.cx]="conn.endPoint.x"
+              [attr.cy]="conn.endPoint.y"
+              r="6.5"
+              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
+            />
+
+            <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
+            @if (conn.routing !== 'orthogonal') {
+              @for (wp of conn.waypoints; track $index) {
                 <circle
-                  class="connection-midpoint-handle"
-                  [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
-                  [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
-                  r="4.5"
-                  (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+                  class="connection-waypoint-handle"
+                  [attr.cx]="wp.x"
+                  [attr.cy]="wp.y"
+                  r="6"
+                  (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
+                  (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
                 />
               }
             }
+
+            <!-- Miro-style Orthogonal Segment Drag Handles (1D displacement on segments >= 30px) -->
+            @if (conn.routing === 'orthogonal') {
+              @for (seg of conn.segments; track seg.index) {
+                <rect
+                  class="connection-segment-handle"
+                  [class.is-horizontal]="seg.orientation === 'horizontal'"
+                  [class.is-vertical]="seg.orientation === 'vertical'"
+                  [attr.x]="
+                    seg.orientation === 'horizontal' ? seg.midpoint.x - 10 : seg.midpoint.x - 4
+                  "
+                  [attr.y]="
+                    seg.orientation === 'horizontal' ? seg.midpoint.y - 4 : seg.midpoint.y - 10
+                  "
+                  [attr.width]="seg.orientation === 'horizontal' ? 20 : 8"
+                  [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
+                  rx="3"
+                  (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
+                />
+              }
+            } @else {
+              <!-- Segment Midpoint Handles for straight / curved connections -->
+              @for (p of conn.points; track $index) {
+                @if ($index < conn.points.length - 1) {
+                  <circle
+                    class="connection-midpoint-handle"
+                    [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
+                    [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
+                    r="4.5"
+                    (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+                  />
+                }
+              }
+            }
           }
-        }
+        </g>
       }
 
       @if (inProgressConnection(); as inProg) {
