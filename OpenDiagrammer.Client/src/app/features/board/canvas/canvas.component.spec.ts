@@ -2093,5 +2093,52 @@ describe('CanvasComponent', () => {
 
       expect(component.connections()[0].strokeColor).toBe('var(--canvas-color-green-stroke)');
     });
+
+    it('should mesh connector text editor and label badge colors with the connector stroke color', async () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+      const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+      const bluePreset = component.canvasColorPresets.find((p) => p.id === 'blue')!;
+      component.setConnectionColor(bluePreset.stroke);
+
+      expect(component.getConnectionFillColor(bluePreset.stroke)).toBe(bluePreset.fill);
+
+      component.startEditingConnectionText(conn.id);
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const inputEl = fixture.nativeElement.querySelector(
+        '.connection-text-editor input',
+      ) as HTMLInputElement;
+      expect(inputEl).not.toBeNull();
+      expect(inputEl.style.borderColor).toBe('var(--canvas-color-blue-stroke)');
+      expect(inputEl.style.backgroundColor).toBe('var(--canvas-color-blue-fill)');
+      expect(inputEl.style.color).toBe('var(--canvas-color-blue-stroke)');
+
+      component.finishEditingConnectionText(conn.id, 'API Gateway');
+      fixture.detectChanges();
+
+      const labelRect = fixture.nativeElement.querySelector(
+        '.connection-label-bg',
+      ) as SVGRectElement;
+      const labelText = fixture.nativeElement.querySelector(
+        '.connection-label-text',
+      ) as SVGTextElement;
+
+      expect(labelRect).not.toBeNull();
+      expect(labelRect.getAttribute('fill')).toBe('var(--canvas-color-blue-fill)');
+      expect(labelRect.getAttribute('stroke')).toBe('var(--canvas-color-blue-stroke)');
+      expect(labelText.getAttribute('fill')).toBe('var(--canvas-color-blue-stroke)');
+
+      // Changing connection color should also update the label
+      const purplePreset = component.canvasColorPresets.find((p) => p.id === 'purple')!;
+      component.setConnectionColor(purplePreset.stroke);
+      fixture.detectChanges();
+
+      expect(labelRect.getAttribute('fill')).toBe('var(--canvas-color-purple-fill)');
+      expect(labelRect.getAttribute('stroke')).toBe('var(--canvas-color-purple-stroke)');
+      expect(labelText.getAttribute('fill')).toBe('var(--canvas-color-purple-stroke)');
+    });
   });
 });

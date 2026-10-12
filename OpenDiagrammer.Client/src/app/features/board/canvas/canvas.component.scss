@@ -154,17 +154,18 @@
 }
 
 .connection-label-bg {
-  fill: var(--mat-sys-surface-container);
-  stroke: var(--mat-sys-outline-variant);
-  stroke-width: 1px;
+  stroke-width: 1.5px;
+  transition:
+    stroke 0.15s ease,
+    fill 0.15s ease;
 }
 
 .connection-label-text {
-  fill: var(--mat-sys-on-surface);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   font-family: inherit;
   pointer-events: none;
+  transition: fill 0.15s ease;
 }
 
 // Reconnect Endpoint Handles
@@ -329,14 +330,12 @@
   pointer-events: auto;
 
   input {
-    background-color: var(--mat-sys-surface);
-    color: var(--mat-sys-on-surface);
     border: 1.5px solid var(--mat-sys-primary);
     border-radius: 4px;
     padding: 0.25rem 0.5rem;
     font-size: 11px;
     font-family: inherit;
-    font-weight: 500;
+    font-weight: 600;
     outline: none;
     box-shadow: var(--mat-sys-level2);
     min-width: 90px;
@@ -344,6 +343,19 @@
     text-align: center;
     box-sizing: border-box;
     field-sizing: content;
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+
+    &::placeholder {
+      color: inherit;
+      opacity: 0.65;
+    }
+
+    &:focus {
+      outline: none;
+    }
   }
 }
 

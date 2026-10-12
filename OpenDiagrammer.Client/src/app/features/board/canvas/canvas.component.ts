@@ -593,6 +593,11 @@ export class CanvasComponent {
     this.editingConnectionId.set(null);
   }
 
+  getConnectionFillColor(strokeColor: string): string {
+    const preset = this.canvasColorPresets.find((p) => p.stroke === strokeColor);
+    return preset ? preset.fill : 'var(--mat-sys-surface)';
+  }
+
   resetConnectionWaypoints(connId: string): void {
     this.updateConnection(connId, { waypoints: [] });
     this.selectConnection(connId);
