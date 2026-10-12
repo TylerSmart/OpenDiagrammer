@@ -164,9 +164,24 @@ describe('CanvasComponent', () => {
     });
     component.handlePointerDown(rightClickEvent);
     expect(component.isPanning()).toBe(true);
+
+    const rightMoveEvent = new PointerEvent('pointermove', {
+      pointerId: 2,
+      clientX: 230,
+      clientY: 240,
+    });
+    component.handlePointerMove(rightMoveEvent);
+
     component.handlePointerUp(
-      new PointerEvent('pointerup', { pointerId: 2, clientX: 200, clientY: 200 }),
+      new PointerEvent('pointerup', { pointerId: 2, button: 2, clientX: 230, clientY: 240 }),
     );
+    expect(component.isPanning()).toBe(false);
+
+    // Verify context menu is prevented right after dragging
+    const contextMenuEvent = new MouseEvent('contextmenu', { cancelable: true });
+    const spy = vi.spyOn(contextMenuEvent, 'preventDefault');
+    component.handleContextMenu(contextMenuEvent);
+    expect(spy).toHaveBeenCalled();
   });
 
   it('should handle keyboard navigation shortcuts', () => {

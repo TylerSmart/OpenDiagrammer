@@ -40,6 +40,8 @@ export class CanvasComponent {
   // Interaction tracking state
   readonly isPanning = signal<boolean>(false);
   isSpacePressed = false;
+  private hasDraggedDuringPan = false;
+  private preventContextMenuUntil = 0;
   private lastPointerPos: CanvasPoint | null = null;
   private activePointers = new Map<number, CanvasPoint>();
   private initialPinchDistance: number | null = null;
@@ -181,8 +183,8 @@ export class CanvasComponent {
 
   // Event handlers
   handleContextMenu(event: MouseEvent): void {
-    // Prevent default context menu when right-click dragging
-    if (this.isPanning()) {
+    // Prevent default context menu when panning or immediately after right-click dragging
+    if (this.isPanning() || Date.now() < this.preventContextMenuUntil) {
       event.preventDefault();
     }
   }
@@ -231,6 +233,7 @@ export class CanvasComponent {
 
     if (isMiddleClick || isRightClick || isSpaceLeftDrag) {
       this.isPanning.set(true);
+      this.hasDraggedDuringPan = false;
       this.lastPointerPos = { x: event.clientX, y: event.clientY };
       try {
         (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
@@ -267,6 +270,10 @@ export class CanvasComponent {
     const deltaX = event.clientX - this.lastPointerPos.x;
     const deltaY = event.clientY - this.lastPointerPos.y;
 
+    if (Math.abs(deltaX) > 1 || Math.abs(deltaY) > 1) {
+      this.hasDraggedDuringPan = true;
+    }
+
     this.panBy(deltaX, deltaY);
     this.lastPointerPos = { x: event.clientX, y: event.clientY };
   }
@@ -279,6 +286,10 @@ export class CanvasComponent {
     }
 
     if (this.activePointers.size === 0) {
+      if (this.hasDraggedDuringPan && event.button === 2) {
+        // Prevent context menu from firing after right-click drag pan release
+        this.preventContextMenuUntil = Date.now() + 400;
+      }
       this.isPanning.set(false);
       this.lastPointerPos = null;
     }
