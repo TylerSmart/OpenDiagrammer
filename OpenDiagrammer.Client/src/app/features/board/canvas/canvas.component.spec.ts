@@ -108,6 +108,18 @@ describe('CanvasComponent', () => {
     });
     component.handleWheel(zoomWheelEvent);
     expect(component.zoom()).toBeGreaterThan(initialZoom);
+
+    // Shift + wheel converts vertical scroll to horizontal panning
+    const curPanX = component.panX();
+    const curPanY = component.panY();
+    const shiftWheelEvent = new WheelEvent('wheel', {
+      deltaY: 50,
+      shiftKey: true,
+      cancelable: true,
+    });
+    component.handleWheel(shiftWheelEvent);
+    expect(component.panX()).toBe(curPanX - 50);
+    expect(component.panY()).toBe(curPanY);
   });
 
   it('should handle pointer drag panning with middle click, right click, or space+left click', () => {

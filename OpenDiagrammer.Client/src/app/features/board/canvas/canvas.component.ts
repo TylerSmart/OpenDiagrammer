@@ -201,6 +201,10 @@ export class CanvasComponent {
       // Zoom factor calculation
       const zoomFactor = Math.exp(-event.deltaY * 0.005);
       this.zoomTo(this.zoom() * zoomFactor, focalPoint);
+    } else if (event.shiftKey) {
+      // Shift + vertical wheel scroll converts vertical wheel movement into horizontal pan
+      const delta = event.deltaY !== 0 ? event.deltaY : event.deltaX;
+      this.panBy(-delta, 0);
     } else {
       // Pan with normal wheel / two-finger scroll
       this.panBy(-event.deltaX, -event.deltaY);
