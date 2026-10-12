@@ -110,14 +110,20 @@ describe('CanvasComponent', () => {
     expect(component.zoom()).toBeGreaterThan(initialZoom);
   });
 
-  it('should handle pointer drag panning', () => {
-    const downEvent = new PointerEvent('pointerdown', {
+  it('should handle pointer drag panning with middle click, right click, or space+left click', () => {
+    // Left-click without space should NOT pan
+    const leftClickEvent = new PointerEvent('pointerdown', {
       pointerId: 1,
-      button: 1, // middle button
+      button: 0,
       clientX: 100,
       clientY: 100,
     });
-    component.handlePointerDown(downEvent);
+    component.handlePointerDown(leftClickEvent);
+    expect(component.isPanning()).toBe(false);
+
+    // Left-click with space pressed SHOULD pan
+    component.isSpacePressed = true;
+    component.handlePointerDown(leftClickEvent);
     expect(component.isPanning()).toBe(true);
 
     const moveEvent = new PointerEvent('pointermove', {
@@ -136,6 +142,19 @@ describe('CanvasComponent', () => {
     });
     component.handlePointerUp(upEvent);
     expect(component.isPanning()).toBe(false);
+
+    // Right-click drag pans
+    const rightClickEvent = new PointerEvent('pointerdown', {
+      pointerId: 2,
+      button: 2,
+      clientX: 200,
+      clientY: 200,
+    });
+    component.handlePointerDown(rightClickEvent);
+    expect(component.isPanning()).toBe(true);
+    component.handlePointerUp(
+      new PointerEvent('pointerup', { pointerId: 2, clientX: 200, clientY: 200 }),
+    );
   });
 
   it('should handle keyboard navigation shortcuts', () => {
@@ -179,5 +198,21 @@ describe('CanvasComponent', () => {
     fixture.detectChanges();
     expect(component.isGridDots()).toBe(true);
     expect(component.isGridLines()).toBe(false);
+
+    // Test adaptive grid scaling at different zoom levels
+    // At zoom 1.0, base size is 24px (24px is within [18, 72])
+    expect(component.backgroundStyles().backgroundSize).toBe('24px 24px');
+
+    // At extreme zoom out 0.1: baseSize * 0.1 = 2.4px -> multiplier becomes 8 -> 19.2px
+    component.zoom.set(0.1);
+    const zoomedOutSize = parseFloat(component.backgroundStyles().backgroundSize || '0');
+    expect(zoomedOutSize).toBeGreaterThanOrEqual(18);
+    expect(zoomedOutSize).toBeLessThanOrEqual(72);
+
+    // At extreme zoom in 4.0: baseSize * 4.0 = 96px -> multiplier becomes 0.5 -> 48px
+    component.zoom.set(4.0);
+    const zoomedInSize = parseFloat(component.backgroundStyles().backgroundSize || '0');
+    expect(zoomedInSize).toBeGreaterThanOrEqual(18);
+    expect(zoomedInSize).toBeLessThanOrEqual(72);
   });
 });

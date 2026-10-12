@@ -13,12 +13,14 @@ import { CANVAS_CONSTANTS, CanvasPoint, CanvasTransform } from './canvas.models'
   host: {
     tabindex: '0',
     '(keydown)': 'handleKeyDown($event)',
+    '(keyup)': 'handleKeyUp($event)',
     '(wheel)': 'handleWheel($event)',
     '(pointerdown)': 'handlePointerDown($event)',
     '(pointermove)': 'handlePointerMove($event)',
     '(pointerup)': 'handlePointerUp($event)',
     '(pointercancel)': 'handlePointerUp($event)',
     '(contextmenu)': 'handleContextMenu($event)',
+    '(blur)': 'handleBlur()',
   },
 })
 export class CanvasComponent {
@@ -37,6 +39,7 @@ export class CanvasComponent {
 
   // Interaction tracking state
   readonly isPanning = signal<boolean>(false);
+  isSpacePressed = false;
   private lastPointerPos: CanvasPoint | null = null;
   private activePointers = new Map<number, CanvasPoint>();
   private initialPinchDistance: number | null = null;
@@ -53,7 +56,7 @@ export class CanvasComponent {
     return `matrix(${this.zoom()}, 0, 0, ${this.zoom()}, ${this.panX()}, ${this.panY()})`;
   });
 
-  // Background styling computed
+  // Background styling computed with dynamic adaptive grid step based on zoom level
   readonly backgroundStyles = computed(() => {
     const scale = this.zoom();
     const bgType = this.backgroundType();
@@ -61,11 +64,24 @@ export class CanvasComponent {
     const panY = this.panY();
 
     let bgSize = '';
-    if (bgType === BoardBackgroundType.GridLines) {
-      const size = CANVAS_CONSTANTS.GRID_SIZE * scale;
-      bgSize = `${size}px ${size}px`;
-    } else if (bgType === BoardBackgroundType.GridDots) {
-      const size = CANVAS_CONSTANTS.DOT_GRID_SIZE * scale;
+    if (bgType === BoardBackgroundType.GridLines || bgType === BoardBackgroundType.GridDots) {
+      const baseSize =
+        bgType === BoardBackgroundType.GridLines
+          ? CANVAS_CONSTANTS.GRID_SIZE
+          : CANVAS_CONSTANTS.DOT_GRID_SIZE;
+
+      // Adaptive step: Keep screen grid interval between 18px and 72px
+      // As zoom changes, multiply or divide baseSize by powers of 2 (or 5)
+      // screenInterval = baseSize * scale * multiplier
+      let multiplier = 1;
+      while (baseSize * scale * multiplier < 18) {
+        multiplier *= 2;
+      }
+      while (baseSize * scale * multiplier > 72) {
+        multiplier /= 2;
+      }
+
+      const size = baseSize * scale * multiplier;
       bgSize = `${size}px ${size}px`;
     }
 
@@ -203,14 +219,13 @@ export class CanvasComponent {
       return;
     }
 
-    // Pan with middle click (button 1), right click (button 2), or spacebar + left click
+    // Pan with middle click (button 1), right click (button 2), or spacebar held + left click (button 0)
+    // Left-click dragging without space is reserved for box/drag selection in diagramming
     const isMiddleClick = event.button === 1;
     const isRightClick = event.button === 2;
-    const isSpaceOrLeftDrag =
-      event.button === 0 &&
-      (event.shiftKey || (event.target as HTMLElement)?.classList.contains('canvas-viewport-area'));
+    const isSpaceLeftDrag = event.button === 0 && this.isSpacePressed;
 
-    if (isMiddleClick || isRightClick || isSpaceOrLeftDrag) {
+    if (isMiddleClick || isRightClick || isSpaceLeftDrag) {
       this.isPanning.set(true);
       this.lastPointerPos = { x: event.clientX, y: event.clientY };
       try {
@@ -266,6 +281,10 @@ export class CanvasComponent {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
+    if (event.code === 'Space' || event.key === ' ') {
+      this.isSpacePressed = true;
+    }
+
     // Zoom in with Ctrl + '+' or '='
     if ((event.ctrlKey || event.metaKey) && (event.key === '+' || event.key === '=')) {
       event.preventDefault();
@@ -302,6 +321,16 @@ export class CanvasComponent {
       event.preventDefault();
       this.panBy(-panStep, 0);
     }
+  }
+
+  handleKeyUp(event: KeyboardEvent): void {
+    if (event.code === 'Space' || event.key === ' ') {
+      this.isSpacePressed = false;
+    }
+  }
+
+  handleBlur(): void {
+    this.isSpacePressed = false;
   }
 
   private emitTransformChange(): void {

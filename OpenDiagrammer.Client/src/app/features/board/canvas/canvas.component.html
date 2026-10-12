@@ -1,4 +1,8 @@
-<div class="canvas-viewport-area" [class.is-panning]="isPanning()">
+<div
+  class="canvas-viewport-area"
+  [class.is-panning]="isPanning()"
+  [class.is-space-pressed]="isSpacePressed"
+>
   <!-- Infinite Grid/Dot background layer -->
   <div
     class="canvas-grid-layer"
