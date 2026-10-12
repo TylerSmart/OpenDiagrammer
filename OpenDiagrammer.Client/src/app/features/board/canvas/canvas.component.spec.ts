@@ -280,12 +280,13 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(2);
     expect(component.activeTool()).toBe('rectangle');
 
-    // Clicking on an existing shape with shape tool creates a new shape at click location
+    // Clicking on an existing shape with shape tool selects/moves that shape without creating duplicate
     component.handleShapePointerDown(
       new PointerEvent('pointerdown', { button: 0, clientX: 200, clientY: 150 }),
       shape,
     );
-    expect(component.shapes().length).toBe(3);
+    expect(component.shapes().length).toBe(2);
+    expect(component.isShapeSelected(shape.id)).toBe(true);
     expect(component.activeTool()).toBe('rectangle');
 
     // Returns to select tool when user explicitly chooses select

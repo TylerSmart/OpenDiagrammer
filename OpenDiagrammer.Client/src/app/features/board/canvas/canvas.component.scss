@@ -26,10 +26,6 @@
 
   &.is-creation-tool:not(.is-space-pressed):not(.is-panning) {
     cursor: crosshair;
-
-    app-canvas-shape {
-      cursor: crosshair;
-    }
   }
 }
 

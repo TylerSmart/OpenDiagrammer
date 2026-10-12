@@ -1481,12 +1481,6 @@ export class CanvasComponent {
       return;
     }
 
-    if (this.activeTool() !== 'select') {
-      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
-      this.createShape(this.activeTool() as ShapeType, worldPoint);
-      return;
-    }
-
     if (!this.isShapeSelected(shape.id)) {
       this.selectShape(shape.id, event.shiftKey);
     } else if (event.shiftKey) {
@@ -1541,7 +1535,7 @@ export class CanvasComponent {
 
   // Pointer event handlers on resize handles
   handleResizePointerDown(event: PointerEvent, handle: ResizeHandlePosition): void {
-    if (event.button !== 0 || this.activeTool() !== 'select') {
+    if (event.button !== 0) {
       return;
     }
 
@@ -1625,7 +1619,24 @@ export class CanvasComponent {
       }
 
       if (currentTool !== 'select' && currentTool !== 'connection') {
-        this.createShape(currentTool as ShapeType, worldPoint);
+        const newShape = this.createShape(currentTool as ShapeType, worldPoint);
+        this.isMovingShapes = true;
+        this.moveStartPoint = worldPoint;
+        this.shapeInitialPositions.clear();
+        this.shapeInitialPositions.set(newShape.id, { x: newShape.x, y: newShape.y });
+        this.initialMovingBounds = {
+          minX: newShape.x,
+          minY: newShape.y,
+          maxX: newShape.x + newShape.width,
+          maxY: newShape.y + newShape.height,
+          width: newShape.width,
+          height: newShape.height,
+        };
+        try {
+          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+        } catch {
+          // Ignored
+        }
         return;
       }
 
