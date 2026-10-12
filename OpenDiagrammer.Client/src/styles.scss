@@ -63,3 +63,7 @@ body {
     color: var(--mat-sys-on-surface-variant);
   }
 }
+
+.auth-card .mat-mdc-tab-body-content {
+  overflow: hidden;
+}

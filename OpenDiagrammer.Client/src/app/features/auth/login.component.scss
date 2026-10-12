@@ -61,13 +61,24 @@
   }
 }
 
+:host ::ng-deep {
+  .mat-mdc-tab-body-content {
+    overflow: hidden;
+  }
+}
+
+.tab-form {
+  padding-top: 1rem;
+}
+
 .full-width {
   width: 100%;
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .form-actions {
-  margin-top: 1rem;
+  margin-top: 0.75rem;
+  margin-bottom: 0.25rem;
 }
 
 .submit-btn {
