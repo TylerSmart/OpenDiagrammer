@@ -38,11 +38,7 @@
         [matMenuTriggerFor]="userMenu"
         aria-label="User profile and account options"
       >
-        <div class="avatar" aria-hidden="true">
-          {{ userInitial() }}
-        </div>
         <span>{{ authService.currentUser()?.username || 'User' }}</span>
-        <mat-icon>arrow_drop_down</mat-icon>
       </button>
       <mat-menu #userMenu="matMenu">
         <div class="user-menu-header">

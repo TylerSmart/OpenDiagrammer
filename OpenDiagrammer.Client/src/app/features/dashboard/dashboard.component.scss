@@ -2,7 +2,6 @@
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: var(--mat-sys-surface);
 }
 
 .top-bar {
@@ -45,19 +44,6 @@
   gap: 0.5rem;
   border-radius: 20px;
   padding: 0.25rem 0.75rem;
-}
-
-.avatar {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  background-color: var(--mat-sys-primary);
-  color: var(--mat-sys-on-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 600;
 }
 
 .user-menu-header {
@@ -154,7 +140,7 @@
   text-align: center;
   padding: 5rem 1rem;
 
-  mat-icon {
+  & > mat-icon {
     font-size: 4rem;
     width: 4rem;
     height: 4rem;

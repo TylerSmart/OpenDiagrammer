@@ -96,11 +96,6 @@ export class DashboardComponent implements OnInit {
     );
   });
 
-  protected readonly userInitial = computed(() => {
-    const user = this.authService.currentUser();
-    return user?.username ? user.username.charAt(0).toUpperCase() : 'U';
-  });
-
   protected readonly themeIcon = computed(() => THEME_ICONS[this.themeService.mode()]);
   protected readonly themeLabel = computed(() => THEME_LABELS[this.themeService.mode()]);
 
