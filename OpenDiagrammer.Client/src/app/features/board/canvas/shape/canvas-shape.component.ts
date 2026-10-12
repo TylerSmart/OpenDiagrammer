@@ -1,4 +1,4 @@
-import { Component, computed, input, output } from '@angular/core';
+import { Component, computed, input, output, signal } from '@angular/core';
 import { AnchorPosition } from '../connection.models';
 import { CanvasShape } from '../shape.models';
 
@@ -11,6 +11,8 @@ export class CanvasShapeComponent {
   readonly shape = input.required<CanvasShape>();
   readonly isSelected = input<boolean>(false);
   readonly showAnchors = input<boolean>(false);
+
+  readonly isHovered = signal<boolean>(false);
 
   readonly anchorPointerDown = output<{
     event: PointerEvent;

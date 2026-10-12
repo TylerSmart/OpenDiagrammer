@@ -85,11 +85,7 @@
       <app-canvas-shape
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
-        [showAnchors]="
-          activeTool() === 'connection' ||
-          isShapeSelected(shape.id) ||
-          inProgressConnection() !== null
-        "
+        [showAnchors]="activeTool() === 'connection' || inProgressConnection() !== null"
         (pointerdown)="handleShapePointerDown($event, shape)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"

@@ -351,6 +351,10 @@ export class CanvasComponent {
   }
 
   setActiveTool(tool: ActiveTool): void {
+    if (this.inProgressConnection()) {
+      this.inProgressConnection.set(null);
+      this.connectionStartScreenPos = null;
+    }
     this.activeTool.set(tool);
   }
 
@@ -469,6 +473,8 @@ export class CanvasComponent {
     this.selectConnection(connId, event.shiftKey);
   }
 
+  private connectionStartScreenPos: CanvasPoint | null = null;
+
   handleAnchorPointerDown(payload: {
     event: PointerEvent;
     shape: CanvasShape;
@@ -480,9 +486,39 @@ export class CanvasComponent {
 
     payload.event.stopPropagation();
 
+    const inProg = this.inProgressConnection();
+
+    // If a connection is already in progress (e.g. from a prior click), complete it now!
+    if (inProg) {
+      if (inProg.sourceShapeId !== payload.shape.id) {
+        this.createConnection(
+          inProg.sourceShapeId,
+          inProg.sourceAnchor,
+          payload.shape.id,
+          payload.anchor,
+        );
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+        this.activeTool.set('select');
+        return;
+      } else {
+        // Clicked same shape anchor - update source anchor
+        const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
+        const path = computeConnectionPath(startPoint, startPoint, 'orthogonal', payload.anchor);
+        this.inProgressConnection.set({
+          sourceShapeId: payload.shape.id,
+          sourceAnchor: payload.anchor,
+          currentPoint: startPoint,
+          path,
+        });
+        return;
+      }
+    }
+
     const startPoint = getShapeAnchorPoint(payload.shape, payload.anchor);
     const initialPath = computeConnectionPath(startPoint, startPoint, 'orthogonal', payload.anchor);
 
+    this.connectionStartScreenPos = { x: payload.event.clientX, y: payload.event.clientY };
     this.inProgressConnection.set({
       sourceShapeId: payload.shape.id,
       sourceAnchor: payload.anchor,
@@ -501,6 +537,36 @@ export class CanvasComponent {
     this.hoveredAnchor = payload;
   }
 
+  /**
+   * Finds the nearest anchor point across other shapes within snapping distance.
+   */
+  private findNearestAnchor(
+    worldPoint: CanvasPoint,
+    sourceShapeId: string,
+    snapThreshold = 30,
+  ): { shape: CanvasShape; anchor: AnchorPosition; point: CanvasPoint } | null {
+    const anchors: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
+    let nearest: { shape: CanvasShape; anchor: AnchorPosition; point: CanvasPoint } | null = null;
+    let minDistance = snapThreshold;
+
+    for (const shape of this.shapes()) {
+      if (shape.id === sourceShapeId) {
+        continue;
+      }
+
+      for (const anchor of anchors) {
+        const pt = getShapeAnchorPoint(shape, anchor);
+        const dist = Math.hypot(pt.x - worldPoint.x, pt.y - worldPoint.y);
+        if (dist < minDistance) {
+          minDistance = dist;
+          nearest = { shape, anchor, point: pt };
+        }
+      }
+    }
+
+    return nearest;
+  }
+
   // Pointer event handlers on shapes
   handleShapePointerDown(event: PointerEvent, shape: CanvasShape): void {
     if (event.button !== 0 || this.isSpacePressed) {
@@ -509,9 +575,39 @@ export class CanvasComponent {
 
     event.stopPropagation();
 
+    const inProg = this.inProgressConnection();
+
+    if (inProg) {
+      // Connect to this target shape at its nearest anchor to the click
+      if (inProg.sourceShapeId !== shape.id) {
+        const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+        const nearest = this.findNearestAnchor(worldPoint, inProg.sourceShapeId, Infinity);
+        const targetAnchor: AnchorPosition =
+          nearest?.shape.id === shape.id ? nearest.anchor : 'left';
+
+        this.createConnection(inProg.sourceShapeId, inProg.sourceAnchor, shape.id, targetAnchor);
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+        this.activeTool.set('select');
+        return;
+      }
+    }
+
     if (this.activeTool() === 'connection') {
-      // Start connection from center or nearest anchor on click
-      this.handleAnchorPointerDown({ event, shape, anchor: 'right' });
+      // Start connection from nearest anchor to where the user clicked on the shape
+      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      const anchors: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
+      let bestAnchor: AnchorPosition = 'right';
+      let bestDist = Infinity;
+      for (const a of anchors) {
+        const pt = getShapeAnchorPoint(shape, a);
+        const d = Math.hypot(pt.x - worldPoint.x, pt.y - worldPoint.y);
+        if (d < bestDist) {
+          bestDist = d;
+          bestAnchor = a;
+        }
+      }
+      this.handleAnchorPointerDown({ event, shape, anchor: bestAnchor });
       return;
     }
 
@@ -610,6 +706,22 @@ export class CanvasComponent {
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
       const currentTool = this.activeTool();
 
+      // If a connection was in-progress and user clicked on empty canvas:
+      const inProg = this.inProgressConnection();
+      if (inProg) {
+        this.createConnection(
+          inProg.sourceShapeId,
+          inProg.sourceAnchor,
+          undefined,
+          undefined,
+          worldPoint,
+        );
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+        this.activeTool.set('select');
+        return;
+      }
+
       if (currentTool !== 'select' && currentTool !== 'connection') {
         this.createShape(currentTool as ShapeType, worldPoint);
         return;
@@ -682,11 +794,22 @@ export class CanvasComponent {
       if (sourceShape) {
         const startPoint = getShapeAnchorPoint(sourceShape, inProg.sourceAnchor);
         let endPoint = currentWorld;
+        let targetShapeId: string | undefined;
         let targetAnchor: AnchorPosition | undefined;
 
+        // 1. Try hoveredAnchor if available
         if (this.hoveredAnchor && this.hoveredAnchor.shape.id !== inProg.sourceShapeId) {
           endPoint = getShapeAnchorPoint(this.hoveredAnchor.shape, this.hoveredAnchor.anchor);
+          targetShapeId = this.hoveredAnchor.shape.id;
           targetAnchor = this.hoveredAnchor.anchor;
+        } else {
+          // 2. Proximity geometric snapping (within 24px)
+          const snapped = this.findNearestAnchor(currentWorld, inProg.sourceShapeId, 24);
+          if (snapped) {
+            endPoint = snapped.point;
+            targetShapeId = snapped.shape.id;
+            targetAnchor = snapped.anchor;
+          }
         }
 
         const path = computeConnectionPath(
@@ -700,7 +823,7 @@ export class CanvasComponent {
         this.inProgressConnection.set({
           ...inProg,
           currentPoint: endPoint,
-          targetShapeId: this.hoveredAnchor?.shape.id,
+          targetShapeId,
           targetAnchor,
           path,
         });
@@ -777,26 +900,39 @@ export class CanvasComponent {
     // Finish in-progress connection
     const inProg = this.inProgressConnection();
     if (inProg) {
-      const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
-      if (inProg.targetShapeId && inProg.targetAnchor) {
-        this.createConnection(
-          inProg.sourceShapeId,
-          inProg.sourceAnchor,
-          inProg.targetShapeId,
-          inProg.targetAnchor,
-        );
-      } else {
-        // Connect to empty world point
-        this.createConnection(
-          inProg.sourceShapeId,
-          inProg.sourceAnchor,
-          undefined,
-          undefined,
-          currentWorld,
-        );
+      const dragDistance = this.connectionStartScreenPos
+        ? Math.hypot(
+            event.clientX - this.connectionStartScreenPos.x,
+            event.clientY - this.connectionStartScreenPos.y,
+          )
+        : 0;
+
+      // If user dragged (> 5px), finalize the connection on pointer up
+      if (dragDistance > 5) {
+        const currentWorld = this.screenToWorld({ x: event.clientX, y: event.clientY });
+        if (inProg.targetShapeId && inProg.targetAnchor) {
+          this.createConnection(
+            inProg.sourceShapeId,
+            inProg.sourceAnchor,
+            inProg.targetShapeId,
+            inProg.targetAnchor,
+          );
+        } else {
+          // Connect to empty world point
+          this.createConnection(
+            inProg.sourceShapeId,
+            inProg.sourceAnchor,
+            undefined,
+            undefined,
+            currentWorld,
+          );
+        }
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+        this.activeTool.set('select');
       }
-      this.inProgressConnection.set(null);
-      this.activeTool.set('select');
+      // If dragDistance <= 5px, it was a click to start! Keep inProgressConnection active
+      // so user can click a target anchor or shape to complete the connection.
     }
 
     if (this.isMovingShapes) {
@@ -925,6 +1061,16 @@ export class CanvasComponent {
   handleKeyDown(event: KeyboardEvent): void {
     if (event.code === 'Space' || event.key === ' ') {
       this.isSpacePressed = true;
+    }
+
+    if (event.key === 'Escape') {
+      if (this.inProgressConnection()) {
+        this.inProgressConnection.set(null);
+        this.connectionStartScreenPos = null;
+      }
+      this.setActiveTool('select');
+      this.clearSelection();
+      return;
     }
 
     if (!event.ctrlKey && !event.metaKey && !event.altKey) {

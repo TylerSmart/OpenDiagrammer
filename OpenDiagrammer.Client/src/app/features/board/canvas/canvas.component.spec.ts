@@ -489,4 +489,99 @@ describe('CanvasComponent', () => {
     expect(newConn.targetShapeId).toBe(s2.id);
     expect(newConn.targetAnchor).toBe('left');
   });
+
+  it('should create connection via two consecutive clicks (click-to-connect)', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+
+    component.setActiveTool('connection');
+
+    // Click 1: Click s1 right anchor (without dragging)
+    const anchor1Event = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: s1.x + s1.width,
+      clientY: s1.y + s1.height / 2,
+    });
+    component.handleAnchorPointerDown({
+      event: anchor1Event,
+      shape: s1,
+      anchor: 'right',
+    });
+
+    const up1Event = new PointerEvent('pointerup', {
+      button: 0,
+      clientX: s1.x + s1.width,
+      clientY: s1.y + s1.height / 2,
+    });
+    component.handlePointerUp(up1Event);
+
+    // Connection remains in progress waiting for next target!
+    expect(component.inProgressConnection()).not.toBeNull();
+    expect(component.inProgressConnection()?.sourceShapeId).toBe(s1.id);
+
+    // Click 2: Click s2 left anchor
+    const anchor2Event = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: s2.x,
+      clientY: s2.y + s2.height / 2,
+    });
+    component.handleAnchorPointerDown({
+      event: anchor2Event,
+      shape: s2,
+      anchor: 'left',
+    });
+
+    expect(component.inProgressConnection()).toBeNull();
+    expect(component.connections().length).toBe(1);
+    expect(component.activeTool()).toBe('select');
+  });
+
+  it('should magnetically snap to nearest target anchor during drag', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+
+    const anchorEvent = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: s1.x + s1.width,
+      clientY: s1.y + s1.height / 2,
+    });
+    component.handleAnchorPointerDown({
+      event: anchorEvent,
+      shape: s1,
+      anchor: 'right',
+    });
+
+    const s2LeftAnchor = { x: s2.x, y: s2.y + s2.height / 2 };
+    const nearScreenPoint = component.worldToScreen({
+      x: s2LeftAnchor.x - 10,
+      y: s2LeftAnchor.y,
+    });
+
+    const nearEvent = new PointerEvent('pointermove', {
+      clientX: nearScreenPoint.x,
+      clientY: nearScreenPoint.y,
+    });
+    component.handlePointerMove(nearEvent);
+
+    const inProg = component.inProgressConnection();
+    expect(inProg).not.toBeNull();
+    expect(inProg?.targetShapeId).toBe(s2.id);
+    expect(inProg?.targetAnchor).toBe('left');
+  });
+
+  it('should cancel in-progress connection on Escape key', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.setActiveTool('connection');
+    component.handleAnchorPointerDown({
+      event: new PointerEvent('pointerdown', { button: 0 }),
+      shape: s1,
+      anchor: 'top',
+    });
+
+    expect(component.inProgressConnection()).not.toBeNull();
+
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+    expect(component.inProgressConnection()).toBeNull();
+    expect(component.activeTool()).toBe('select');
+  });
 });

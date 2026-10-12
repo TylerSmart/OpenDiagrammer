@@ -5,6 +5,8 @@
   [style.width]="shapeStyles().width"
   [style.height]="shapeStyles().height"
   [style.z-index]="shapeStyles().zIndex"
+  (pointerenter)="isHovered.set(true)"
+  (pointerleave)="isHovered.set(false)"
 >
   <svg class="shape-svg" [attr.viewBox]="'0 0 ' + shape().width + ' ' + shape().height">
     @switch (shape().type) {
@@ -60,8 +62,8 @@
     </div>
   }
 
-  <!-- Connection Anchor Points -->
-  @if (showAnchors() || isSelected()) {
+  <!-- Connection Anchor Points (suppressed if shape is selected so resize handles take priority) -->
+  @if (!isSelected() && (showAnchors() || isHovered())) {
     @for (anchor of anchors; track anchor) {
       <div
         class="shape-anchor anchor-{{ anchor }}"
