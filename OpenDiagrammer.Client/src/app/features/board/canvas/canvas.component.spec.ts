@@ -696,4 +696,40 @@ describe('CanvasComponent', () => {
     expect(updated.targetShapeId).toBe(s3.id);
     expect(updated.targetAnchor).toBe('top');
   });
+
+  it('should route orthogonal connections with outward clearance when sharing bottom-to-bottom anchors', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 400, y: 100 });
+    const conn = component.createConnection(s1.id, 'bottom', s2.id, 'bottom');
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(rendered).toBeDefined();
+
+    // Shape center is y = 100, height = 80 -> top y = 60, bottom y = 140.
+    // Clearance stub steps down below both shapes (140 + 20 = 160)
+    expect(rendered!.points.length).toBe(4);
+    expect(rendered!.points[0].y).toBe(140);
+    expect(rendered!.points[1].y).toBe(160);
+    expect(rendered!.points[2].y).toBe(160);
+    expect(rendered!.points[3].y).toBe(140);
+    expect(rendered!.path).toContain('L 100 160 L 400 160');
+  });
+
+  it('should smoothly interpolate curved connections through multiple waypoints using cubic Bezier spline', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('rectangle', { x: 500, y: 100 });
+    const conn = component.createConnection(s1.id, 'right', s2.id, 'left');
+
+    component.updateConnection(conn.id, {
+      routing: 'curved',
+      waypoints: [{ x: 300, y: 250 }],
+    });
+
+    const rendered = component.renderedConnections().find((c) => c.id === conn.id);
+    expect(rendered).toBeDefined();
+    expect(rendered!.routing).toBe('curved');
+    expect(rendered!.waypoints.length).toBe(1);
+    // Path contains cubic Bezier curve commands (C)
+    expect(rendered!.path).toContain('C');
+  });
 });

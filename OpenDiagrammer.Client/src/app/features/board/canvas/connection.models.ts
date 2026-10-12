@@ -87,7 +87,7 @@ export function computeConnectionPath(
   end: CanvasPoint,
   routing: ConnectionRouting,
   sourceAnchor?: AnchorPosition,
-  _targetAnchor?: AnchorPosition,
+  targetAnchor?: AnchorPosition,
   waypoints?: CanvasPoint[],
 ): { path: string; midpoint: CanvasPoint; points: CanvasPoint[] } {
   const pts = [start, ...(waypoints || []), end];
@@ -105,11 +105,32 @@ export function computeConnectionPath(
 
   if (routing === 'curved') {
     if (pts.length === 2) {
-      const dx = end.x - start.x;
-      const cx1 = start.x + dx * 0.5;
-      const cy1 = start.y;
-      const cx2 = start.x + dx * 0.5;
-      const cy2 = end.y;
+      // Direct curved line between start and end
+      let cx1: number;
+      let cy1: number;
+      let cx2: number;
+      let cy2: number;
+
+      if (sourceAnchor === 'left' || sourceAnchor === 'right') {
+        const dx = (end.x - start.x) / 2;
+        cx1 = start.x + dx;
+        cy1 = start.y;
+        cx2 = end.x - dx;
+        cy2 = end.y;
+      } else if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
+        const dy = (end.y - start.y) / 2;
+        cx1 = start.x;
+        cy1 = start.y + dy;
+        cx2 = end.x;
+        cy2 = end.y - dy;
+      } else {
+        const dx = end.x - start.x;
+        cx1 = start.x + dx * 0.5;
+        cy1 = start.y;
+        cx2 = start.x + dx * 0.5;
+        cy2 = end.y;
+      }
+
       const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
       return {
         path: `M ${start.x} ${start.y} C ${cx1} ${cy1}, ${cx2} ${cy2}, ${end.x} ${end.y}`,
@@ -117,14 +138,21 @@ export function computeConnectionPath(
         points: pts,
       };
     } else {
-      // Curved spline through waypoints using quadratic/cubic segments
+      // Smooth Catmull-Rom to Cubic Bézier spline passing exactly through all waypoints
       let path = `M ${pts[0].x} ${pts[0].y}`;
-      for (let i = 0; i < pts.length - 1; i++) {
-        const p0 = pts[i];
-        const p1 = pts[i + 1];
-        const mx = (p0.x + p1.x) / 2;
-        const my = (p0.y + p1.y) / 2;
-        path += ` Q ${p0.x} ${p0.y}, ${mx} ${my} T ${p1.x} ${p1.y}`;
+      const n = pts.length;
+      for (let i = 0; i < n - 1; i++) {
+        const p0 = i > 0 ? pts[i - 1] : pts[i];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = i + 2 < n ? pts[i + 2] : p2;
+
+        const cp1x = p1.x + (p2.x - p0.x) / 6;
+        const cp1y = p1.y + (p2.y - p0.y) / 6;
+        const cp2x = p2.x - (p3.x - p1.x) / 6;
+        const cp2y = p2.y - (p3.y - p1.y) / 6;
+
+        path += ` C ${cp1x.toFixed(2)} ${cp1y.toFixed(2)}, ${cp2x.toFixed(2)} ${cp2y.toFixed(2)}, ${p2.x} ${p2.y}`;
       }
       const midIdx = Math.floor(pts.length / 2);
       return { path, midpoint: pts[midIdx], points: pts };
@@ -146,22 +174,92 @@ export function computeConnectionPath(
     return { path, midpoint: allStepPoints[midIdx], points: allStepPoints };
   }
 
-  const midX = (start.x + end.x) / 2;
-  const midY = (start.y + end.y) / 2;
+  // Anchor normal vectors & clearance stub distance (20px)
+  const STUB = 20;
 
-  let path: string;
-  let mid: CanvasPoint;
+  function getAnchorOffset(point: CanvasPoint, anchor?: AnchorPosition): CanvasPoint {
+    if (!anchor) return { ...point };
+    switch (anchor) {
+      case 'top':
+        return { x: point.x, y: point.y - STUB };
+      case 'bottom':
+        return { x: point.x, y: point.y + STUB };
+      case 'left':
+        return { x: point.x - STUB, y: point.y };
+      case 'right':
+        return { x: point.x + STUB, y: point.y };
+    }
+  }
+
+  const pStartStub = getAnchorOffset(start, sourceAnchor);
+  const pEndStub = getAnchorOffset(end, targetAnchor);
+
+  // When both anchors face the same direction, step around them
+  if (sourceAnchor && targetAnchor && sourceAnchor === targetAnchor) {
+    let commonCoord: number;
+    let points: CanvasPoint[];
+
+    if (sourceAnchor === 'bottom') {
+      commonCoord = Math.max(start.y, end.y) + STUB;
+      points = [start, { x: start.x, y: commonCoord }, { x: end.x, y: commonCoord }, end];
+    } else if (sourceAnchor === 'top') {
+      commonCoord = Math.min(start.y, end.y) - STUB;
+      points = [start, { x: start.x, y: commonCoord }, { x: end.x, y: commonCoord }, end];
+    } else if (sourceAnchor === 'left') {
+      commonCoord = Math.min(start.x, end.x) - STUB;
+      points = [start, { x: commonCoord, y: start.y }, { x: commonCoord, y: end.y }, end];
+    } else {
+      // right
+      commonCoord = Math.max(start.x, end.x) + STUB;
+      points = [start, { x: commonCoord, y: start.y }, { x: commonCoord, y: end.y }, end];
+    }
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 1; i < points.length; i++) {
+      path += ` L ${points[i].x} ${points[i].y}`;
+    }
+    const mid = {
+      x: (points[1].x + points[2].x) / 2,
+      y: (points[1].y + points[2].y) / 2,
+    };
+    return { path, midpoint: mid, points };
+  }
+
+  // Opposite anchors facing each other or general orthogonal routing
   let points: CanvasPoint[];
-
   if (sourceAnchor === 'top' || sourceAnchor === 'bottom') {
-    path = `M ${start.x} ${start.y} L ${start.x} ${midY} L ${end.x} ${midY} L ${end.x} ${end.y}`;
-    mid = { x: (start.x + end.x) / 2, y: midY };
-    points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
+    if (targetAnchor === 'top' || targetAnchor === 'bottom') {
+      // Both vertical
+      const midY = (pStartStub.y + pEndStub.y) / 2;
+      points = [start, { x: start.x, y: midY }, { x: end.x, y: midY }, end];
+    } else {
+      // Source is vertical, target is horizontal or unassigned
+      points = [start, { x: start.x, y: end.y }, end];
+    }
+  } else if (sourceAnchor === 'left' || sourceAnchor === 'right') {
+    if (targetAnchor === 'left' || targetAnchor === 'right') {
+      // Both horizontal
+      const midX = (pStartStub.x + pEndStub.x) / 2;
+      points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
+    } else {
+      // Source is horizontal, target is vertical or unassigned
+      points = [start, { x: end.x, y: start.y }, end];
+    }
   } else {
-    path = `M ${start.x} ${start.y} L ${midX} ${start.y} L ${midX} ${end.y} L ${end.x} ${end.y}`;
-    mid = { x: midX, y: (start.y + end.y) / 2 };
+    // Default midpoint step
+    const midX = (start.x + end.x) / 2;
     points = [start, { x: midX, y: start.y }, { x: midX, y: end.y }, end];
   }
+
+  let path = `M ${points[0].x} ${points[0].y}`;
+  for (let i = 1; i < points.length; i++) {
+    path += ` L ${points[i].x} ${points[i].y}`;
+  }
+  const midIdx = Math.floor(points.length / 2);
+  const mid =
+    points.length >= 4
+      ? { x: (points[1].x + points[2].x) / 2, y: (points[1].y + points[2].y) / 2 }
+      : points[midIdx];
 
   return { path, midpoint: mid, points };
 }
