@@ -67,6 +67,13 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)
 - [x] Implement Frames and Pages
 
+## Phase 6.1: Collaboration Fixes, Rich Text Refinements & Structured Nodes
+*Fix real-time synchronization edge cases, inline text editing ergonomics, and multi-section dynamic node structures.*
+- [x] Fix real-time shape synchronization desync edge cases (prevent stale Yjs map states and external update suppression)
+- [x] Enable double-click on shapes to directly initiate inline text editing
+- [x] Support rich text formatting (bold, italic, underline, font size) on text selections within shapes
+- [x] Implement multi-section structured nodes (e.g., UML Class/Interface) with dynamic height expansion and overflow handling
+
 ## Phase 7: Polish, Export, & Revision History
 *Finalize features and prepare for production.*
 *Note: Undo/Redo and Revision History integrate with Phase 5's CRDT undo manager and document snapshot/update stream.*

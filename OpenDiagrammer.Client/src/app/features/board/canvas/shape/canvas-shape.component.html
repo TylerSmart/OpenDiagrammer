@@ -148,22 +148,6 @@
           [attr.stroke]="shape().strokeColor"
           [attr.stroke-width]="shape().strokeWidth"
         />
-        <line
-          x1="1"
-          [attr.y1]="umlClassDivider1()"
-          [attr.x2]="shape().width - 1"
-          [attr.y2]="umlClassDivider1()"
-          [attr.stroke]="shape().strokeColor"
-          [attr.stroke-width]="shape().strokeWidth"
-        />
-        <line
-          x1="1"
-          [attr.y1]="umlClassDivider2()"
-          [attr.x2]="shape().width - 1"
-          [attr.y2]="umlClassDivider2()"
-          [attr.stroke]="shape().strokeColor"
-          [attr.stroke-width]="shape().strokeWidth"
-        />
       }
       @case ('uml-interface') {
         <rect
@@ -172,14 +156,6 @@
           [attr.width]="shape().width - 2"
           [attr.height]="shape().height - 2"
           [attr.fill]="shape().fillColor"
-          [attr.stroke]="shape().strokeColor"
-          [attr.stroke-width]="shape().strokeWidth"
-        />
-        <line
-          x1="1"
-          [attr.y1]="umlInterfaceDivider()"
-          [attr.x2]="shape().width - 1"
-          [attr.y2]="umlInterfaceDivider()"
           [attr.stroke]="shape().strokeColor"
           [attr.stroke-width]="shape().strokeWidth"
         />
@@ -342,6 +318,31 @@
     <div class="shape-masked-overlay" aria-label="Hidden note">
       <span class="masked-lock-icon">🔒</span>
       <span class="masked-dots">••••••</span>
+    </div>
+  } @else if (isUmlClass() && !isEditing()) {
+    <div
+      class="uml-compartments-container"
+      [style.color]="textColor()"
+      [style.--shape-stroke]="shape().strokeColor"
+    >
+      <div class="uml-compartment uml-header" [innerHTML]="umlClassSections().classNameHtml"></div>
+      <div
+        class="uml-compartment uml-attributes"
+        [innerHTML]="umlClassSections().attributesHtml"
+      ></div>
+      <div class="uml-compartment uml-methods" [innerHTML]="umlClassSections().methodsHtml"></div>
+    </div>
+  } @else if (isUmlInterface() && !isEditing()) {
+    <div
+      class="uml-compartments-container"
+      [style.color]="textColor()"
+      [style.--shape-stroke]="shape().strokeColor"
+    >
+      <div class="uml-compartment uml-header" [innerHTML]="umlInterfaceSections().nameHtml"></div>
+      <div
+        class="uml-compartment uml-methods"
+        [innerHTML]="umlInterfaceSections().methodsHtml"
+      ></div>
     </div>
   } @else if (!isFrame() && shape().text && !isEditing()) {
     <div

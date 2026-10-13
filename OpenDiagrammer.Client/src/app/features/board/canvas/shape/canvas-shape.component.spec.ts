@@ -128,10 +128,20 @@ describe('CanvasShapeComponent', () => {
     fixture.componentRef.setInput('shape', {
       ...mockShape,
       type: 'uml-class',
+      text: 'OrderService\n---\n+ id: string\n---\n+ checkout()',
     });
     fixture.detectChanges();
-    const lines = fixture.nativeElement.querySelectorAll('line');
-    expect(lines.length).toBe(2);
+    const compartments = fixture.nativeElement.querySelectorAll('.uml-compartment');
+    expect(compartments.length).toBe(3);
+    expect(fixture.nativeElement.querySelector('.uml-header')?.textContent).toContain(
+      'OrderService',
+    );
+    expect(fixture.nativeElement.querySelector('.uml-attributes')?.textContent).toContain(
+      '+ id: string',
+    );
+    expect(fixture.nativeElement.querySelector('.uml-methods')?.textContent).toContain(
+      '+ checkout()',
+    );
 
     // UML actor
     fixture.componentRef.setInput('shape', {

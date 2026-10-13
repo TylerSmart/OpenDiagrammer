@@ -1,7 +1,13 @@
 import { Component, computed, inject, input, output, signal } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { AnchorPosition } from '../connection.models';
-import { CanvasShape, computeFittingFontSize, sanitizeRichText } from '../shape.models';
+import {
+  CanvasShape,
+  computeFittingFontSize,
+  parseUmlClassText,
+  parseUmlInterfaceText,
+  sanitizeRichText,
+} from '../shape.models';
 
 @Component({
   selector: 'app-canvas-shape',
@@ -119,6 +125,28 @@ export class CanvasShapeComponent {
     }
     const sanitized = sanitizeRichText(text);
     return this.sanitizer.bypassSecurityTrustHtml(sanitized);
+  });
+
+  readonly isUmlClass = computed(() => this.shape().type === 'uml-class');
+  readonly isUmlInterface = computed(() => this.shape().type === 'uml-interface');
+
+  readonly umlClassSections = computed(() => {
+    const s = this.shape();
+    const parsed = parseUmlClassText(s.text);
+    return {
+      classNameHtml: this.sanitizer.bypassSecurityTrustHtml(sanitizeRichText(parsed.className)),
+      attributesHtml: this.sanitizer.bypassSecurityTrustHtml(sanitizeRichText(parsed.attributes)),
+      methodsHtml: this.sanitizer.bypassSecurityTrustHtml(sanitizeRichText(parsed.methods)),
+    };
+  });
+
+  readonly umlInterfaceSections = computed(() => {
+    const s = this.shape();
+    const parsed = parseUmlInterfaceText(s.text);
+    return {
+      nameHtml: this.sanitizer.bypassSecurityTrustHtml(sanitizeRichText(parsed.interfaceName)),
+      methodsHtml: this.sanitizer.bypassSecurityTrustHtml(sanitizeRichText(parsed.methods)),
+    };
   });
 
   handleDoubleClick(event: MouseEvent): void {

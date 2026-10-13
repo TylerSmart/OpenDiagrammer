@@ -1,7 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CanvasComponent } from './canvas.component';
-import { CANVAS_CONSTANTS } from './canvas.models';
+import { CANVAS_CONSTANTS, CanvasDiagramData } from './canvas.models';
 import { getShapeAnchorPoint } from './connection.models';
 import { FRAME_PRESETS } from './shape.models';
 
@@ -3094,6 +3094,125 @@ describe('CanvasComponent', () => {
 
       component.toggleFramesNavigator();
       expect(openCalled).toBe(true);
+    });
+  });
+
+  describe('Collaboration, Inline Text Editing & Structured Shapes', () => {
+    it('should initiate inline text editing when double-clicking over an existing shape', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      fixture.detectChanges();
+
+      const screenPt = component.worldToScreen({ x: 200, y: 150 });
+      const dblClickEvent = new MouseEvent('dblclick', {
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+
+      component.handleDoubleClick(dblClickEvent);
+      expect(component.editingShapeId()).toBe(shape.id);
+      expect(component.selectedShapeIds().has(shape.id)).toBe(true);
+    });
+
+    it('should adjust shape font size and clamp within bounds', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      expect(shape.fontSize ?? 14).toBe(14);
+
+      component.adjustShapeFontSize(shape.id, 2);
+      let updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(16);
+
+      component.adjustShapeFontSize(shape.id, -4);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(12);
+
+      component.setShapeFontSize(shape.id, 80);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(72);
+
+      component.setShapeFontSize(shape.id, 4);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(8);
+    });
+
+    it('should dynamically expand UML class height when attributes and methods are added', () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      const initialHeight = umlShape.height;
+
+      const headerEl = document.createElement('div');
+      headerEl.innerHTML = 'CustomerService';
+
+      const attrEl = document.createElement('div');
+      attrEl.innerHTML =
+        '+ id: string<br>+ name: string<br>+ email: string<br>+ active: boolean<br>+ role: string';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML =
+        '+ getCustomer(): Customer<br>+ updateEmail(email: string): void<br>+ deactivate(): void<br>+ getRole(): string';
+
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+
+      const updated = component.shapes().find((s) => s.id === umlShape.id);
+      expect(updated).toBeDefined();
+      expect(updated!.height).toBeGreaterThan(initialHeight);
+      expect(updated!.text).toContain('CustomerService');
+      expect(updated!.text).toContain('+ email: string');
+      expect(updated!.text).toContain('+ deactivate(): void');
+    });
+
+    it('should dynamically expand UML interface height when methods are added', () => {
+      const ifaceShape = component.createShape('uml-interface', { x: 100, y: 100 });
+      const initialHeight = ifaceShape.height;
+
+      const headerEl = document.createElement('div');
+      headerEl.innerHTML = '«interface»<br>IRepository';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML =
+        '+ findById(id: string): T<br>+ findAll(): T[]<br>+ save(entity: T): void<br>+ delete(id: string): void';
+
+      component.handleUmlInterfaceSectionInput(ifaceShape.id, 'methods', headerEl, methodEl);
+
+      const updated = component.shapes().find((s) => s.id === ifaceShape.id);
+      expect(updated).toBeDefined();
+      expect(updated!.height).toBeGreaterThan(initialHeight);
+      expect(updated!.text).toContain('IRepository');
+      expect(updated!.text).toContain('+ delete(id: string): void');
+    });
+
+    it('should preserve locally dragged shape when external diagram data arrives', () => {
+      const s1 = component.createShape('rectangle', { x: 50, y: 50 });
+      const s2 = component.createShape('rectangle', { x: 200, y: 200 });
+
+      // Simulate local drag of s1
+      (component as unknown as { isMovingShapes: boolean }).isMovingShapes = true;
+      (
+        component as unknown as { shapeInitialPositions: Map<string, { x: number; y: number }> }
+      ).shapeInitialPositions.set(s1.id, { x: 50, y: 50 });
+
+      // Move s1 locally to (90, 90)
+      component.updateShape(s1.id, { x: 90, y: 90 });
+
+      // External diagram data arrives moving s2 to (300, 300) while remote still has s1 at (50, 50)
+      const remoteData: CanvasDiagramData = {
+        shapes: [
+          { ...s1, x: 50, y: 50 },
+          { ...s2, x: 300, y: 300 },
+        ],
+        connections: [],
+      };
+
+      component.applyExternalDiagramData(remoteData);
+
+      const localS1 = component.shapes().find((s) => s.id === s1.id);
+      const localS2 = component.shapes().find((s) => s.id === s2.id);
+
+      // Local dragged s1 remains at (90, 90)
+      expect(localS1?.x).toBe(90);
+      expect(localS1?.y).toBe(90);
+      // Non-dragged s2 cleanly receives external update at (300, 300)
+      expect(localS2?.x).toBe(300);
+      expect(localS2?.y).toBe(300);
     });
   });
 });

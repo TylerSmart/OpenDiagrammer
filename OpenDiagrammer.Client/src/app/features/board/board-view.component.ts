@@ -6,6 +6,7 @@ import {
   effect,
   inject,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -220,6 +221,16 @@ export class BoardViewComponent implements OnInit {
       }
     });
 
+    effect(() => {
+      const canvas = this.canvasComponent();
+      const crdtData = this.crdtService.diagramData();
+      if (canvas && crdtData.shapes.length > 0 && canvas.shapes().length === 0) {
+        untracked(() => {
+          canvas.applyExternalDiagramData(crdtData);
+        });
+      }
+    });
+
     this.timerInterval = setInterval(() => {
       this.tickThinkModeTimer();
     }, 1000);
@@ -260,6 +271,11 @@ export class BoardViewComponent implements OnInit {
     const syncInit = await this.realtimeService.startConnection(boardId);
     if (syncInit?.crdtState) {
       this.crdtService.applyRemoteUpdate(base64ToUint8Array(syncInit.crdtState));
+      const latest = this.crdtService.getDiagramData();
+      const canvas = this.canvasComponent();
+      if (canvas && latest.shapes.length > 0) {
+        canvas.applyExternalDiagramData(latest);
+      }
     }
   }
 

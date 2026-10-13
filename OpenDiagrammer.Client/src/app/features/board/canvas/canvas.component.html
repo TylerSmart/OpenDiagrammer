@@ -390,6 +390,7 @@
             mat-icon-button
             class="tool-btn small"
             [class.active]="selShape.isBold"
+            (pointerdown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'bold')"
             matTooltip="Bold (Ctrl+B)"
             aria-label="Bold text"
@@ -400,6 +401,7 @@
             mat-icon-button
             class="tool-btn small"
             [class.active]="selShape.isItalic"
+            (pointerdown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'italic')"
             matTooltip="Italic (Ctrl+I)"
             aria-label="Italic text"
@@ -410,11 +412,40 @@
             mat-icon-button
             class="tool-btn small"
             [class.active]="selShape.isUnderline"
+            (pointerdown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'underline')"
             matTooltip="Underline (Ctrl+U)"
             aria-label="Underline text"
           >
             <mat-icon>format_underlined</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small font-size-btn"
+            (pointerdown)="$event.preventDefault()"
+            (click)="adjustShapeFontSize(selShape.id, -2)"
+            matTooltip="Decrease Font Size"
+            aria-label="Decrease font size"
+            [disabled]="(selShape.fontSize || 14) <= 8"
+          >
+            <mat-icon>text_decrease</mat-icon>
+          </button>
+          <span class="font-size-label" matTooltip="Font Size"
+            >{{ selShape.fontSize || 14 }}px</span
+          >
+          <button
+            mat-icon-button
+            class="tool-btn small font-size-btn"
+            (pointerdown)="$event.preventDefault()"
+            (click)="adjustShapeFontSize(selShape.id, 2)"
+            matTooltip="Increase Font Size"
+            aria-label="Increase font size"
+            [disabled]="(selShape.fontSize || 14) >= 72"
+          >
+            <mat-icon>text_increase</mat-icon>
           </button>
 
           <div class="dock-divider"></div>
@@ -862,6 +893,7 @@
       <div
         class="shape-text-inline-editor-wrapper"
         [class.is-frame-editor]="editShape.type === 'frame'"
+        [class.is-uml-editor]="editShape.type === 'uml-class' || editShape.type === 'uml-interface'"
         [style.transform]="
           editShape.type === 'frame'
             ? 'translate(' + editShape.x + 'px, ' + (editShape.y - 30) + 'px)'
@@ -872,26 +904,123 @@
         [style.z-index]="50 + editShape.zIndex"
         (pointerdown)="$event.stopPropagation()"
       >
-        <div
-          #shapeTextEditor
-          class="shape-rich-text-editor"
-          [class.frame-title-editor]="editShape.type === 'frame'"
-          contenteditable="true"
-          [style.text-align]="editShape.type === 'frame' ? 'left' : editShape.textAlign || 'center'"
-          [style.color]="
-            editShape.fillColor.includes('inverse')
-              ? 'var(--canvas-color-inverse-text)'
-              : 'var(--mat-sys-on-surface)'
-          "
-          [style.font-size.px]="
-            editShape.type === 'frame' ? 12 : getShapeFittingFontSize(editShape)
-          "
-          [style.font-weight]="editShape.type === 'frame' || editShape.isBold ? 'bold' : null"
-          [style.font-style]="editShape.isItalic ? 'italic' : null"
-          [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
-          (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
-          (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
-        ></div>
+        @if (editShape.type === 'uml-class') {
+          <div
+            class="uml-sections-inline-editor"
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            (focusout)="handleUmlEditorFocusOut($event, editShape.id)"
+          >
+            <div
+              #umlClassHeaderEditor
+              class="uml-editor-section uml-editor-header"
+              contenteditable="true"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'className',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassHeaderEditor)"
+            ></div>
+            <div
+              #umlClassAttrEditor
+              class="uml-editor-section uml-editor-attributes"
+              contenteditable="true"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'attributes',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassAttrEditor)"
+            ></div>
+            <div
+              #umlClassMethodEditor
+              class="uml-editor-section uml-editor-methods"
+              contenteditable="true"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'methods',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassMethodEditor)"
+            ></div>
+          </div>
+        } @else if (editShape.type === 'uml-interface') {
+          <div
+            class="uml-sections-inline-editor"
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            (focusout)="handleUmlEditorFocusOut($event, editShape.id)"
+          >
+            <div
+              #umlIfaceHeaderEditor
+              class="uml-editor-section uml-editor-header"
+              contenteditable="true"
+              (input)="
+                handleUmlInterfaceSectionInput(
+                  editShape.id,
+                  'header',
+                  umlIfaceHeaderEditor,
+                  umlIfaceMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceHeaderEditor)"
+            ></div>
+            <div
+              #umlIfaceMethodEditor
+              class="uml-editor-section uml-editor-methods"
+              contenteditable="true"
+              (input)="
+                handleUmlInterfaceSectionInput(
+                  editShape.id,
+                  'methods',
+                  umlIfaceHeaderEditor,
+                  umlIfaceMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceMethodEditor)"
+            ></div>
+          </div>
+        } @else {
+          <div
+            #shapeTextEditor
+            class="shape-rich-text-editor"
+            [class.frame-title-editor]="editShape.type === 'frame'"
+            contenteditable="true"
+            [style.text-align]="
+              editShape.type === 'frame' ? 'left' : editShape.textAlign || 'center'
+            "
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            [style.font-size.px]="editShape.type === 'frame' ? 12 : editShape.fontSize || 14"
+            [style.font-weight]="editShape.type === 'frame' || editShape.isBold ? 'bold' : null"
+            [style.font-style]="editShape.isItalic ? 'italic' : null"
+            [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
+            (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
+            (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
+          ></div>
+        }
       </div>
     }
 
