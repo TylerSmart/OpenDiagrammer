@@ -132,6 +132,8 @@ export class CanvasComponent {
   readonly diagramChange = output<CanvasDiagramData>();
   readonly cursorMove = output<CanvasPoint>();
   readonly openFramesNavigator = output<void>();
+  readonly undoAction = output<void>();
+  readonly redoAction = output<void>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -1921,6 +1923,7 @@ export class CanvasComponent {
   }
 
   createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
+    this.pushUndoSnapshot();
     const catalogItem = SHAPE_CATALOG.find((i) => i.type === type);
     const width = catalogItem?.defaultWidth ?? SHAPE_CONSTANTS.DEFAULT_WIDTH;
     const height = catalogItem?.defaultHeight ?? SHAPE_CONSTANTS.DEFAULT_HEIGHT;
@@ -2142,6 +2145,11 @@ export class CanvasComponent {
   deleteSelectedShapes(): void {
     const selected = this.selectedShapeIds();
     const selectedConns = this.selectedConnectionIds();
+
+    if (selected.size === 0 && selectedConns.size === 0) {
+      return;
+    }
+    this.pushUndoSnapshot();
 
     if (this.readOnly()) {
       if (!this.thinkMode() || !this.canViewerParticipate()) {
@@ -2379,6 +2387,101 @@ export class CanvasComponent {
     this.clipboard = null;
   }
 
+  // Undo / Redo History Stack
+  private undoStack: CanvasDiagramData[] = [];
+  private redoStack: CanvasDiagramData[] = [];
+  private isApplyingHistory = false;
+
+  pushUndoSnapshot(): void {
+    if (this.isApplyingHistory) {
+      return;
+    }
+    const current: CanvasDiagramData = {
+      shapes: this.shapes().map((s) => ({ ...s })),
+      connections: this.connections().map((c) => ({
+        ...c,
+        waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+      })),
+    };
+    this.undoStack.push(current);
+    if (this.undoStack.length > 50) {
+      this.undoStack.shift();
+    }
+    this.redoStack = [];
+  }
+
+  canUndo(): boolean {
+    return this.undoStack.length > 0;
+  }
+
+  canRedo(): boolean {
+    return this.redoStack.length > 0;
+  }
+
+  undo(): boolean {
+    if (this.undoStack.length === 0) {
+      return false;
+    }
+    const current: CanvasDiagramData = {
+      shapes: this.shapes().map((s) => ({ ...s })),
+      connections: this.connections().map((c) => ({
+        ...c,
+        waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+      })),
+    };
+    this.redoStack.push(current);
+
+    const prev = this.undoStack.pop()!;
+    this.isApplyingHistory = true;
+    try {
+      this.shapes.set(prev.shapes.map((s) => ({ ...s })));
+      this.connections.set(
+        prev.connections.map((c) => ({
+          ...c,
+          waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+        })),
+      );
+      this.clearSelection();
+      this.emitDiagramChange();
+      this.undoAction.emit();
+    } finally {
+      this.isApplyingHistory = false;
+    }
+    return true;
+  }
+
+  redo(): boolean {
+    if (this.redoStack.length === 0) {
+      return false;
+    }
+    const current: CanvasDiagramData = {
+      shapes: this.shapes().map((s) => ({ ...s })),
+      connections: this.connections().map((c) => ({
+        ...c,
+        waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+      })),
+    };
+    this.undoStack.push(current);
+
+    const next = this.redoStack.pop()!;
+    this.isApplyingHistory = true;
+    try {
+      this.shapes.set(next.shapes.map((s) => ({ ...s })));
+      this.connections.set(
+        next.connections.map((c) => ({
+          ...c,
+          waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
+        })),
+      );
+      this.clearSelection();
+      this.emitDiagramChange();
+      this.redoAction.emit();
+    } finally {
+      this.isApplyingHistory = false;
+    }
+    return true;
+  }
+
   cut(): boolean {
     const copied = this.copy();
     if (copied) {
@@ -2514,6 +2617,8 @@ export class CanvasComponent {
     ) {
       return false;
     }
+
+    this.pushUndoSnapshot();
 
     this.pasteOffsetCount++;
     const OFFSET_STEP = 24;
@@ -4231,6 +4336,22 @@ export class CanvasComponent {
       } else {
         this.sendBackward();
       }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'z' || event.key === 'Z')) {
+      event.preventDefault();
+      if (event.shiftKey) {
+        this.redo();
+      } else {
+        this.undo();
+      }
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'y' || event.key === 'Y')) {
+      event.preventDefault();
+      this.redo();
       return;
     }
 

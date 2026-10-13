@@ -12,6 +12,8 @@ public sealed class OpenDiagrammerDbContext(DbContextOptions<OpenDiagrammerDbCon
 
     public DbSet<BoardMember> BoardMembers => Set<BoardMember>();
 
+    public DbSet<BoardRevision> BoardRevisions => Set<BoardRevision>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OpenDiagrammerDbContext).Assembly);

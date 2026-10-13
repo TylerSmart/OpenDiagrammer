@@ -522,4 +522,259 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
 
         return true;
     }
+
+    public async Task<IReadOnlyList<BoardRevisionSummaryDto>> GetBoardRevisionsAsync(
+        Guid userId,
+        Guid boardId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.AsNoTracking()
+            .Include(b => b.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            throw new KeyNotFoundException($"Board with ID {boardId} was not found.");
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException(
+                "You do not have permission to view revisions for this board."
+            );
+        }
+
+        var revisions = await dbContext
+            .BoardRevisions.AsNoTracking()
+            .Include(r => r.CreatedBy)
+            .Where(r => r.BoardId == boardId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Select(r => new BoardRevisionSummaryDto(
+                r.Id,
+                r.BoardId,
+                r.Title,
+                r.Description,
+                r.CreatedById,
+                r.CreatedBy.Username,
+                r.CreatedAt
+            ))
+            .ToListAsync(cancellationToken);
+
+        return revisions;
+    }
+
+    public async Task<BoardRevisionDto?> GetBoardRevisionByIdAsync(
+        Guid userId,
+        Guid boardId,
+        Guid revisionId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.AsNoTracking()
+            .Include(b => b.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException("You do not have permission to view this revision.");
+        }
+
+        var revision = await dbContext
+            .BoardRevisions.AsNoTracking()
+            .Include(r => r.CreatedBy)
+            .FirstOrDefaultAsync(
+                r => r.Id == revisionId && r.BoardId == boardId,
+                cancellationToken
+            );
+
+        if (revision is null)
+        {
+            return null;
+        }
+
+        return new BoardRevisionDto(
+            revision.Id,
+            revision.BoardId,
+            revision.Title,
+            revision.Description,
+            revision.CreatedById,
+            revision.CreatedBy.Username,
+            revision.CanvasDataJson,
+            revision.CrdtState,
+            revision.CreatedAt
+        );
+    }
+
+    public async Task<BoardRevisionDto> CreateBoardRevisionAsync(
+        Guid userId,
+        Guid boardId,
+        CreateBoardRevisionRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.Include(b => b.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            throw new KeyNotFoundException($"Board with ID {boardId} was not found.");
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException(
+                "You do not have permission to create revisions on this board."
+            );
+        }
+
+        var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
+        if (!userRole.CanCreateRevision())
+        {
+            throw new ForbiddenException("Your role does not permit creating revisions.");
+        }
+
+        var user = await dbContext.Users.FindAsync([userId], cancellationToken);
+
+        var revision = new BoardRevision
+        {
+            Id = Guid.NewGuid(),
+            BoardId = board.Id,
+            CreatedById = userId,
+            Title = request.Title.Trim(),
+            Description = request.Description?.Trim(),
+            CanvasDataJson = board.CanvasDataJson,
+            CrdtState = board.CrdtState,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+
+        dbContext.BoardRevisions.Add(revision);
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        return new BoardRevisionDto(
+            revision.Id,
+            revision.BoardId,
+            revision.Title,
+            revision.Description,
+            revision.CreatedById,
+            user?.Username ?? "Unknown",
+            revision.CanvasDataJson,
+            revision.CrdtState,
+            revision.CreatedAt
+        );
+    }
+
+    public async Task<BoardDetailDto?> RestoreBoardRevisionAsync(
+        Guid userId,
+        Guid boardId,
+        Guid revisionId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.Include(b => b.Owner)
+            .Include(b => b.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException(
+                "You do not have permission to restore revisions on this board."
+            );
+        }
+
+        var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
+        if (!userRole.CanManageRevisions())
+        {
+            throw new ForbiddenException(
+                "Only board owners and administrators can restore revisions."
+            );
+        }
+
+        var revision = await dbContext
+            .BoardRevisions.AsNoTracking()
+            .FirstOrDefaultAsync(
+                r => r.Id == revisionId && r.BoardId == boardId,
+                cancellationToken
+            );
+
+        if (revision is null)
+        {
+            throw new KeyNotFoundException($"Revision with ID {revisionId} was not found.");
+        }
+
+        var user = await dbContext.Users.FindAsync([userId], cancellationToken);
+        var operatorUsername = user?.Username ?? "System";
+
+        // Save current board state as a pre-restore backup revision first
+        var backupRevision = new BoardRevision
+        {
+            Id = Guid.NewGuid(),
+            BoardId = board.Id,
+            CreatedById = userId,
+            Title = $"Pre-restore Snapshot (Before '{revision.Title}')",
+            Description = $"Automatic backup created before restoring revision '{revision.Title}'",
+            CanvasDataJson = board.CanvasDataJson,
+            CrdtState = board.CrdtState,
+            CreatedAt = DateTimeOffset.UtcNow,
+        };
+        dbContext.BoardRevisions.Add(backupRevision);
+
+        // Apply revision state to board
+        board.CanvasDataJson = revision.CanvasDataJson;
+        board.CrdtState = revision.CrdtState;
+        board.ModifiedAt = DateTimeOffset.UtcNow;
+        board.ModifiedBy = operatorUsername;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var memberDtos = board
+            .Members.Select(m => new BoardMemberDto(
+                Id: m.Id,
+                BoardId: m.BoardId,
+                UserId: m.UserId,
+                Username: m.User.Username,
+                Email: m.User.Email,
+                Role: m.Role,
+                CreatedAt: m.CreatedAt
+            ))
+            .ToList();
+
+        return new BoardDetailDto(
+            Id: board.Id,
+            Name: board.Name,
+            Description: board.Description,
+            OwnerId: board.OwnerId,
+            OwnerUsername: board.Owner.Username,
+            UserRole: userRole,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: board.Mode,
+            ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
+            CreatedAt: board.CreatedAt,
+            ModifiedAt: board.ModifiedAt,
+            Members: memberDtos,
+            CrdtState: board.CrdtState
+        );
+    }
 }

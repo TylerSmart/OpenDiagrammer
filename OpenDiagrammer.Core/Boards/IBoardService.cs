@@ -58,4 +58,31 @@ public interface IBoardService
         Guid newOwnerId,
         CancellationToken cancellationToken = default
     );
+
+    Task<IReadOnlyList<BoardRevisionSummaryDto>> GetBoardRevisionsAsync(
+        Guid userId,
+        Guid boardId,
+        CancellationToken cancellationToken = default
+    );
+
+    Task<BoardRevisionDto?> GetBoardRevisionByIdAsync(
+        Guid userId,
+        Guid boardId,
+        Guid revisionId,
+        CancellationToken cancellationToken = default
+    );
+
+    Task<BoardRevisionDto> CreateBoardRevisionAsync(
+        Guid userId,
+        Guid boardId,
+        CreateBoardRevisionRequest request,
+        CancellationToken cancellationToken = default
+    );
+
+    Task<BoardDetailDto?> RestoreBoardRevisionAsync(
+        Guid userId,
+        Guid boardId,
+        Guid revisionId,
+        CancellationToken cancellationToken = default
+    );
 }

@@ -2142,6 +2142,61 @@ describe('CanvasComponent', () => {
     });
   });
 
+  describe('Undo and Redo', () => {
+    it('should undo and redo shape creation', () => {
+      expect(component.canUndo()).toBe(false);
+      expect(component.canRedo()).toBe(false);
+
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      expect(component.shapes().length).toBe(1);
+      expect(component.canUndo()).toBe(true);
+
+      expect(component.undo()).toBe(true);
+      expect(component.shapes().length).toBe(0);
+      expect(component.canRedo()).toBe(true);
+
+      expect(component.redo()).toBe(true);
+      expect(component.shapes().length).toBe(1);
+      expect(component.shapes()[0].id).toBe(s1.id);
+    });
+
+    it('should undo shape deletion', () => {
+      const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      component.deleteSelectedShapes();
+      expect(component.shapes().length).toBe(0);
+
+      expect(component.undo()).toBe(true);
+      expect(component.shapes().length).toBe(1);
+      expect(component.shapes()[0].id).toBe(s1.id);
+    });
+
+    it('should trigger undo and redo via keyboard shortcuts Ctrl+Z and Ctrl+Y / Ctrl+Shift+Z', () => {
+      component.createShape('rectangle', { x: 100, y: 100 });
+      expect(component.shapes().length).toBe(1);
+
+      // Ctrl + Z (Undo)
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+      expect(component.shapes().length).toBe(0);
+
+      // Ctrl + Shift + Z (Redo)
+      component.handleKeyDown(
+        new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, shiftKey: true }),
+      );
+      expect(component.shapes().length).toBe(1);
+
+      // Ctrl + Z (Undo)
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true }));
+      expect(component.shapes().length).toBe(0);
+
+      // Ctrl + Y (Redo)
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'y', ctrlKey: true }));
+      expect(component.shapes().length).toBe(1);
+    });
+  });
+
   describe('Alt+Click+Drag to duplicate (Miro-style)', () => {
     it('should duplicate a single shape when Alt key is held during drag and move the clone', () => {
       const s1 = component.createShape('rectangle', { x: 100, y: 100 });

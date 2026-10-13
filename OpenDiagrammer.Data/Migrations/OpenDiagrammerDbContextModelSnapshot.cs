@@ -133,6 +133,45 @@ namespace OpenDiagrammer.Data.Migrations
                     b.ToTable("BoardMembers", (string)null);
                 });
 
+            modelBuilder.Entity("OpenDiagrammer.Data.Entities.BoardRevision", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("BoardId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CanvasDataJson")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<byte[]>("CrdtState")
+                        .HasColumnType("varbinary(max)");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("datetimeoffset");
+
+                    b.Property<Guid>("CreatedById")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(2000)
+                        .HasColumnType("nvarchar(2000)");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedById");
+
+                    b.HasIndex("BoardId", "CreatedAt");
+
+                    b.ToTable("BoardRevisions");
+                });
+
             modelBuilder.Entity("OpenDiagrammer.Data.Entities.User", b =>
                 {
                     b.Property<Guid>("Id")
@@ -230,9 +269,30 @@ namespace OpenDiagrammer.Data.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("OpenDiagrammer.Data.Entities.BoardRevision", b =>
+                {
+                    b.HasOne("OpenDiagrammer.Data.Entities.Board", "Board")
+                        .WithMany("Revisions")
+                        .HasForeignKey("BoardId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("OpenDiagrammer.Data.Entities.User", "CreatedBy")
+                        .WithMany()
+                        .HasForeignKey("CreatedById")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Board");
+
+                    b.Navigation("CreatedBy");
+                });
+
             modelBuilder.Entity("OpenDiagrammer.Data.Entities.Board", b =>
                 {
                     b.Navigation("Members");
+
+                    b.Navigation("Revisions");
                 });
 
             modelBuilder.Entity("OpenDiagrammer.Data.Entities.User", b =>

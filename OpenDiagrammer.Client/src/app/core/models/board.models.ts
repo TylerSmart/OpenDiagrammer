@@ -167,3 +167,38 @@ export interface ThinkModeConfig {
   hideOthersWriting?: boolean;
   groups?: ThinkModeGroup[];
 }
+
+export interface BoardRevisionSummaryDto {
+  id: string;
+  boardId: string;
+  title: string;
+  description?: string | null;
+  createdById: string;
+  createdByUsername: string;
+  createdAt: string;
+}
+
+export interface BoardRevisionDto {
+  id: string;
+  boardId: string;
+  title: string;
+  description?: string | null;
+  createdById: string;
+  createdByUsername: string;
+  canvasDataJson?: string | null;
+  crdtState?: string | null;
+  createdAt: string;
+}
+
+export interface CreateBoardRevisionRequest {
+  title: string;
+  description?: string | null;
+}
+
+export function canManageRevisions(role: BoardRole): boolean {
+  return role === BoardRole.Owner || role === BoardRole.Admin;
+}
+
+export function canCreateRevision(role: BoardRole): boolean {
+  return role === BoardRole.Owner || role === BoardRole.Admin || role === BoardRole.Editor;
+}

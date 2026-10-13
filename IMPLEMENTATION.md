@@ -78,7 +78,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 *Finalize features and prepare for production.*
 *Note: Undo/Redo and Revision History integrate with Phase 5's CRDT undo manager and document snapshot/update stream.*
 - [x] Implement cross-board Copy/Paste
-- [ ] Implement Undo/Redo and backend Revision History snapshots
+- [x] Implement Undo/Redo and backend Revision History snapshots
 - [ ] Implement Canvas Exporting (PDF, SVG, PNG, JPEG)
 - [ ] Complete full E2E and Integration test suites
 - [ ] Finalize Docker deployment docs and TRUENAS Scale instructions

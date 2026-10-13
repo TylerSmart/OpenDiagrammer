@@ -48,12 +48,17 @@ export class CrdtService {
   });
 
   public readonly isIndexedDbSynced = signal<boolean>(false);
+  private undoManager: Y.UndoManager | null = null;
 
   constructor() {
     this.setupListeners();
   }
 
   private setupListeners(): void {
+    this.undoManager = new Y.UndoManager([this.shapesMap, this.connectionsMap], {
+      trackedOrigins: new Set(['local', null, undefined]),
+    });
+
     this.doc.on('update', (update: Uint8Array, origin: unknown) => {
       this.syncDiagramDataFromDoc();
       if (origin !== 'remote' && origin !== 'indexeddb') {
@@ -115,6 +120,7 @@ export class CrdtService {
     }
 
     this.syncDiagramDataFromDoc();
+    this.undoManager?.clear();
   }
 
   public applyRemoteUpdate(update: Uint8Array): void {
@@ -270,7 +276,27 @@ export class CrdtService {
     this.diagramData.set({ shapes, connections });
   }
 
+  public undo(): void {
+    this.undoManager?.undo();
+  }
+
+  public redo(): void {
+    this.undoManager?.redo();
+  }
+
+  public canUndo(): boolean {
+    return (this.undoManager?.undoStack.length ?? 0) > 0;
+  }
+
+  public canRedo(): boolean {
+    return (this.undoManager?.redoStack.length ?? 0) > 0;
+  }
+
   public destroy(): void {
+    if (this.undoManager) {
+      this.undoManager.destroy();
+      this.undoManager = null;
+    }
     if (this.indexeddbProvider) {
       this.indexeddbProvider.destroy();
       this.indexeddbProvider = null;

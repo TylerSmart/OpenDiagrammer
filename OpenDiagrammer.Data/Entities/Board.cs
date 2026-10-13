@@ -30,6 +30,8 @@ public sealed class Board : IAuditable
 
     public ICollection<BoardMember> Members { get; set; } = new List<BoardMember>();
 
+    public ICollection<BoardRevision> Revisions { get; set; } = new List<BoardRevision>();
+
     public DateTimeOffset CreatedAt { get; set; }
 
     public string CreatedBy { get; set; } = "System";

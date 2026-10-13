@@ -166,6 +166,36 @@
           </button>
         }
 
+        <!-- Undo and Redo buttons -->
+        <button
+          mat-icon-button
+          (click)="handleUndo()"
+          [disabled]="currentBoard.userRole === BoardRole.Viewer"
+          aria-label="Undo"
+          matTooltip="Undo (Ctrl+Z)"
+        >
+          <mat-icon>undo</mat-icon>
+        </button>
+        <button
+          mat-icon-button
+          (click)="handleRedo()"
+          [disabled]="currentBoard.userRole === BoardRole.Viewer"
+          aria-label="Redo"
+          matTooltip="Redo (Ctrl+Y)"
+        >
+          <mat-icon>redo</mat-icon>
+        </button>
+
+        <!-- Revision History button -->
+        <button
+          mat-icon-button
+          (click)="openRevisionHistoryDialog()"
+          aria-label="Revision history"
+          matTooltip="Revision history"
+        >
+          <mat-icon>history</mat-icon>
+        </button>
+
         <!-- Settings button -->
         @if (canManageSettings(currentBoard.userRole)) {
           <button
