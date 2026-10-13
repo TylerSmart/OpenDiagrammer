@@ -362,14 +362,18 @@
   } @else if (!isFrame() && shape().text && !isEditing()) {
     <div
       class="shape-text-overlay"
+      [class.valign-top]="shape().verticalAlign === 'top'"
+      [class.valign-middle]="!shape().verticalAlign || shape().verticalAlign === 'middle'"
+      [class.valign-bottom]="shape().verticalAlign === 'bottom'"
       [style.color]="textColor()"
       [style.font-size.px]="fittingFontSize()"
       [style.text-align]="shape().textAlign || 'center'"
       [style.font-weight]="shape().isBold ? 'bold' : null"
       [style.font-style]="shape().isItalic ? 'italic' : null"
       [style.text-decoration]="shape().isUnderline ? 'underline' : null"
-      [innerHTML]="safeHtml()"
-    ></div>
+    >
+      <div class="shape-text-content" [innerHTML]="safeHtml()"></div>
+    </div>
   }
 
   @if (shape().type === 'sticky-pad') {

@@ -1123,6 +1123,16 @@ export class CanvasComponent {
     this.emitDiagramChange();
   }
 
+  setShapeVerticalAlign(shapeId: string, align: 'top' | 'middle' | 'bottom'): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, verticalAlign: align } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
   toggleStickyAuthorVisibility(shapeId: string): void {
     if (this.readOnly()) {
       return;
@@ -1904,6 +1914,7 @@ export class CanvasComponent {
             : SHAPE_CONSTANTS.DEFAULT_STROKE,
       strokeWidth: isTextBlock ? 0 : SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
       text: frameText,
+      verticalAlign: 'middle',
       authorName: isSticky ? this.currentUsername() || 'Author' : undefined,
       showAuthor: isSticky ? true : undefined,
       zIndex: isFrame ? 0 : this.shapes().length + 1,

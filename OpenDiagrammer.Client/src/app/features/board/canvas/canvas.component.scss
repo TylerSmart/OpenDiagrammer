@@ -404,6 +404,16 @@
   align-content: center;
   white-space: pre-wrap;
 
+  &.valign-top {
+    align-content: start;
+  }
+  &.valign-middle {
+    align-content: center;
+  }
+  &.valign-bottom {
+    align-content: end;
+  }
+
   b,
   strong,
   i,

@@ -90,6 +90,42 @@ describe('CanvasShapeComponent', () => {
     expect(overlay.innerHTML).not.toContain('<script>');
   });
 
+  it('should apply vertical alignment classes and default to middle alignment', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+    });
+    fixture.detectChanges();
+
+    let overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay.classList).toContain('valign-middle');
+    expect(overlay.classList).not.toContain('valign-top');
+    expect(overlay.classList).not.toContain('valign-bottom');
+
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+      verticalAlign: 'top',
+    });
+    fixture.detectChanges();
+
+    overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay.classList).toContain('valign-top');
+    expect(overlay.classList).not.toContain('valign-middle');
+
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+      verticalAlign: 'bottom',
+    });
+    fixture.detectChanges();
+
+    overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay.classList).toContain('valign-bottom');
+    expect(overlay.classList).not.toContain('valign-middle');
+  });
+
   it('should emit shapeDoubleClick on double click', () => {
     let emitted: { shape: CanvasShape; section?: string } | undefined;
     component.shapeDoubleClick.subscribe((s) => {

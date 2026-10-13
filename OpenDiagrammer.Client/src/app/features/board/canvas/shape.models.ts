@@ -300,6 +300,7 @@ export interface CanvasShape {
   strokeWidth: number;
   text?: string;
   textAlign?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
   fontSize?: number;
   isBold?: boolean;
   isItalic?: boolean;

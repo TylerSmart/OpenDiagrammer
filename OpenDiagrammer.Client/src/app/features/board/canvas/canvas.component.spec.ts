@@ -2835,6 +2835,55 @@ describe('CanvasComponent', () => {
       expect(current?.textAlign).toBe('left');
     });
 
+    it('should change vertical alignment for shape and default new shapes to middle', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      // Default should be middle
+      expect(shape.verticalAlign).toBe('middle');
+
+      // Change to top
+      component.setShapeVerticalAlign(shape.id, 'top');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('top');
+
+      // Change to bottom
+      component.setShapeVerticalAlign(shape.id, 'bottom');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('bottom');
+
+      // Change to middle
+      component.setShapeVerticalAlign(shape.id, 'middle');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('middle');
+    });
+
+    it('should reflect vertical alignment classes on shape text editor while editing', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      let editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-middle')).toBe(true);
+      expect(editorEl?.classList.contains('valign-top')).toBe(false);
+
+      component.setShapeVerticalAlign(shape.id, 'top');
+      fixture.detectChanges();
+
+      editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-top')).toBe(true);
+      expect(editorEl?.classList.contains('valign-middle')).toBe(false);
+
+      component.setShapeVerticalAlign(shape.id, 'bottom');
+      fixture.detectChanges();
+
+      editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-bottom')).toBe(true);
+      expect(editorEl?.classList.contains('valign-middle')).toBe(false);
+    });
+
     it('should compute fitting font size down to minimum', () => {
       const shape = component.createShape('rectangle', { x: 100, y: 100 });
       // Short text
