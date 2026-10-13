@@ -669,7 +669,7 @@ export class CanvasComponent {
   readonly connTextInput = viewChild<ElementRef<HTMLInputElement>>('textInput');
 
   // Persistence state tracking
-  private lastLoadedDataJson: string | null = null;
+  private lastLoadedDataJson: string | null | undefined = undefined;
   private lastEmittedJson: string | null = null;
   private hasLoadedInitialData = false;
 
@@ -686,7 +686,7 @@ export class CanvasComponent {
     effect(() => {
       const dataJson = this.initialCanvasData();
       untracked(() => {
-        if (dataJson !== this.lastLoadedDataJson) {
+        if (!this.hasLoadedInitialData || dataJson !== this.lastLoadedDataJson) {
           this.loadCanvasData(dataJson);
         }
       });
@@ -704,24 +704,26 @@ export class CanvasComponent {
           return;
         }
         this.lastEmittedJson = currentJson;
-        this.diagramChange.emit({
+        const diagramData: CanvasDiagramData = {
           shapes,
           connections,
           zoom: this.zoom(),
           panX: this.panX(),
           panY: this.panY(),
-        });
+        };
+        this.lastLoadedDataJson = JSON.stringify(diagramData);
+        this.diagramChange.emit(diagramData);
       });
     });
   }
 
   loadCanvasData(dataJson: string | null): void {
     this.lastLoadedDataJson = dataJson;
+    this.hasLoadedInitialData = true;
     if (!dataJson) {
       this.shapes.set([]);
       this.connections.set([]);
       this.lastEmittedJson = JSON.stringify({ shapes: [], connections: [] });
-      this.hasLoadedInitialData = true;
       return;
     }
 
@@ -741,12 +743,10 @@ export class CanvasComponent {
         this.panY.set(parsed.panY);
       }
       this.lastEmittedJson = JSON.stringify({ shapes, connections });
-      this.hasLoadedInitialData = true;
     } catch {
       this.shapes.set([]);
       this.connections.set([]);
       this.lastEmittedJson = JSON.stringify({ shapes: [], connections: [] });
-      this.hasLoadedInitialData = true;
     }
   }
 

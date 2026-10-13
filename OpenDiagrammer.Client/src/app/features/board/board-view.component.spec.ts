@@ -54,6 +54,7 @@ describe('BoardViewComponent', () => {
   };
   let mockAuthService: {
     currentUser: ReturnType<typeof vi.fn>;
+    token: ReturnType<typeof vi.fn>;
   };
   let mockRouter: {
     navigate: ReturnType<typeof vi.fn>;
@@ -76,6 +77,7 @@ describe('BoardViewComponent', () => {
         email: 'architect@example.com',
         username: 'architect',
       }),
+      token: vi.fn().mockReturnValue('mock-jwt-token'),
     };
     mockRouter = {
       navigate: vi.fn(),
@@ -217,7 +219,7 @@ describe('BoardViewComponent', () => {
     expect(mockBoardService.updateCanvasData).not.toHaveBeenCalled();
 
     // Advance by debounce time
-    vi.advanceTimersByTime(800);
+    vi.advanceTimersByTime(500);
 
     expect(mockBoardService.updateCanvasData).toHaveBeenCalledWith('test-board-id', {
       canvasDataJson: JSON.stringify(diagramData),
@@ -239,7 +241,7 @@ describe('BoardViewComponent', () => {
     };
 
     component.handleDiagramChange(diagramData);
-    vi.advanceTimersByTime(800);
+    vi.advanceTimersByTime(500);
 
     expect(mockBoardService.updateCanvasData).not.toHaveBeenCalled();
   });
@@ -267,13 +269,45 @@ describe('BoardViewComponent', () => {
     };
 
     component.handleDiagramChange(diagramData);
-    vi.advanceTimersByTime(800);
+    vi.advanceTimersByTime(500);
 
     expect(component['saveStatus']()).toBe('error');
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'Failed to save diagram changes.',
       'Dismiss',
       expect.objectContaining({ duration: 4000 }),
+    );
+  });
+
+  it('should flush pending diagram changes immediately using fetch with keepalive', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
+    const diagramData: CanvasDiagramData = {
+      shapes: [
+        {
+          id: 's1',
+          type: 'rectangle',
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 100,
+          strokeColor: '#000',
+          fillColor: '#fff',
+          strokeWidth: 2,
+          zIndex: 1,
+        },
+      ],
+      connections: [],
+    };
+
+    component.handleDiagramChange(diagramData);
+    component.flushPendingSave();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/boards/test-board-id/canvas',
+      expect.objectContaining({
+        method: 'PUT',
+        keepalive: true,
+      }),
     );
   });
 });

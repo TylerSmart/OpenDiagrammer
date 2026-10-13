@@ -59,6 +59,10 @@ const THEME_LABELS: Record<ThemeMode, string> = {
   selector: 'app-board-view',
   styleUrl: './board-view.component.scss',
   templateUrl: './board-view.component.html',
+  host: {
+    '(window:beforeunload)': 'flushPendingSave()',
+    '(window:pagehide)': 'flushPendingSave()',
+  },
 })
 export class BoardViewComponent implements OnInit {
   private readonly route = inject(ActivatedRoute);
@@ -71,6 +75,7 @@ export class BoardViewComponent implements OnInit {
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
   private readonly saveTrigger$ = new Subject<CanvasDiagramData>();
+  private pendingDiagramData: CanvasDiagramData | null = null;
 
   protected readonly board = signal<BoardDetailDto | null>(null);
   protected readonly isLoading = signal<boolean>(false);
@@ -90,7 +95,7 @@ export class BoardViewComponent implements OnInit {
   constructor() {
     this.saveTrigger$
       .pipe(
-        debounceTime(800),
+        debounceTime(500),
         switchMap((diagramData) => {
           const current = this.board();
           if (!current || current.userRole === BoardRole.Viewer) {
@@ -102,6 +107,7 @@ export class BoardViewComponent implements OnInit {
           return this.boardService.updateCanvasData(current.id, request).pipe(
             tap(() => {
               this.saveStatus.set('saved');
+              this.pendingDiagramData = null;
               this.board.update((b) =>
                 b ? { ...b, canvasDataJson: request.canvasDataJson } : null,
               );
@@ -118,6 +124,8 @@ export class BoardViewComponent implements OnInit {
         takeUntilDestroyed(this.destroyRef),
       )
       .subscribe();
+
+    this.destroyRef.onDestroy(() => this.flushPendingSave());
   }
 
   ngOnInit(): void {
@@ -166,9 +174,36 @@ export class BoardViewComponent implements OnInit {
     if (!current || current.userRole === BoardRole.Viewer) {
       return;
     }
+    this.pendingDiagramData = data;
     this.isBoardEmpty.set(data.shapes.length === 0);
     this.saveStatus.set('saving');
     this.saveTrigger$.next(data);
+  }
+
+  flushPendingSave(): void {
+    if (!this.pendingDiagramData) {
+      return;
+    }
+    const current = this.board();
+    if (!current || current.userRole === BoardRole.Viewer) {
+      return;
+    }
+    const token = this.authService.token();
+    const payload = JSON.stringify({
+      canvasDataJson: JSON.stringify(this.pendingDiagramData),
+    });
+    this.pendingDiagramData = null;
+    void fetch(`/api/boards/${current.id}/canvas`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // Ignored: Best effort flush on window unload or component teardown
+    });
   }
 
   goBack(): void {

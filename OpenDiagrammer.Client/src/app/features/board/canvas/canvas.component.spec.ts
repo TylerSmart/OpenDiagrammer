@@ -2544,6 +2544,22 @@ describe('CanvasComponent', () => {
       expect(emitted.shapes[0].type).toBe('rectangle');
     });
 
+    it('should initialize with null initialCanvasData and still emit diagramChange when shape is added', () => {
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+
+      // Rely on reactive effect with default null initialCanvasData
+      fixture.detectChanges();
+
+      // Add a shape
+      component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      expect(emitSpy).toHaveBeenCalled();
+      const emitted = emitSpy.mock.calls[emitSpy.mock.calls.length - 1][0];
+      expect(emitted.shapes.length).toBe(1);
+      expect(emitted.shapes[0].type).toBe('rectangle');
+    });
+
     it('should hide docks and disable modifications when in readOnly mode', () => {
       fixture.componentRef.setInput('readOnly', true);
       fixture.detectChanges();
