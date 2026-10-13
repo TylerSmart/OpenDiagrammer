@@ -91,14 +91,34 @@ describe('CanvasShapeComponent', () => {
   });
 
   it('should emit shapeDoubleClick on double click', () => {
-    let emittedShape: CanvasShape | null = null;
+    let emitted: { shape: CanvasShape; section?: string } | undefined;
     component.shapeDoubleClick.subscribe((s) => {
-      emittedShape = s;
+      emitted = s;
     });
 
     const container = fixture.nativeElement.querySelector('.shape-container');
     container.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
-    expect(emittedShape).toEqual(mockShape);
+    expect(emitted?.shape).toEqual(mockShape);
+  });
+
+  it('should emit specific section on double click when clicked on a UML compartment', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-class',
+      text: 'User\n---\n+ name: string\n---\n+ login()',
+    });
+    fixture.detectChanges();
+
+    let emitted: { shape: CanvasShape; section?: string } | undefined;
+    component.shapeDoubleClick.subscribe((s) => {
+      emitted = s;
+    });
+
+    const attrEl = fixture.nativeElement.querySelector('.uml-attributes');
+    expect(attrEl).not.toBeNull();
+    attrEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(emitted?.shape.id).toBe(mockShape.id);
+    expect(emitted?.section).toBe('attributes');
   });
 
   it('should render flowchart shapes correctly', () => {

@@ -326,12 +326,21 @@
       [style.color]="textColor()"
       [style.--shape-stroke]="shape().strokeColor"
     >
-      <div class="uml-compartment uml-header" [innerHTML]="umlClassSections().classNameHtml"></div>
+      <div
+        class="uml-compartment uml-header"
+        data-uml-section="header"
+        [innerHTML]="umlClassSections().classNameHtml"
+      ></div>
       <div
         class="uml-compartment uml-attributes"
+        data-uml-section="attributes"
         [innerHTML]="umlClassSections().attributesHtml"
       ></div>
-      <div class="uml-compartment uml-methods" [innerHTML]="umlClassSections().methodsHtml"></div>
+      <div
+        class="uml-compartment uml-methods"
+        data-uml-section="methods"
+        [innerHTML]="umlClassSections().methodsHtml"
+      ></div>
     </div>
   } @else if (isUmlInterface() && !isEditing()) {
     <div
@@ -339,9 +348,14 @@
       [style.color]="textColor()"
       [style.--shape-stroke]="shape().strokeColor"
     >
-      <div class="uml-compartment uml-header" [innerHTML]="umlInterfaceSections().nameHtml"></div>
+      <div
+        class="uml-compartment uml-header"
+        data-uml-section="header"
+        [innerHTML]="umlInterfaceSections().nameHtml"
+      ></div>
       <div
         class="uml-compartment uml-methods"
+        data-uml-section="methods"
         [innerHTML]="umlInterfaceSections().methodsHtml"
       ></div>
     </div>

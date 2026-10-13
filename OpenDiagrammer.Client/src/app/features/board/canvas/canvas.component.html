@@ -151,7 +151,7 @@
         "
         [allowHoverAnchors]="!readOnly() && !hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
-        (shapeDoubleClick)="startEditingShapeText(shape.id)"
+        (shapeDoubleClick)="startEditingShapeText(shape.id, $event.section)"
         (pullStickyNote)="pullStickyNoteFromPad($event)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"

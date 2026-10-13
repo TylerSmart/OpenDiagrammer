@@ -3205,6 +3205,32 @@ describe('CanvasComponent', () => {
       expect(updated!.text).toContain('+ delete(id: string): void');
     });
 
+    it('should focus the requested UML compartment and retain focus during section input', async () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      component.startEditingShapeText(umlShape.id, 'attributes');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const attrEditor = fixture.nativeElement.querySelector(
+        '.uml-editor-attributes',
+      ) as HTMLElement;
+      const headerEditor = fixture.nativeElement.querySelector('.uml-editor-header') as HTMLElement;
+      expect(attrEditor).not.toBeNull();
+      expect(headerEditor).not.toBeNull();
+
+      // Attr editor has focus
+      expect(document.activeElement).toBe(attrEditor);
+
+      // Typing one character into attrEditor
+      attrEditor.innerHTML = '+ newAttribute: number';
+      attrEditor.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Focus must remain in attrEditor and NOT revert to headerEditor
+      expect(document.activeElement).toBe(attrEditor);
+    });
+
     it('should preserve locally dragged shape when external diagram data arrives', () => {
       const s1 = component.createShape('rectangle', { x: 50, y: 50 });
       const s2 = component.createShape('rectangle', { x: 200, y: 200 });

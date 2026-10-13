@@ -143,6 +143,7 @@
     box-sizing: border-box;
     white-space: pre-wrap;
     word-break: break-word;
+    pointer-events: auto;
 
     &.uml-header {
       text-align: center;

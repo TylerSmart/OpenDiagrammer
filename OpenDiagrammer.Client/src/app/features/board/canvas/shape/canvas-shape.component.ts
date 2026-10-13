@@ -26,7 +26,10 @@ export class CanvasShapeComponent {
 
   readonly isHovered = signal<boolean>(false);
 
-  readonly shapeDoubleClick = output<CanvasShape>();
+  readonly shapeDoubleClick = output<{
+    shape: CanvasShape;
+    section?: 'header' | 'attributes' | 'methods';
+  }>();
   readonly pullStickyNote = output<CanvasShape>();
 
   readonly anchorPointerDown = output<{
@@ -154,7 +157,10 @@ export class CanvasShapeComponent {
     if (this.isMasked()) {
       return;
     }
-    this.shapeDoubleClick.emit(this.shape());
+    const target = event.target as HTMLElement | null;
+    const section = (target?.closest('[data-uml-section]')?.getAttribute('data-uml-section') ||
+      undefined) as 'header' | 'attributes' | 'methods' | undefined;
+    this.shapeDoubleClick.emit({ shape: this.shape(), section });
   }
 
   handlePullNote(event: MouseEvent): void {

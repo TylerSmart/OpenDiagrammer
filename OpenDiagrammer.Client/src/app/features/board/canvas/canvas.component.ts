@@ -176,6 +176,7 @@ export class CanvasComponent {
   private lastShapePointerDownTime = 0;
   private lastShapePointerDownId: string | null = null;
   private lastShapePointerDownPos: CanvasPoint | null = null;
+  private activeUmlSection: 'header' | 'attributes' | 'methods' | undefined;
 
   // Resize state
   private isResizing = false;
@@ -692,7 +693,7 @@ export class CanvasComponent {
     this.editingConnectionId.set(null);
   }
 
-  startEditingShapeText(shapeId: string): void {
+  startEditingShapeText(shapeId: string, section?: 'header' | 'attributes' | 'methods'): void {
     const shape = this.shapes().find((s) => s.id === shapeId);
     if (!shape) {
       return;
@@ -711,62 +712,81 @@ export class CanvasComponent {
       return;
     }
     this.selectedShapeIds.set(new Set([shapeId]));
+    this.activeUmlSection = section;
     this.editingShapeId.set(shapeId);
+    this.focusShapeTextEditor(shape, section);
     setTimeout(() => {
-      this.focusShapeTextEditor(shape);
+      const s = this.shapes().find((x) => x.id === shapeId) || shape;
+      this.focusShapeTextEditor(s, this.activeUmlSection || section);
     }, 0);
   }
 
-  focusShapeTextEditor(shape: CanvasShape): void {
+  focusShapeTextEditor(shape: CanvasShape, section?: 'header' | 'attributes' | 'methods'): void {
     if (shape.type === 'uml-class') {
       const headerEl = this.umlClassHeaderEditor()?.nativeElement;
       const attrEl = this.umlClassAttrEditor()?.nativeElement;
       const methodEl = this.umlClassMethodEditor()?.nativeElement;
       if (headerEl && attrEl && methodEl) {
-        const isCurrentlyFocused =
-          document.activeElement === headerEl ||
-          document.activeElement === attrEl ||
-          document.activeElement === methodEl;
-        if (!isCurrentlyFocused) {
-          const parsed = parseUmlClassText(shape.text);
-          if (headerEl.innerHTML !== parsed.className) headerEl.innerHTML = parsed.className;
-          if (attrEl.innerHTML !== parsed.attributes) attrEl.innerHTML = parsed.attributes;
-          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
-          headerEl.focus();
+        const parsed = parseUmlClassText(shape.text);
+        if (headerEl.innerHTML !== parsed.className) headerEl.innerHTML = parsed.className;
+        if (attrEl.innerHTML !== parsed.attributes) attrEl.innerHTML = parsed.attributes;
+        if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+
+        const targetEl =
+          section === 'attributes' ? attrEl : section === 'methods' ? methodEl : headerEl;
+        targetEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(targetEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
         }
       }
     } else if (shape.type === 'uml-interface') {
       const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
       const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
       if (headerEl && methodEl) {
-        const isCurrentlyFocused =
-          document.activeElement === headerEl || document.activeElement === methodEl;
-        if (!isCurrentlyFocused) {
-          const parsed = parseUmlInterfaceText(shape.text);
-          if (headerEl.innerHTML !== parsed.interfaceName)
-            headerEl.innerHTML = parsed.interfaceName;
-          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
-          headerEl.focus();
+        const parsed = parseUmlInterfaceText(shape.text);
+        if (headerEl.innerHTML !== parsed.interfaceName) headerEl.innerHTML = parsed.interfaceName;
+        if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+
+        const targetEl = section === 'methods' ? methodEl : headerEl;
+        targetEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(targetEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
         }
       }
     } else {
       const editorEl = this.shapeRichTextEditor()?.nativeElement;
       if (editorEl) {
-        if (document.activeElement !== editorEl) {
-          editorEl.innerHTML = shape.text || '';
-          editorEl.focus();
-          try {
-            const selection = window.getSelection();
-            if (selection) {
-              const range = document.createRange();
-              range.selectNodeContents(editorEl);
-              range.collapse(false);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            }
-          } catch {
-            // Ignore selection range errors in headless or unsupported environments
+        editorEl.innerHTML = shape.text || '';
+        editorEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(editorEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
           }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
         }
       }
     }
@@ -1162,12 +1182,38 @@ export class CanvasComponent {
       if (!editShapeId) {
         return;
       }
-      const shape = this.shapes().find((s) => s.id === editShapeId);
+      const shape = untracked(() => this.shapes().find((s) => s.id === editShapeId));
       if (!shape) {
         return;
       }
 
-      this.focusShapeTextEditor(shape);
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      const ifaceHeaderEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const ifaceMethodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      const editorEl = this.shapeRichTextEditor()?.nativeElement;
+
+      const isAnyFocused =
+        document.activeElement &&
+        (document.activeElement === headerEl ||
+          document.activeElement === attrEl ||
+          document.activeElement === methodEl ||
+          document.activeElement === ifaceHeaderEl ||
+          document.activeElement === ifaceMethodEl ||
+          document.activeElement === editorEl ||
+          headerEl?.contains(document.activeElement) ||
+          attrEl?.contains(document.activeElement) ||
+          methodEl?.contains(document.activeElement) ||
+          ifaceHeaderEl?.contains(document.activeElement) ||
+          ifaceMethodEl?.contains(document.activeElement) ||
+          editorEl?.contains(document.activeElement));
+
+      if (isAnyFocused) {
+        return;
+      }
+
+      this.focusShapeTextEditor(shape, this.activeUmlSection);
     });
 
     effect(() => {
@@ -1580,15 +1626,17 @@ export class CanvasComponent {
     const shapeEl = (target?.closest('.shape-container') ||
       target?.closest('app-canvas-shape')) as HTMLElement | null;
     const shapeIdFromDom = shapeEl?.getAttribute('data-shape-id');
+    const umlSection = (target?.closest('[data-uml-section]')?.getAttribute('data-uml-section') ||
+      undefined) as 'header' | 'attributes' | 'methods' | undefined;
     if (shapeIdFromDom) {
-      this.startEditingShapeText(shapeIdFromDom);
+      this.startEditingShapeText(shapeIdFromDom, umlSection);
       return;
     }
 
     const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
     const targetShape = this.findShapeAtPoint(worldPoint);
     if (targetShape) {
-      this.startEditingShapeText(targetShape.id);
+      this.startEditingShapeText(targetShape.id, umlSection);
       return;
     }
 
