@@ -61,11 +61,18 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 ## Phase 6: Advanced Node Types & Think Mode
 *Add specific node behaviors and structured collaborative modes.*
 *Note: Rich text editing and Think Mode build directly on Phase 5's CRDT primitives and real-time synchronization.*
-- [ ] Implement rich text editing within nodes
-- [ ] Build specific node catalogs (UML, Flowcharts, etc.)
-- [ ] Implement Sticky Notes (colors, author names)
-- [ ] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)
-- [ ] Implement Frames and Pages
+- [x] Implement rich text editing within nodes
+- [x] Build specific node catalogs (UML, Flowcharts, etc.)
+- [x] Implement Sticky Notes (colors, author names)
+- [x] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)
+- [x] Implement Frames and Pages
+
+## Phase 6.1: Collaboration Fixes, Rich Text Refinements & Structured Nodes
+*Fix real-time synchronization edge cases, inline text editing ergonomics, and multi-section dynamic node structures.*
+- [x] Fix real-time shape synchronization desync edge cases (prevent stale Yjs map states and external update suppression)
+- [x] Enable double-click on shapes to directly initiate inline text editing
+- [x] Support rich text formatting (bold, italic, underline, font size) on text selections within shapes
+- [x] Implement multi-section structured nodes (e.g., UML Class/Interface) with dynamic height expansion and overflow handling
 
 ## Phase 7: Polish, Export, & Revision History
 *Finalize features and prepare for production.*

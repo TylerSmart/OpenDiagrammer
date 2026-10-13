@@ -15,7 +15,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BoardBackgroundType, CanvasCursorDto } from '../../../core/models/board.models';
+import {
+  BoardBackgroundType,
+  CanvasCursorDto,
+  ThinkModeConfig,
+} from '../../../core/models/board.models';
 import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
 import {
   CANVAS_CONSTANTS,
@@ -43,11 +47,26 @@ import {
   CanvasColorPreset,
   CanvasShape,
   CANVAS_COLOR_PRESETS,
+  CatalogShapeItem,
   ResizeHandlePosition,
   SHAPE_CONSTANTS,
   ShapeType,
   computeShapeMovementSnapping,
   computeShapeResizeSnapping,
+  computeFittingFontSize,
+  sanitizeRichText,
+  SHAPE_CATALOG,
+  STICKY_NOTE_COLORS,
+  FramePreset,
+  FRAME_PRESETS,
+  UmlClassSections,
+  UmlInterfaceSections,
+  parseUmlClassText,
+  formatUmlClassText,
+  parseUmlInterfaceText,
+  formatUmlInterfaceText,
+  computeUmlClassRequiredHeight,
+  computeUmlInterfaceRequiredHeight,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -87,6 +106,7 @@ export interface ReconnectingPreview {
     '(pointermove)': 'handlePointerMove($event)',
     '(pointerup)': 'handlePointerUp($event)',
     '(pointercancel)': 'handlePointerUp($event)',
+    '(dblclick)': 'handleDoubleClick($event)',
     '(contextmenu)': 'handleContextMenu($event)',
     '(blur)': 'handleBlur()',
   },
@@ -98,11 +118,18 @@ export class CanvasComponent {
   readonly readOnly = input<boolean>(false);
   readonly liveCursors = input<CanvasCursorDto[]>([]);
   readonly showLiveCursors = input<boolean>(true);
+  readonly currentUsername = input<string | null | undefined>(null);
+  readonly thinkMode = input<boolean>(false);
+  readonly thinkModeConfig = input<ThinkModeConfig | null>(null);
+  readonly canViewerParticipate = input<boolean>(false);
+  readonly facilitatorReveal = input<boolean>(false);
+  readonly isFramesNavigatorOpen = input<boolean>(false);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
   readonly diagramChange = output<CanvasDiagramData>();
   readonly cursorMove = output<CanvasPoint>();
+  readonly openFramesNavigator = output<void>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -111,6 +138,7 @@ export class CanvasComponent {
 
   // Shapes & Diagramming State
   readonly shapes = signal<CanvasShape[]>([]);
+  readonly frames = computed(() => this.shapes().filter((s) => s.type === 'frame'));
   readonly selectedShapeIds = signal<Set<string>>(new Set<string>());
   readonly activeTool = signal<ActiveTool>('select');
 
@@ -145,6 +173,15 @@ export class CanvasComponent {
   private connectionInitialWaypoints = new Map<string, CanvasPoint[]>();
   private isAltDragPending = false;
   private hasClonedForAltDrag = false;
+  private hasPointerCaptureForMove = false;
+  private lastShapePointerDownTime = 0;
+  private lastShapePointerDownId: string | null = null;
+  private lastShapePointerDownPos: CanvasPoint | null = null;
+  activeUmlSection: 'header' | 'attributes' | 'methods' | undefined;
+  savedEditorRange: Range | null = null;
+  private lastCanvasPointerDownTime = 0;
+  private lastCanvasPointerDownPos: CanvasPoint | null = null;
+  private hasPointerCaptureForMarquee = false;
 
   // Resize state
   private isResizing = false;
@@ -323,6 +360,27 @@ export class CanvasComponent {
     return this.renderedConnections().find((c) => c.id === id) || null;
   });
 
+  // Single selected shape for contextual rich text and formatting
+  readonly singleSelectedShape = computed<CanvasShape | null>(() => {
+    const selectedIds = this.selectedShapeIds();
+    if (selectedIds.size !== 1) {
+      return null;
+    }
+    const id = Array.from(selectedIds)[0];
+    return this.shapes().find((s) => s.id === id) || null;
+  });
+
+  // Inline shape rich text editing state
+  readonly editingShapeId = signal<string | null>(null);
+
+  readonly editingShape = computed<CanvasShape | null>(() => {
+    const id = this.editingShapeId();
+    if (!id) {
+      return null;
+    }
+    return this.shapes().find((s) => s.id === id) || null;
+  });
+
   readonly hasSelectedConnection = computed<boolean>(() => this.selectedConnectionIds().size > 0);
 
   // Connection Waypoint Dragging State
@@ -352,6 +410,12 @@ export class CanvasComponent {
 
   readonly canvasColorPresets = CANVAS_COLOR_PRESETS;
   readonly connectionColors = CANVAS_COLOR_PRESETS.map((p) => p.stroke);
+
+  readonly shapeCatalog = SHAPE_CATALOG;
+  readonly basicCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'basic');
+  readonly flowchartCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'flowchart');
+  readonly umlCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'uml');
+  readonly stickyNoteColors = STICKY_NOTE_COLORS;
 
   readonly connectionToolbarPos = computed<{
     x: number;
@@ -634,6 +698,523 @@ export class CanvasComponent {
     this.editingConnectionId.set(null);
   }
 
+  startEditingShapeText(shapeId: string, section?: 'header' | 'attributes' | 'methods'): void {
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
+    }
+    if (this.isShapeMasked(shape)) {
+      return;
+    }
+    this.selectedShapeIds.set(new Set([shapeId]));
+    this.activeUmlSection = section;
+    this.editingShapeId.set(shapeId);
+    this.focusShapeTextEditor(shape, section);
+    setTimeout(() => {
+      const s = this.shapes().find((x) => x.id === shapeId) || shape;
+      this.focusShapeTextEditor(s, this.activeUmlSection || section);
+    }, 0);
+  }
+
+  focusShapeTextEditor(shape: CanvasShape, section?: 'header' | 'attributes' | 'methods'): void {
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (headerEl && attrEl && methodEl) {
+        const parsed = parseUmlClassText(shape.text);
+        if (headerEl.innerHTML !== parsed.className) headerEl.innerHTML = parsed.className;
+        if (attrEl.innerHTML !== parsed.attributes) attrEl.innerHTML = parsed.attributes;
+        if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+
+        const targetEl =
+          section === 'attributes' ? attrEl : section === 'methods' ? methodEl : headerEl;
+        targetEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(targetEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
+        }
+      }
+    } else if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (headerEl && methodEl) {
+        const parsed = parseUmlInterfaceText(shape.text);
+        if (headerEl.innerHTML !== parsed.interfaceName) headerEl.innerHTML = parsed.interfaceName;
+        if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+
+        const targetEl = section === 'methods' ? methodEl : headerEl;
+        targetEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(targetEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
+        }
+      }
+    } else {
+      const editorEl = this.shapeRichTextEditor()?.nativeElement;
+      if (editorEl) {
+        editorEl.innerHTML = shape.text || '';
+        editorEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(editorEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
+        }
+      }
+    }
+  }
+
+  finishEditingShapeText(shapeId: string, contentHtml: string): void {
+    if (this.editingShapeId() !== shapeId) {
+      return;
+    }
+    this.savedEditorRange = null;
+    const sanitized = sanitizeRichText(contentHtml.trim());
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: sanitized || undefined } : s)),
+    );
+    this.editingShapeId.set(null);
+    this.emitDiagramChange();
+  }
+
+  saveCurrentEditorSelection(): void {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const activeEditor = this.getActiveEditorElement();
+      if (
+        activeEditor &&
+        (activeEditor.contains(range.commonAncestorContainer) ||
+          activeEditor === range.commonAncestorContainer)
+      ) {
+        this.savedEditorRange = range.cloneRange();
+      }
+    }
+  }
+
+  getActiveEditorElement(): HTMLElement | null {
+    const editId = this.editingShapeId();
+    if (!editId) {
+      return null;
+    }
+    const shape = this.shapes().find((s) => s.id === editId);
+    if (!shape) {
+      return null;
+    }
+
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (document.activeElement === attrEl) return attrEl ?? null;
+      if (document.activeElement === methodEl) return methodEl ?? null;
+      if (document.activeElement === headerEl) return headerEl ?? null;
+
+      if (this.activeUmlSection === 'attributes') return attrEl ?? null;
+      if (this.activeUmlSection === 'methods') return methodEl ?? null;
+      return headerEl ?? null;
+    }
+
+    if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (document.activeElement === methodEl) return methodEl ?? null;
+      if (document.activeElement === headerEl) return headerEl ?? null;
+
+      if (this.activeUmlSection === 'methods') return methodEl ?? null;
+      return headerEl ?? null;
+    }
+
+    return this.shapeRichTextEditor()?.nativeElement ?? null;
+  }
+
+  isFormatActive(shape: CanvasShape, format: 'bold' | 'italic' | 'underline'): boolean {
+    if (this.editingShapeId() === shape.id) {
+      try {
+        if (document.queryCommandState(format)) {
+          return true;
+        }
+      } catch {
+        // Query command state might throw in non-browser/test environments
+      }
+    }
+    if (format === 'bold') return !!shape.isBold;
+    if (format === 'italic') return !!shape.isItalic;
+    if (format === 'underline') return !!shape.isUnderline;
+    return false;
+  }
+
+  persistActiveEditorContent(shapeId: string, editorEl: HTMLElement): void {
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (headerEl && attrEl && methodEl) {
+        const sections: UmlClassSections = {
+          className: sanitizeRichText(headerEl.innerHTML.trim()),
+          attributes: sanitizeRichText(attrEl.innerHTML.trim()),
+          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+        };
+        const formatted = formatUmlClassText(sections);
+        const requiredH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13);
+        const newHeight = Math.max(requiredH, shape.height);
+        this.shapes.update((list) =>
+          list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+        );
+        this.emitDiagramChange();
+      }
+      return;
+    }
+
+    if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (headerEl && methodEl) {
+        const sections: UmlInterfaceSections = {
+          interfaceName: sanitizeRichText(headerEl.innerHTML.trim()),
+          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+        };
+        const formatted = formatUmlInterfaceText(sections);
+        const requiredH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13);
+        const newHeight = Math.max(requiredH, shape.height);
+        this.shapes.update((list) =>
+          list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+        );
+        this.emitDiagramChange();
+      }
+      return;
+    }
+
+    const sanitized = sanitizeRichText(editorEl.innerHTML);
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  toggleShapeFormat(shapeId: string, format: 'bold' | 'italic' | 'underline'): void {
+    if (this.readOnly()) {
+      return;
+    }
+
+    const isCurrentlyEditing = this.editingShapeId() === shapeId;
+    const editorEl = isCurrentlyEditing ? this.getActiveEditorElement() : null;
+
+    if (isCurrentlyEditing && editorEl) {
+      const sel = window.getSelection();
+      if (
+        this.savedEditorRange &&
+        (!sel || sel.rangeCount === 0 || !editorEl.contains(sel.anchorNode))
+      ) {
+        try {
+          editorEl.focus();
+          sel?.removeAllRanges();
+          sel?.addRange(this.savedEditorRange);
+        } catch {
+          // Ignored
+        }
+      }
+
+      const currentSel = window.getSelection();
+      const currentRange =
+        currentSel && currentSel.rangeCount > 0 && !currentSel.getRangeAt(0).collapsed
+          ? currentSel.getRangeAt(0)
+          : this.savedEditorRange && !this.savedEditorRange.collapsed
+            ? this.savedEditorRange
+            : currentSel && currentSel.rangeCount > 0
+              ? currentSel.getRangeAt(0)
+              : this.savedEditorRange;
+      const hasTextSelection =
+        !!currentRange && !currentRange.collapsed && currentRange.toString().length > 0;
+
+      if (hasTextSelection) {
+        try {
+          document.execCommand(format, false);
+        } catch {
+          // Fallback
+        }
+        this.persistActiveEditorContent(shapeId, editorEl);
+        this.saveCurrentEditorSelection();
+        editorEl.focus();
+        return;
+      }
+
+      // No range selected (collapsed caret or cursor at start/end of text):
+      // Toggle the format on the shape itself so that newly typed characters and the overall shape
+      // take on the toggled format, and the toolbar button is visibly active.
+      try {
+        document.execCommand(format, false);
+      } catch {
+        // Fallback
+      }
+      this.shapes.update((list) =>
+        list.map((s) => {
+          if (s.id !== shapeId) {
+            return s;
+          }
+          if (format === 'bold') return { ...s, isBold: !s.isBold };
+          if (format === 'italic') return { ...s, isItalic: !s.isItalic };
+          if (format === 'underline') return { ...s, isUnderline: !s.isUnderline };
+          return s;
+        }),
+      );
+      this.emitDiagramChange();
+      editorEl.focus();
+      this.saveCurrentEditorSelection();
+      return;
+    }
+
+    this.shapes.update((list) =>
+      list.map((s) => {
+        if (s.id !== shapeId) {
+          return s;
+        }
+        if (format === 'bold') {
+          return { ...s, isBold: !s.isBold };
+        }
+        if (format === 'italic') {
+          return { ...s, isItalic: !s.isItalic };
+        }
+        if (format === 'underline') {
+          return { ...s, isUnderline: !s.isUnderline };
+        }
+        return s;
+      }),
+    );
+    this.emitDiagramChange();
+  }
+
+  adjustShapeFontSize(shapeId: string, delta: number): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) => {
+        if (s.id !== shapeId) {
+          return s;
+        }
+        const currentSize = s.fontSize || 14;
+        const newSize = Math.max(8, Math.min(72, currentSize + delta));
+        return { ...s, fontSize: newSize };
+      }),
+    );
+    this.emitDiagramChange();
+  }
+
+  setShapeFontSize(shapeId: string, size: number): void {
+    if (this.readOnly()) {
+      return;
+    }
+    const boundedSize = Math.max(8, Math.min(72, size));
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, fontSize: boundedSize } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  handleUmlClassSectionInput(
+    shapeId: string,
+    section: 'className' | 'attributes' | 'methods',
+    headerEl: HTMLElement,
+    attrEl: HTMLElement,
+    methodEl: HTMLElement,
+  ): void {
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+    const sections: UmlClassSections = {
+      className: sanitizeRichText(headerEl.innerHTML.trim()),
+      attributes: sanitizeRichText(attrEl.innerHTML.trim()),
+      methods: sanitizeRichText(methodEl.innerHTML.trim()),
+    };
+    const formatted = formatUmlClassText(sections);
+    const requiredH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13);
+    const newHeight = Math.max(requiredH, shape.height);
+
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  handleUmlInterfaceSectionInput(
+    shapeId: string,
+    section: 'header' | 'methods',
+    headerEl: HTMLElement,
+    methodEl: HTMLElement,
+  ): void {
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+    const sections: UmlInterfaceSections = {
+      interfaceName: sanitizeRichText(headerEl.innerHTML.trim()),
+      methods: sanitizeRichText(methodEl.innerHTML.trim()),
+    };
+    const formatted = formatUmlInterfaceText(sections);
+    const requiredH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13);
+    const newHeight = Math.max(requiredH, shape.height);
+
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  handleUmlEditorFocusOut(event: FocusEvent, shapeId: string): void {
+    const target = event.currentTarget as HTMLElement | null;
+    const related = event.relatedTarget as Node | null;
+    if (target && related && target.contains(related)) {
+      return;
+    }
+    if (this.editingShapeId() === shapeId) {
+      this.editingShapeId.set(null);
+    }
+  }
+
+  setShapeTextAlign(shapeId: string, align: 'left' | 'center' | 'right'): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, textAlign: align } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  setShapeVerticalAlign(shapeId: string, align: 'top' | 'middle' | 'bottom'): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, verticalAlign: align } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  toggleStickyAuthorVisibility(shapeId: string): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) =>
+        s.id === shapeId ? { ...s, showAuthor: s.showAuthor === false ? true : false } : s,
+      ),
+    );
+    this.emitDiagramChange();
+  }
+
+  isShapeMasked(shape: CanvasShape): boolean {
+    if (!this.thinkMode()) {
+      return false;
+    }
+    const config = this.thinkModeConfig();
+    if (!config?.hideOthersWriting) {
+      return false;
+    }
+    if (this.facilitatorReveal()) {
+      return false;
+    }
+    if (shape.type !== 'sticky-note') {
+      return false;
+    }
+    const current = this.currentUsername();
+    if (!current) {
+      return true;
+    }
+    if (shape.authorName === current) {
+      return false;
+    }
+    if (config.groups && config.groups.length > 0) {
+      const userGroups = config.groups.filter((g) => g.memberUsernames.includes(current));
+      for (const g of userGroups) {
+        if (shape.authorName && g.memberUsernames.includes(shape.authorName)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  pullStickyNoteFromPad(padShape: CanvasShape): void {
+    const newX = padShape.x + padShape.width + 20;
+    const newY = padShape.y;
+    const note = this.createShape('sticky-note', { x: newX + 60, y: newY + 60 });
+    this.selectShape(note.id);
+  }
+
+  getShapeFittingFontSize(shape: CanvasShape): number {
+    return computeFittingFontSize(shape.text, shape.width, shape.height, shape.fontSize || 14);
+  }
+
+  handleRichTextKeydown(event: KeyboardEvent, shapeId: string, editorEl: HTMLElement): void {
+    event.stopPropagation();
+    if (event.ctrlKey || event.metaKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'b') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'bold');
+        return;
+      }
+      if (key === 'i') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'italic');
+        return;
+      }
+      if (key === 'u') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'underline');
+        return;
+      }
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.finishEditingShapeText(shapeId, editorEl.innerHTML);
+    }
+  }
+
   getConnectionFillColor(strokeColor: string): string {
     const preset = this.canvasColorPresets.find((p) => p.stroke === strokeColor);
     return preset ? preset.fill : 'var(--mat-sys-surface)';
@@ -670,6 +1251,12 @@ export class CanvasComponent {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly fullscreenService = inject(FullscreenService);
   readonly connTextInput = viewChild<ElementRef<HTMLInputElement>>('textInput');
+  readonly shapeRichTextEditor = viewChild<ElementRef<HTMLElement>>('shapeTextEditor');
+  readonly umlClassHeaderEditor = viewChild<ElementRef<HTMLElement>>('umlClassHeaderEditor');
+  readonly umlClassAttrEditor = viewChild<ElementRef<HTMLElement>>('umlClassAttrEditor');
+  readonly umlClassMethodEditor = viewChild<ElementRef<HTMLElement>>('umlClassMethodEditor');
+  readonly umlIfaceHeaderEditor = viewChild<ElementRef<HTMLElement>>('umlIfaceHeaderEditor');
+  readonly umlIfaceMethodEditor = viewChild<ElementRef<HTMLElement>>('umlIfaceMethodEditor');
 
   // Persistence state tracking
   private lastLoadedDataJson: string | null | undefined = undefined;
@@ -746,6 +1333,45 @@ export class CanvasComponent {
     });
 
     effect(() => {
+      const editShapeId = this.editingShapeId();
+      if (!editShapeId) {
+        return;
+      }
+      const shape = untracked(() => this.shapes().find((s) => s.id === editShapeId));
+      if (!shape) {
+        return;
+      }
+
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      const ifaceHeaderEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const ifaceMethodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      const editorEl = this.shapeRichTextEditor()?.nativeElement;
+
+      const isAnyFocused =
+        document.activeElement &&
+        (document.activeElement === headerEl ||
+          document.activeElement === attrEl ||
+          document.activeElement === methodEl ||
+          document.activeElement === ifaceHeaderEl ||
+          document.activeElement === ifaceMethodEl ||
+          document.activeElement === editorEl ||
+          headerEl?.contains(document.activeElement) ||
+          attrEl?.contains(document.activeElement) ||
+          methodEl?.contains(document.activeElement) ||
+          ifaceHeaderEl?.contains(document.activeElement) ||
+          ifaceMethodEl?.contains(document.activeElement) ||
+          editorEl?.contains(document.activeElement));
+
+      if (isAnyFocused) {
+        return;
+      }
+
+      this.focusShapeTextEditor(shape, this.activeUmlSection);
+    });
+
+    effect(() => {
       const dataJson = this.initialCanvasData();
       untracked(() => {
         if (!this.hasLoadedInitialData || dataJson !== this.lastLoadedDataJson) {
@@ -788,8 +1414,29 @@ export class CanvasComponent {
 
   public applyExternalDiagramData(diagramData: CanvasDiagramData): void {
     this.isApplyingExternalData = true;
-    this.shapes.set(diagramData.shapes);
+    if (this.isMovingShapes && this.shapeInitialPositions.size > 0) {
+      // Preserve shapes currently being dragged locally, update all others
+      const currentShapes = this.shapes();
+      const draggedShapeMap = new Map<string, CanvasShape>();
+      for (const s of currentShapes) {
+        if (this.shapeInitialPositions.has(s.id)) {
+          draggedShapeMap.set(s.id, s);
+        }
+      }
+      const mergedShapes = diagramData.shapes.map((remoteShape) => {
+        const localDragged = draggedShapeMap.get(remoteShape.id);
+        return localDragged ?? remoteShape;
+      });
+      this.shapes.set(mergedShapes);
+    } else {
+      this.shapes.set(diagramData.shapes);
+    }
     this.connections.set(diagramData.connections);
+    this.lastEmittedJson = JSON.stringify({
+      shapes: this.shapes(),
+      connections: diagramData.connections,
+    });
+    this.lastLoadedDataJson = JSON.stringify(diagramData);
   }
 
   loadCanvasData(dataJson: string | null): void {
@@ -1044,10 +1691,45 @@ export class CanvasComponent {
   readonly draggingTool = signal<ShapeType | null>(null);
   private toolDragStartPos: CanvasPoint | null = null;
   private hasToolDragStarted = false;
+  private suppressNextToolClick = false;
+
+  readonly isCatalogToolActive = computed<boolean>(() => {
+    const tool = this.activeTool();
+    const mainDockTools: ActiveTool[] = [
+      'select',
+      'connection',
+      'rectangle',
+      'rounded-rectangle',
+      'ellipse',
+      'diamond',
+      'sticky-note',
+      'frame',
+    ];
+    return !mainDockTools.includes(tool);
+  });
+
+  readonly activeCatalogItem = computed<CatalogShapeItem | undefined>(() => {
+    const tool = this.activeTool();
+    return this.shapeCatalog.find((item) => item.type === tool);
+  });
+
+  handleToolButtonClick(tool: ActiveTool): void {
+    if (this.suppressNextToolClick) {
+      this.suppressNextToolClick = false;
+      return;
+    }
+    this.setActiveTool(tool);
+  }
 
   setActiveTool(tool: ActiveTool): void {
-    if (this.readOnly() && tool !== 'select') {
+    if (this.suppressNextToolClick) {
+      this.suppressNextToolClick = false;
       return;
+    }
+    if (this.readOnly() && tool !== 'select') {
+      if (!this.thinkMode() || !this.canViewerParticipate() || tool !== 'sticky-note') {
+        return;
+      }
     }
     if (this.inProgressConnection()) {
       this.inProgressConnection.set(null);
@@ -1066,13 +1748,16 @@ export class CanvasComponent {
     const centerX = rect.width > 0 ? rect.left + rect.width / 2 : 400;
     const centerY = rect.height > 0 ? rect.top + rect.height / 2 : 300;
     const centerWorld = this.screenToWorld({ x: centerX, y: centerY });
-    return this.createShape(type, centerWorld);
+    const shape = this.createShape(type, centerWorld);
+    this.emitDiagramChange();
+    return shape;
   }
 
   handleToolPointerDown(event: PointerEvent, tool: ShapeType): void {
     if (this.readOnly()) {
       return;
     }
+    this.suppressNextToolClick = false;
     this.toolDragStartPos = { x: event.clientX, y: event.clientY };
     this.hasToolDragStarted = false;
     this.draggingTool.set(tool);
@@ -1100,9 +1785,14 @@ export class CanvasComponent {
   handleToolPointerUp(event: PointerEvent): void {
     const tool = this.draggingTool();
     if (tool && this.hasToolDragStarted) {
+      this.suppressNextToolClick = true;
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
       this.createShape(tool, worldPoint);
-      this.setActiveTool('select');
+      this.activeTool.set('select');
+      this.emitDiagramChange();
+      setTimeout(() => {
+        this.suppressNextToolClick = false;
+      }, 100);
     }
     this.draggingTool.set(null);
     this.toolDragStartPos = null;
@@ -1115,25 +1805,90 @@ export class CanvasComponent {
     }
     const target = event.target as HTMLElement | null;
     if (
-      !target ||
-      target.closest('.canvas-tools-dock') ||
-      target.closest('.canvas-controls-dock') ||
-      target.closest('app-canvas-shape') ||
-      target.closest('.canvas-connections-layer') ||
-      target.closest('.canvas-connection-handles-layer') ||
-      target.closest('.connection-group') ||
-      target.closest('.connection-text-editor') ||
-      target.closest('.selection-toolbar-dock') ||
-      target.closest('.connection-toolbar-dock') ||
-      target.closest('.welcome-card')
+      target &&
+      (target.closest('.canvas-tools-dock') ||
+        target.closest('.canvas-controls-dock') ||
+        target.closest('.connection-text-editor') ||
+        target.closest('.selection-tools-dock') ||
+        target.closest('.selection-toolbar-dock') ||
+        target.closest('.connection-tools-dock') ||
+        target.closest('.connection-toolbar-dock') ||
+        target.closest('.welcome-card') ||
+        target.closest('.frames-navigator-sidebar') ||
+        target.closest('.shape-text-inline-editor-wrapper') ||
+        target.closest('button') ||
+        target.closest('[role="toolbar"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.mat-mdc-button-base') ||
+        target.closest('.mat-mdc-menu-panel') ||
+        target.closest('.cdk-overlay-container'))
     ) {
       return;
     }
+
+    // 1. If double-clicking over an existing shape (via DOM target or coordinates), start editing its text!
+    const shapeEl = (target?.closest('.shape-container') ||
+      target?.closest('app-canvas-shape')) as HTMLElement | null;
+    const shapeIdFromDom = shapeEl?.getAttribute('data-shape-id');
+    const umlSection = (target?.closest('[data-uml-section]')?.getAttribute('data-uml-section') ||
+      undefined) as 'header' | 'attributes' | 'methods' | undefined;
+    if (shapeIdFromDom) {
+      this.startEditingShapeText(shapeIdFromDom, umlSection);
+      return;
+    }
+
     const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
-    this.createShape('rectangle', worldPoint);
+    const targetShape = this.findShapeAtPoint(worldPoint);
+    if (targetShape) {
+      this.startEditingShapeText(targetShape.id, umlSection);
+      return;
+    }
+
+    // 2. Ignore connection layers
+    if (
+      target &&
+      (target.closest('.canvas-connections-layer') ||
+        target.closest('.canvas-connection-handles-layer') ||
+        target.closest('.connection-group'))
+    ) {
+      return;
+    }
+
+    // 3. Double-clicking on empty canvas creates a rectangle
+    const newShape = this.createShape('rectangle', worldPoint);
+    this.emitDiagramChange();
+    this.startEditingShapeText(newShape.id);
+  }
+
+  findShapeAtPoint(point: CanvasPoint): CanvasShape | null {
+    const sorted = [...this.shapes()].sort((a, b) => b.zIndex - a.zIndex);
+    for (const shape of sorted) {
+      if (shape.type !== 'frame' && this.isPointInsideShape(point, shape)) {
+        return shape;
+      }
+    }
+    for (const shape of sorted) {
+      if (shape.type === 'frame' && this.isPointInsideShape(point, shape)) {
+        return shape;
+      }
+    }
+    return null;
+  }
+
+  private isPointInsideShape(point: CanvasPoint, shape: CanvasShape): boolean {
+    return (
+      point.x >= shape.x &&
+      point.x <= shape.x + shape.width &&
+      point.y >= shape.y &&
+      point.y <= shape.y + shape.height
+    );
   }
 
   clearSelection(): void {
+    if (this.editingShapeId()) {
+      this.editingShapeId.set(null);
+    }
     this.selectedShapeIds.set(new Set<string>());
     this.selectedConnectionIds.set(new Set<string>());
   }
@@ -1164,22 +1919,189 @@ export class CanvasComponent {
   }
 
   createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
+    const catalogItem = SHAPE_CATALOG.find((i) => i.type === type);
+    const width = catalogItem?.defaultWidth ?? SHAPE_CONSTANTS.DEFAULT_WIDTH;
+    const height = catalogItem?.defaultHeight ?? SHAPE_CONSTANTS.DEFAULT_HEIGHT;
+    const defaultText = catalogItem?.defaultText;
+
+    const isTextBlock = type === 'text-block';
+    const isSticky = type === 'sticky-note';
+    const isFrame = type === 'frame';
+
+    const frameCount = this.shapes().filter((s) => s.type === 'frame').length;
+    const frameText = isFrame ? `Frame ${frameCount + 1}` : defaultText;
+
     const newShape: CanvasShape = {
       id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type,
-      x: Math.round(worldPoint.x - SHAPE_CONSTANTS.DEFAULT_WIDTH / 2),
-      y: Math.round(worldPoint.y - SHAPE_CONSTANTS.DEFAULT_HEIGHT / 2),
-      width: SHAPE_CONSTANTS.DEFAULT_WIDTH,
-      height: SHAPE_CONSTANTS.DEFAULT_HEIGHT,
-      fillColor: SHAPE_CONSTANTS.DEFAULT_FILL,
-      strokeColor: SHAPE_CONSTANTS.DEFAULT_STROKE,
-      strokeWidth: SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
-      zIndex: this.shapes().length + 1,
+      x: Math.round(worldPoint.x - width / 2),
+      y: Math.round(worldPoint.y - height / 2),
+      width,
+      height,
+      fillColor:
+        isTextBlock || isFrame
+          ? 'transparent'
+          : isSticky
+            ? 'var(--canvas-color-amber-fill)'
+            : SHAPE_CONSTANTS.DEFAULT_FILL,
+      strokeColor: isTextBlock
+        ? 'transparent'
+        : isFrame
+          ? 'var(--canvas-frame-stroke, rgba(140, 140, 160, 0.5))'
+          : isSticky
+            ? 'var(--canvas-color-amber-stroke)'
+            : SHAPE_CONSTANTS.DEFAULT_STROKE,
+      strokeWidth: isTextBlock ? 0 : SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
+      text: frameText,
+      verticalAlign: 'middle',
+      authorName: isSticky ? this.currentUsername() || 'Author' : undefined,
+      showAuthor: isSticky ? true : undefined,
+      zIndex: isFrame ? 0 : this.shapes().length + 1,
     };
 
     this.shapes.update((list) => [...list, newShape]);
     this.selectShape(newShape.id);
+    if (this.activeTool() !== 'connection') {
+      this.activeTool.set('select');
+    }
     return newShape;
+  }
+
+  createFrame(preset?: FramePreset, worldPoint?: CanvasPoint): CanvasShape {
+    const p = preset ?? FRAME_PRESETS[0];
+    let point = worldPoint;
+    if (!point) {
+      const rect = this.elementRef.nativeElement.getBoundingClientRect();
+      const viewW = rect.width > 0 ? rect.width : 800;
+      const viewH = rect.height > 0 ? rect.height : 600;
+      point = this.screenToWorld({ x: viewW / 2, y: viewH / 2 });
+    }
+    const frameCount = this.shapes().filter((s) => s.type === 'frame').length;
+    const title = p.id === 'custom' ? `Frame ${frameCount + 1}` : `${p.name} ${frameCount + 1}`;
+
+    const newShape: CanvasShape = {
+      id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type: 'frame',
+      x: Math.round(point.x - p.width / 2),
+      y: Math.round(point.y - p.height / 2),
+      width: p.width,
+      height: p.height,
+      fillColor: 'transparent',
+      strokeColor: 'var(--canvas-frame-stroke, rgba(140, 140, 160, 0.5))',
+      strokeWidth: 2,
+      text: title,
+      zIndex: 0,
+    };
+
+    this.shapes.update((list) => [...list, newShape]);
+    this.selectShape(newShape.id);
+    if (this.activeTool() !== 'connection') {
+      this.activeTool.set('select');
+    }
+    return newShape;
+  }
+
+  isShapeInsideFrame(shape: CanvasShape, frame: CanvasShape): boolean {
+    if (shape.id === frame.id) {
+      return false;
+    }
+    const centerX = shape.x + shape.width / 2;
+    const centerY = shape.y + shape.height / 2;
+    return (
+      centerX >= frame.x &&
+      centerX <= frame.x + frame.width &&
+      centerY >= frame.y &&
+      centerY <= frame.y + frame.height
+    );
+  }
+
+  getShapesInFrame(frame: CanvasShape): CanvasShape[] {
+    return this.shapes().filter((s) => this.isShapeInsideFrame(s, frame));
+  }
+
+  zoomToFitBounds(
+    bounds: { x: number; y: number; width: number; height: number },
+    padding = 80,
+  ): void {
+    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+    const viewWidth = rect.width > 0 ? rect.width : 800;
+    const viewHeight = rect.height > 0 ? rect.height : 600;
+
+    const availableWidth = Math.max(100, viewWidth - padding * 2);
+    const availableHeight = Math.max(100, viewHeight - padding * 2);
+
+    const scaleX = availableWidth / bounds.width;
+    const scaleY = availableHeight / bounds.height;
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), CANVAS_CONSTANTS.MIN_ZOOM), 1.5);
+
+    const frameCenterX = bounds.x + bounds.width / 2;
+    const frameCenterY = bounds.y + bounds.height / 2;
+
+    const newPanX = viewWidth / 2 - frameCenterX * targetZoom;
+    const newPanY = viewHeight / 2 - frameCenterY * targetZoom;
+
+    this.zoom.set(targetZoom);
+    this.panX.set(newPanX);
+    this.panY.set(newPanY);
+    this.emitTransformChange();
+  }
+
+  zoomToFrame(frameId: string): void {
+    const frame = this.shapes().find((s) => s.id === frameId && s.type === 'frame');
+    if (!frame) {
+      return;
+    }
+    this.zoomToFitBounds({ x: frame.x, y: frame.y, width: frame.width, height: frame.height });
+    this.selectShape(frame.id);
+  }
+
+  renameFrame(frameId: string, title: string): void {
+    this.updateShape(frameId, { text: title });
+  }
+
+  deleteFrame(frameId: string): void {
+    this.shapes.update((list) => list.filter((s) => s.id !== frameId));
+    if (this.selectedShapeIds().has(frameId)) {
+      this.selectedShapeIds.update((s) => {
+        const next = new Set(s);
+        next.delete(frameId);
+        return next;
+      });
+    }
+  }
+
+  reorderFrames(frameId: string, direction: 'up' | 'down'): void {
+    const currentShapes = this.shapes();
+    const frameIndices: number[] = [];
+    currentShapes.forEach((s, idx) => {
+      if (s.type === 'frame') {
+        frameIndices.push(idx);
+      }
+    });
+
+    const targetPos = frameIndices.findIndex((idx) => currentShapes[idx].id === frameId);
+    if (targetPos === -1) {
+      return;
+    }
+
+    const swapPos = direction === 'up' ? targetPos - 1 : targetPos + 1;
+    if (swapPos < 0 || swapPos >= frameIndices.length) {
+      return;
+    }
+
+    const fromIdx = frameIndices[targetPos];
+    const toIdx = frameIndices[swapPos];
+
+    const updated = [...currentShapes];
+    const temp = updated[fromIdx];
+    updated[fromIdx] = updated[toIdx];
+    updated[toIdx] = temp;
+
+    this.shapes.set(updated);
+  }
+
+  toggleFramesNavigator(): void {
+    this.openFramesNavigator.emit();
   }
 
   updateShape(id: string, partial: Partial<CanvasShape>): void {
@@ -1218,6 +2140,29 @@ export class CanvasComponent {
   deleteSelectedShapes(): void {
     const selected = this.selectedShapeIds();
     const selectedConns = this.selectedConnectionIds();
+
+    if (this.readOnly()) {
+      if (!this.thinkMode() || !this.canViewerParticipate()) {
+        return;
+      }
+      const allowedIds = new Set(
+        this.shapes()
+          .filter(
+            (s) =>
+              selected.has(s.id) &&
+              s.type === 'sticky-note' &&
+              s.authorName === this.currentUsername(),
+          )
+          .map((s) => s.id),
+      );
+      if (allowedIds.size === 0) {
+        return;
+      }
+      this.shapes.update((list) => list.filter((s) => !allowedIds.has(s.id)));
+      this.clearSelection();
+      this.emitDiagramChange();
+      return;
+    }
 
     if (selected.size > 0) {
       this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
@@ -1968,11 +2913,47 @@ export class CanvasComponent {
     }
 
     const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (!isMultiSelect) {
+      const now = performance.now();
+      const isDoubleTap =
+        this.lastShapePointerDownId === shape.id &&
+        now - this.lastShapePointerDownTime < 450 &&
+        this.lastShapePointerDownPos &&
+        Math.hypot(
+          event.clientX - this.lastShapePointerDownPos.x,
+          event.clientY - this.lastShapePointerDownPos.y,
+        ) < 12;
+
+      this.lastShapePointerDownTime = now;
+      this.lastShapePointerDownId = shape.id;
+      this.lastShapePointerDownPos = { x: event.clientX, y: event.clientY };
+
+      if (isDoubleTap) {
+        this.lastShapePointerDownTime = 0;
+        this.lastShapePointerDownId = null;
+        this.lastShapePointerDownPos = null;
+        this.isMovingShapes = false;
+        this.startEditingShapeText(shape.id);
+        return;
+      }
+    }
+
     if (!this.isShapeSelected(shape.id)) {
       this.selectShape(shape.id, isMultiSelect);
     } else if (isMultiSelect) {
       this.selectShape(shape.id, true);
       return;
+    }
+
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
     }
 
     this.isMovingShapes = true;
@@ -1982,13 +2963,27 @@ export class CanvasComponent {
     this.hasClonedForAltDrag = false;
 
     const selectedIds = this.selectedShapeIds();
+    const movingIds = new Set(selectedIds);
+    // If any frame is selected, all shapes contained inside that frame move with it
+    for (const frame of this.shapes()) {
+      if (frame.type === 'frame' && selectedIds.has(frame.id)) {
+        for (const child of this.shapes()) {
+          if (child.id !== frame.id && this.isShapeInsideFrame(child, frame)) {
+            movingIds.add(child.id);
+          }
+        }
+      }
+    }
+
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const s of this.shapes()) {
-      if (selectedIds.has(s.id)) {
+      if (movingIds.has(s.id)) {
         this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+      }
+      if (selectedIds.has(s.id)) {
         minX = Math.min(minX, s.x);
         minY = Math.min(minY, s.y);
         maxX = Math.max(maxX, s.x + s.width);
@@ -2003,9 +2998,9 @@ export class CanvasComponent {
     this.connectionInitialWaypoints.clear();
     for (const c of this.connections()) {
       const isSelfLoop =
-        c.targetShapeId && c.sourceShapeId === c.targetShapeId && selectedIds.has(c.sourceShapeId);
+        c.targetShapeId && c.sourceShapeId === c.targetShapeId && movingIds.has(c.sourceShapeId);
       const isBothEndpoints =
-        c.targetShapeId && selectedIds.has(c.sourceShapeId) && selectedIds.has(c.targetShapeId);
+        c.targetShapeId && movingIds.has(c.sourceShapeId) && movingIds.has(c.targetShapeId);
 
       if ((isSelfLoop || isBothEndpoints) && c.waypoints?.length) {
         this.connectionInitialWaypoints.set(
@@ -2013,12 +3008,6 @@ export class CanvasComponent {
           c.waypoints.map((p) => ({ ...p })),
         );
       }
-    }
-
-    try {
-      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
-    } catch {
-      // Ignored
     }
   }
 
@@ -2039,6 +3028,17 @@ export class CanvasComponent {
     const shape = this.shapes().find((s) => s.id === shapeId);
     if (!shape) {
       return;
+    }
+
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
     }
 
     this.isResizing = true;
@@ -2083,7 +3083,24 @@ export class CanvasComponent {
 
     // Prevent canvas interactions if clicking inside floating docks or UI controls
     const target = event.target as HTMLElement | null;
-    if (target?.closest('.canvas-tools-dock') || target?.closest('.canvas-controls-dock')) {
+    if (
+      target &&
+      (target.closest('.canvas-tools-dock') ||
+        target.closest('.canvas-controls-dock') ||
+        target.closest('.selection-tools-dock') ||
+        target.closest('.selection-toolbar-dock') ||
+        target.closest('.connection-tools-dock') ||
+        target.closest('.connection-toolbar-dock') ||
+        target.closest('.welcome-card') ||
+        target.closest('.frames-navigator-sidebar') ||
+        target.closest('button') ||
+        target.closest('[role="toolbar"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.mat-mdc-button-base') ||
+        target.closest('.mat-mdc-menu-panel') ||
+        target.closest('.cdk-overlay-container'))
+    ) {
       return;
     }
 
@@ -2108,6 +3125,11 @@ export class CanvasComponent {
       }
 
       if (currentTool !== 'select' && currentTool !== 'connection') {
+        if (this.readOnly()) {
+          if (!this.thinkMode() || !this.canViewerParticipate() || currentTool !== 'sticky-note') {
+            return;
+          }
+        }
         const newShape = this.createShape(currentTool as ShapeType, worldPoint);
         this.isMovingShapes = true;
         this.moveStartPoint = worldPoint;
@@ -2136,7 +3158,32 @@ export class CanvasComponent {
       }
 
       if (currentTool === 'select') {
+        const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+        if (!isMultiSelect) {
+          const now = performance.now();
+          const isCanvasDoubleTap =
+            now - this.lastCanvasPointerDownTime < 450 &&
+            this.lastCanvasPointerDownPos &&
+            Math.hypot(
+              event.clientX - this.lastCanvasPointerDownPos.x,
+              event.clientY - this.lastCanvasPointerDownPos.y,
+            ) < 12;
+
+          this.lastCanvasPointerDownTime = now;
+          this.lastCanvasPointerDownPos = { x: event.clientX, y: event.clientY };
+
+          if (isCanvasDoubleTap) {
+            this.lastCanvasPointerDownTime = 0;
+            this.lastCanvasPointerDownPos = null;
+            this.marqueeStart = null;
+            this.marqueeBox.set(null);
+            this.handleDoubleClick(event);
+            return;
+          }
+        }
+
         this.marqueeStart = worldPoint;
+        this.hasPointerCaptureForMarquee = false;
         this.marqueeBox.set({
           minX: worldPoint.x,
           minY: worldPoint.y,
@@ -2145,12 +3192,6 @@ export class CanvasComponent {
           width: 0,
           height: 0,
         });
-
-        try {
-          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
-        } catch {
-          // Ignored
-        }
       }
     }
   }
@@ -2537,6 +3578,15 @@ export class CanvasComponent {
       const rawDeltaX = currentWorld.x - this.moveStartPoint.x;
       const rawDeltaY = currentWorld.y - this.moveStartPoint.y;
 
+      if (!this.hasPointerCaptureForMove && Math.hypot(rawDeltaX, rawDeltaY) >= 3) {
+        this.hasPointerCaptureForMove = true;
+        try {
+          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+        } catch {
+          // Ignored
+        }
+      }
+
       if (this.isAltDragPending && !this.hasClonedForAltDrag) {
         if (Math.hypot(rawDeltaX, rawDeltaY) >= 3) {
           this.performAltDragClone();
@@ -2629,6 +3679,21 @@ export class CanvasComponent {
       const minY = Math.min(this.marqueeStart.y, currentWorld.y);
       const maxX = Math.max(this.marqueeStart.x, currentWorld.x);
       const maxY = Math.max(this.marqueeStart.y, currentWorld.y);
+
+      if (!this.hasPointerCaptureForMarquee) {
+        const dist = Math.hypot(
+          currentWorld.x - this.marqueeStart.x,
+          currentWorld.y - this.marqueeStart.y,
+        );
+        if (dist > 3) {
+          this.hasPointerCaptureForMarquee = true;
+          try {
+            (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+          } catch {
+            // Ignored
+          }
+        }
+      }
 
       this.marqueeBox.set({
         minX,
@@ -2772,6 +3837,7 @@ export class CanvasComponent {
 
     if (this.isMovingShapes) {
       this.isMovingShapes = false;
+      this.hasPointerCaptureForMove = false;
       this.moveStartPoint = null;
       this.initialMovingBounds = null;
       this.alignmentGuides.set([]);
@@ -2811,6 +3877,7 @@ export class CanvasComponent {
         }
         this.selectedShapeIds.set(matchingIds);
       }
+      this.hasPointerCaptureForMarquee = false;
       this.marqueeStart = null;
       this.marqueeBox.set(null);
     }
@@ -2890,7 +3957,11 @@ export class CanvasComponent {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      (event.target as HTMLElement)?.isContentEditable
+    ) {
       return;
     }
 
@@ -2899,6 +3970,10 @@ export class CanvasComponent {
     }
 
     if (event.key === 'Escape') {
+      if (this.editingShapeId()) {
+        this.editingShapeId.set(null);
+        return;
+      }
       if (this.isResizing && this.resizeInitialShape) {
         const initial = this.resizeInitialShape;
         this.shapes.update((list) => list.map((s) => (s.id === initial.id ? { ...initial } : s)));
@@ -2933,6 +4008,14 @@ export class CanvasComponent {
     }
 
     if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === 'Enter') {
+        const singleShape = this.singleSelectedShape();
+        if (singleShape && !this.editingShapeId() && !this.readOnly()) {
+          event.preventDefault();
+          this.startEditingShapeText(singleShape.id);
+          return;
+        }
+      }
       if (event.key === 'v' || event.key === 'V') {
         this.setActiveTool('select');
         return;
@@ -2951,6 +4034,18 @@ export class CanvasComponent {
       }
       if (event.key === 'd' || event.key === 'D') {
         this.setActiveTool('diamond');
+        return;
+      }
+      if (event.key === 't' || event.key === 'T') {
+        this.setActiveTool('text-block');
+        return;
+      }
+      if (event.key === 'n' || event.key === 'N') {
+        this.setActiveTool('sticky-note');
+        return;
+      }
+      if (event.key === 'f' || event.key === 'F') {
+        this.setActiveTool('frame');
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {

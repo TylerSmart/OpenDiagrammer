@@ -1,8 +1,9 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CanvasComponent } from './canvas.component';
-import { CANVAS_CONSTANTS } from './canvas.models';
+import { CANVAS_CONSTANTS, CanvasDiagramData } from './canvas.models';
 import { getShapeAnchorPoint } from './connection.models';
+import { FRAME_PRESETS } from './shape.models';
 
 describe('CanvasComponent', () => {
   let component: CanvasComponent;
@@ -321,7 +322,7 @@ describe('CanvasComponent', () => {
     expect(zoomedInSize).toBeLessThanOrEqual(72);
   });
 
-  it('should create and select shapes using tools while retaining active tool until returning to select', () => {
+  it('should create and select shapes using tools and return to select tool after placing a single shape', () => {
     component.setActiveTool('rectangle');
     expect(component.activeTool()).toBe('rectangle');
 
@@ -329,8 +330,8 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(1);
     expect(shape.type).toBe('rectangle');
     expect(component.isShapeSelected(shape.id)).toBe(true);
-    // Tool remains active!
-    expect(component.activeTool()).toBe('rectangle');
+    // Tool returns to select after placing a single shape!
+    expect(component.activeTool()).toBe('select');
 
     // Selection bounding box should match shape bounds
     const box = component.selectionBox();
@@ -338,35 +339,48 @@ describe('CanvasComponent', () => {
     expect(box?.minX).toBe(shape.x);
     expect(box?.minY).toBe(shape.y);
 
-    // Creating another shape still keeps the tool active
-    const shape2 = component.createShape('rectangle', { x: 400, y: 150 });
-    expect(shape2.type).toBe('rectangle');
+    // Clicking canvas with a shape tool creates shape and resets tool to select
+    component.setActiveTool('ellipse');
+    expect(component.activeTool()).toBe('ellipse');
+    component.handlePointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 300 }),
+    );
     expect(component.shapes().length).toBe(2);
-    expect(component.activeTool()).toBe('rectangle');
+    expect(component.shapes()[1].type).toBe('ellipse');
+    expect(component.activeTool()).toBe('select');
 
-    // Clicking on an existing shape with shape tool selects/moves that shape without creating duplicate
+    // Placing a catalog shape also resets tool to select and clears catalog highlight
+    component.setActiveTool('uml-class');
+    expect(component.activeTool()).toBe('uml-class');
+    expect(component.isCatalogToolActive()).toBe(true);
+    component.handlePointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 400 }),
+    );
+    expect(component.shapes().length).toBe(3);
+    expect(component.shapes()[2].type).toBe('uml-class');
+    expect(component.activeTool()).toBe('select');
+    expect(component.isCatalogToolActive()).toBe(false);
+
+    // Clicking on an existing shape selects that shape without creating duplicate
     component.handleShapePointerDown(
       new PointerEvent('pointerdown', { button: 0, clientX: 200, clientY: 150 }),
       shape,
     );
-    expect(component.shapes().length).toBe(2);
+    expect(component.shapes().length).toBe(3);
     expect(component.isShapeSelected(shape.id)).toBe(true);
-    expect(component.activeTool()).toBe('rectangle');
-
-    // Returns to select tool when user explicitly chooses select
-    component.setActiveTool('select');
     expect(component.activeTool()).toBe('select');
   });
 
-  it('should insert shape at viewport center when clicking an already-active shape tool', () => {
+  it('should insert shape at viewport center and return to select tool when clicking an already-active shape tool', () => {
     component.setActiveTool('rectangle');
     expect(component.activeTool()).toBe('rectangle');
     const countBefore = component.shapes().length;
 
-    // Clicking again should insert shape at center
+    // Clicking again should insert shape at center and return to select
     component.setActiveTool('rectangle');
     expect(component.shapes().length).toBe(countBefore + 1);
     expect(component.shapes()[component.shapes().length - 1].type).toBe('rectangle');
+    expect(component.activeTool()).toBe('select');
   });
 
   it('should create a rectangle when double-clicking on empty canvas area', () => {
@@ -404,6 +418,17 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(countBefore + 1);
     const lastShape = component.shapes()[component.shapes().length - 1];
     expect(lastShape.type).toBe('diamond');
+    expect(component.activeTool()).toBe('select');
+
+    // Emulating the browser's subsequent synthetic click event on the dragged tool button
+    component.handleToolButtonClick('diamond');
+    expect(component.activeTool()).toBe('select');
+  });
+
+  it('should switch active tool when tool button is clicked without dragging', () => {
+    component.setActiveTool('select');
+    component.handleToolButtonClick('rectangle');
+    expect(component.activeTool()).toBe('rectangle');
   });
 
   it('should select multiple shapes and clear selection', () => {
@@ -2680,6 +2705,850 @@ describe('CanvasComponent', () => {
       expect(emitSpy).toHaveBeenCalled();
       const lastCall = emitSpy.mock.calls[emitSpy.mock.calls.length - 1][0];
       expect(lastCall.shapes.find((s) => s.id === shape.id)?.x).not.toBe(50);
+    });
+  });
+
+  describe('Rich Text Editing Within Nodes', () => {
+    it('should start editing shape text on double click or Enter key and finish on blur', async () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      // Start editing via double-click method
+      component.startEditingShapeText(shape.id);
+      expect(component.editingShapeId()).toBe(shape.id);
+      expect(component.editingShape()?.id).toBe(shape.id);
+
+      // Finish editing
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      component.finishEditingShapeText(shape.id, '<b>Bold Node Text</b>');
+      expect(component.editingShapeId()).toBeNull();
+
+      const updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.text).toBe('<b>Bold Node Text</b>');
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('should start editing on Enter key when single shape is selected', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      component.selectShape(shape.id);
+      fixture.detectChanges();
+
+      expect(component.singleSelectedShape()?.id).toBe(shape.id);
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+      expect(component.editingShapeId()).toBe(shape.id);
+    });
+
+    it('should toggle rich text formats: bold, italic, and underline', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.toggleShapeFormat(shape.id, 'bold');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(true);
+      expect(component.isFormatActive(current!, 'bold')).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'italic');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isItalic).toBe(true);
+      expect(component.isFormatActive(current!, 'italic')).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'underline');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isUnderline).toBe(true);
+      expect(component.isFormatActive(current!, 'underline')).toBe(true);
+    });
+
+    it('should toggle format on shape while actively editing text without selection', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      expect(component.editingShapeId()).toBe(shape.id);
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+
+      // Active editing with collapsed caret (no selection)
+      component.toggleShapeFormat(shape.id, 'bold');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(true);
+      expect(component.isFormatActive(current!, 'bold')).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'bold');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(false);
+      expect(component.isFormatActive(current!, 'bold')).toBe(false);
+    });
+
+    it('should apply rich text command and persist innerHTML when text is selected in editor', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      if (editorEl) {
+        editorEl.innerHTML = 'Hello World';
+        const range = document.createRange();
+        range.selectNodeContents(editorEl);
+        component.savedEditorRange = range;
+
+        const originalExecCommand = (document as unknown as { execCommand?: unknown }).execCommand;
+        const execSpy = vi.fn((cmd: string) => {
+          if (cmd === 'bold') {
+            editorEl.innerHTML = '<b>Hello World</b>';
+            return true;
+          }
+          return false;
+        });
+        (document as unknown as { execCommand: unknown }).execCommand = execSpy;
+
+        component.toggleShapeFormat(shape.id, 'bold');
+        expect(execSpy).toHaveBeenCalledWith('bold', false);
+
+        const current = component.shapes().find((s) => s.id === shape.id);
+        expect(current?.text).toBe('<b>Hello World</b>');
+
+        if (originalExecCommand !== undefined) {
+          (document as unknown as { execCommand: unknown }).execCommand = originalExecCommand;
+        } else {
+          delete (document as unknown as { execCommand?: unknown }).execCommand;
+        }
+      }
+    });
+
+    it('should handle Ctrl+B, Ctrl+I, Ctrl+U shortcuts in handleRichTextKeydown', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      if (editorEl) {
+        const toggleSpy = vi.spyOn(component, 'toggleShapeFormat');
+
+        const ctrlB = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlB, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'bold');
+
+        const ctrlI = new KeyboardEvent('keydown', { key: 'i', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlI, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'italic');
+
+        const ctrlU = new KeyboardEvent('keydown', { key: 'u', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlU, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'underline');
+      }
+    });
+
+    it('should change text alignment for shape', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.setShapeTextAlign(shape.id, 'right');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.textAlign).toBe('right');
+
+      component.setShapeTextAlign(shape.id, 'left');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.textAlign).toBe('left');
+    });
+
+    it('should change vertical alignment for shape and default new shapes to middle', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      // Default should be middle
+      expect(shape.verticalAlign).toBe('middle');
+
+      // Change to top
+      component.setShapeVerticalAlign(shape.id, 'top');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('top');
+
+      // Change to bottom
+      component.setShapeVerticalAlign(shape.id, 'bottom');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('bottom');
+
+      // Change to middle
+      component.setShapeVerticalAlign(shape.id, 'middle');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.verticalAlign).toBe('middle');
+    });
+
+    it('should reflect vertical alignment classes on shape text editor while editing', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      let editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-middle')).toBe(true);
+      expect(editorEl?.classList.contains('valign-top')).toBe(false);
+
+      component.setShapeVerticalAlign(shape.id, 'top');
+      fixture.detectChanges();
+
+      editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-top')).toBe(true);
+      expect(editorEl?.classList.contains('valign-middle')).toBe(false);
+
+      component.setShapeVerticalAlign(shape.id, 'bottom');
+      fixture.detectChanges();
+
+      editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl?.classList.contains('valign-bottom')).toBe(true);
+      expect(editorEl?.classList.contains('valign-middle')).toBe(false);
+    });
+
+    it('should compute fitting font size down to minimum', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      // Short text
+      const smallTextSize = component.getShapeFittingFontSize({
+        ...shape,
+        width: 100,
+        height: 60,
+        text: 'Short',
+      });
+      expect(smallTextSize).toBe(14);
+
+      // Long multi-line text should scale down towards minimum
+      const longTextSize = component.getShapeFittingFontSize({
+        ...shape,
+        width: 80,
+        height: 40,
+        text: 'Very long text that spans multiple lines and needs to fit tightly inside the small rectangle',
+      });
+      expect(longTextSize).toBeLessThan(14);
+      expect(longTextSize).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should cancel editing on Escape key', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      component.startEditingShapeText(shape.id);
+      expect(component.editingShapeId()).toBe(shape.id);
+
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(component.editingShapeId()).toBeNull();
+    });
+  });
+
+  describe('Node Catalogs (UML, Flowcharts, Basic Shapes)', () => {
+    it('should expose categorized shape catalog items', () => {
+      expect(component.basicCatalogItems.length).toBeGreaterThan(0);
+      expect(component.flowchartCatalogItems.length).toBeGreaterThan(0);
+      expect(component.umlCatalogItems.length).toBeGreaterThan(0);
+      expect(component.basicCatalogItems.some((i) => i.type === 'rectangle')).toBe(true);
+      expect(component.flowchartCatalogItems.some((i) => i.type === 'flowchart-decision')).toBe(
+        true,
+      );
+      expect(component.umlCatalogItems.some((i) => i.type === 'uml-class')).toBe(true);
+    });
+
+    it('should create UML class shape with catalog dimensions and default text', () => {
+      const shape = component.createShape('uml-class', { x: 200, y: 150 });
+      expect(shape.type).toBe('uml-class');
+      expect(shape.width).toBe(160);
+      expect(shape.height).toBe(120);
+      expect(shape.text).toContain('ClassName');
+    });
+
+    it('should create Flowchart terminal shape with catalog dimensions and default text', () => {
+      const shape = component.createShape('flowchart-terminal', { x: 300, y: 200 });
+      expect(shape.type).toBe('flowchart-terminal');
+      expect(shape.width).toBe(130);
+      expect(shape.height).toBe(60);
+      expect(shape.text).toBe('Start');
+    });
+
+    it('should create Text Block with transparent stroke and fill', () => {
+      const shape = component.createShape('text-block', { x: 100, y: 100 });
+      expect(shape.type).toBe('text-block');
+      expect(shape.fillColor).toBe('transparent');
+      expect(shape.strokeColor).toBe('transparent');
+      expect(shape.strokeWidth).toBe(0);
+    });
+
+    it('should indicate catalog tool is active and highlight catalog trigger when a catalog shape is selected', () => {
+      expect(component.isCatalogToolActive()).toBe(false);
+      expect(component.activeCatalogItem()).toBeUndefined();
+
+      component.setActiveTool('uml-class');
+      fixture.detectChanges();
+      expect(component.isCatalogToolActive()).toBe(true);
+      expect(component.activeCatalogItem()?.type).toBe('uml-class');
+
+      const catalogBtn: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+        '.canvas-tools-dock button[aria-label="Shapes Catalog"]',
+      );
+      expect(catalogBtn?.classList.contains('active')).toBe(true);
+
+      component.setActiveTool('select');
+      fixture.detectChanges();
+      expect(component.isCatalogToolActive()).toBe(false);
+      expect(catalogBtn?.classList.contains('active')).toBe(false);
+    });
+  });
+
+  describe('Sticky Notes', () => {
+    it('should create sticky note with default author when currentUsername is set', () => {
+      fixture.componentRef.setInput('currentUsername', 'TestUser');
+      fixture.detectChanges();
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      expect(shape.type).toBe('sticky-note');
+      expect(shape.authorName).toBe('TestUser');
+      expect(shape.fillColor).toBe('var(--canvas-color-amber-fill)');
+      expect(shape.showAuthor).toBe(true);
+    });
+
+    it('should toggle sticky note author visibility', () => {
+      fixture.componentRef.setInput('currentUsername', 'TestUser');
+      fixture.detectChanges();
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      component.selectedShapeIds.set(new Set([shape.id]));
+      expect(shape.showAuthor).toBe(true);
+
+      component.toggleStickyAuthorVisibility(shape.id);
+      const updatedShape = component.shapes().find((s) => s.id === shape.id);
+      expect(updatedShape?.showAuthor).toBe(false);
+
+      component.toggleStickyAuthorVisibility(shape.id);
+      const reUpdatedShape = component.shapes().find((s) => s.id === shape.id);
+      expect(reUpdatedShape?.showAuthor).toBe(true);
+    });
+
+    it('should support switching tool to sticky-note via key shortcut N', () => {
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'n' }));
+      expect(component.activeTool()).toBe('sticky-note');
+    });
+  });
+
+  describe('Think Mode and Viewer Participation', () => {
+    it('should not mask shapes when Think Mode is false', () => {
+      fixture.componentRef.setInput('thinkMode', false);
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      shape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(shape)).toBe(false);
+    });
+
+    it('should mask another user sticky note when Think Mode has hideOthersWriting', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', { hideOthersWriting: true });
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(true);
+
+      const aliceShape = component.createShape('sticky-note', { x: 200, y: 100 });
+      aliceShape.authorName = 'Alice';
+
+      expect(component.isShapeMasked(aliceShape)).toBe(false);
+    });
+
+    it('should not mask notes when facilitatorReveal is true', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', { hideOthersWriting: true });
+      fixture.componentRef.setInput('currentUsername', 'Facilitator');
+      fixture.componentRef.setInput('facilitatorReveal', true);
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(false);
+    });
+
+    it('should not mask notes when users belong to the same group', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', {
+        hideOthersWriting: true,
+        groups: [
+          {
+            id: 'g1',
+            name: 'Designers',
+            memberUsernames: ['Alice', 'Bob'],
+          },
+        ],
+      });
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(false);
+
+      const charlieShape = component.createShape('sticky-note', { x: 200, y: 100 });
+      charlieShape.authorName = 'Charlie';
+
+      expect(component.isShapeMasked(charlieShape)).toBe(true);
+    });
+
+    it('should allow viewers to create sticky notes in Think Mode with viewer participation', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('canViewerParticipate', true);
+      fixture.componentRef.setInput('currentUsername', 'ViewerUser');
+      fixture.detectChanges();
+
+      component.setActiveTool('sticky-note');
+      component.handlePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 200,
+          button: 0,
+        }),
+      );
+
+      const stickyNotes = component.shapes().filter((s) => s.type === 'sticky-note');
+      expect(stickyNotes.length).toBe(1);
+      expect(stickyNotes[0].authorName).toBe('ViewerUser');
+    });
+
+    it('should NOT allow viewers to create non-sticky shapes in Think Mode', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('canViewerParticipate', true);
+      fixture.detectChanges();
+
+      component.setActiveTool('rectangle');
+      component.handlePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 200,
+          button: 0,
+        }),
+      );
+
+      const rects = component.shapes().filter((s) => s.type === 'rectangle');
+      expect(rects.length).toBe(0);
+    });
+
+    it('should pull a sticky note from a sticky pad dispenser', () => {
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const pad = component.createShape('sticky-pad', { x: 100, y: 100 });
+      expect(pad.type).toBe('sticky-pad');
+
+      const initialCount = component.shapes().length;
+      component.pullStickyNoteFromPad(pad);
+
+      expect(component.shapes().length).toBe(initialCount + 1);
+      const newNote = component.shapes()[component.shapes().length - 1];
+      expect(newNote.type).toBe('sticky-note');
+      expect(newNote.authorName).toBe('Alice');
+      expect(newNote.x).toBeGreaterThan(pad.x);
+    });
+  });
+
+  describe('Frames and Pages', () => {
+    it('should create a frame with default preset dimensions and text', () => {
+      const frame = component.createFrame();
+      expect(frame.type).toBe('frame');
+      expect(frame.width).toBe(800);
+      expect(frame.height).toBe(600);
+      expect(frame.text).toContain('Frame');
+      expect(component.frames().length).toBe(1);
+    });
+
+    it('should create a frame with specific preset (e.g. Presentation 16:9)', () => {
+      const preset = FRAME_PRESETS.find((p) => p.id === 'presentation-16-9')!;
+      const frame = component.createFrame(preset);
+      expect(frame.type).toBe('frame');
+      expect(frame.width).toBe(1920);
+      expect(frame.height).toBe(1080);
+      expect(frame.text).toContain('Presentation (16:9)');
+    });
+
+    it('should switch active tool to frame when pressing F key', () => {
+      expect(component.activeTool()).toBe('select');
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'f' }));
+      expect(component.activeTool()).toBe('frame');
+    });
+
+    it('should correctly detect if shapes are inside frame bounds with isShapeInsideFrame', () => {
+      const frame = component.createFrame(undefined, { x: 500, y: 500 }); // 800x600 centered at 500,500 -> [100, 900], [200, 800]
+      const insideShape = component.createShape('rectangle', { x: 500, y: 500 });
+      const outsideShape = component.createShape('rectangle', { x: 1500, y: 1500 });
+
+      expect(component.isShapeInsideFrame(insideShape, frame)).toBe(true);
+      expect(component.isShapeInsideFrame(outsideShape, frame)).toBe(false);
+      expect(component.isShapeInsideFrame(frame, frame)).toBe(false);
+
+      const contained = component.getShapesInFrame(frame);
+      expect(contained.some((s) => s.id === insideShape.id)).toBe(true);
+      expect(contained.some((s) => s.id === outsideShape.id)).toBe(false);
+    });
+
+    it('should move contained child shapes when the parent frame is moved', () => {
+      const frame = component.createFrame(undefined, { x: 500, y: 500 });
+      const child = component.createShape('rectangle', { x: 500, y: 500 });
+      const outside = component.createShape('rectangle', { x: 1500, y: 1500 });
+
+      const initialChildX = child.x;
+      const initialChildY = child.y;
+      const initialOutsideX = outside.x;
+      const initialOutsideY = outside.y;
+
+      // Select and drag the frame
+      component.selectShape(frame.id);
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 500,
+          clientY: 500,
+          button: 0,
+        }),
+        frame,
+      );
+
+      // Move 50px horizontally and 30px vertically
+      component.handlePointerMove(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 550,
+          clientY: 530,
+        }),
+      );
+
+      component.handlePointerUp(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 550,
+          clientY: 530,
+        }),
+      );
+
+      const movedChild = component.shapes().find((s) => s.id === child.id)!;
+      const movedOutside = component.shapes().find((s) => s.id === outside.id)!;
+
+      expect(movedChild.x).toBe(initialChildX + 50);
+      expect(movedChild.y).toBe(initialChildY + 30);
+      expect(movedOutside.x).toBe(initialOutsideX);
+      expect(movedOutside.y).toBe(initialOutsideY);
+    });
+
+    it('should zoom and pan to fit frame with zoomToFrame and zoomToFitBounds', () => {
+      const frame = component.createFrame(undefined, { x: 1000, y: 800 });
+      component.zoomToFrame(frame.id);
+
+      expect(component.selectedShapeIds().has(frame.id)).toBe(true);
+      expect(component.zoom()).toBeGreaterThan(0);
+    });
+
+    it('should rename, reorder, and delete frames correctly', () => {
+      const frame1 = component.createFrame(undefined, { x: 200, y: 200 });
+      const frame2 = component.createFrame(undefined, { x: 1200, y: 200 });
+
+      expect(component.frames().length).toBe(2);
+
+      component.renameFrame(frame1.id, 'Renamed Screen A');
+      const updated = component.shapes().find((s) => s.id === frame1.id);
+      expect(updated?.text).toBe('Renamed Screen A');
+
+      component.reorderFrames(frame2.id, 'up');
+      const reorderedFrames = component.frames();
+      expect(reorderedFrames[0].id).toBe(frame2.id);
+
+      component.deleteFrame(frame1.id);
+      expect(component.frames().length).toBe(1);
+      expect(component.shapes().some((s) => s.id === frame1.id)).toBe(false);
+    });
+
+    it('should emit openFramesNavigator when toggleFramesNavigator is called', () => {
+      let openCalled = false;
+      component.openFramesNavigator.subscribe(() => (openCalled = true));
+
+      component.toggleFramesNavigator();
+      expect(openCalled).toBe(true);
+    });
+  });
+
+  describe('Collaboration, Inline Text Editing & Structured Shapes', () => {
+    it('should initiate inline text editing when double-clicking over an existing shape', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      fixture.detectChanges();
+
+      const screenPt = component.worldToScreen({ x: 200, y: 150 });
+      const dblClickEvent = new MouseEvent('dblclick', {
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+
+      component.handleDoubleClick(dblClickEvent);
+      expect(component.editingShapeId()).toBe(shape.id);
+      expect(component.selectedShapeIds().has(shape.id)).toBe(true);
+    });
+
+    it('should initiate inline text editing on quick successive pointerdown taps on the same shape', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      fixture.detectChanges();
+
+      const screenPt = component.worldToScreen({ x: 200, y: 150 });
+      const event1 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+      component.handleShapePointerDown(event1, shape);
+      expect(component.selectedShapeIds().has(shape.id)).toBe(true);
+      expect(component.editingShapeId()).toBeNull();
+
+      const event2 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+      component.handleShapePointerDown(event2, shape);
+      expect(component.editingShapeId()).toBe(shape.id);
+    });
+
+    it('should adjust shape font size and clamp within bounds', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      expect(shape.fontSize ?? 14).toBe(14);
+
+      component.adjustShapeFontSize(shape.id, 2);
+      let updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(16);
+
+      component.adjustShapeFontSize(shape.id, -4);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(12);
+
+      component.setShapeFontSize(shape.id, 80);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(72);
+
+      component.setShapeFontSize(shape.id, 4);
+      updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.fontSize).toBe(8);
+    });
+
+    it('should dynamically expand UML class height when attributes and methods are added', () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      const initialHeight = umlShape.height;
+
+      const headerEl = document.createElement('div');
+      headerEl.innerHTML = 'CustomerService';
+
+      const attrEl = document.createElement('div');
+      attrEl.innerHTML =
+        '+ id: string<br>+ name: string<br>+ email: string<br>+ active: boolean<br>+ role: string';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML =
+        '+ getCustomer(): Customer<br>+ updateEmail(email: string): void<br>+ deactivate(): void<br>+ getRole(): string';
+
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+
+      const updated = component.shapes().find((s) => s.id === umlShape.id);
+      expect(updated).toBeDefined();
+      expect(updated!.height).toBeGreaterThan(initialHeight);
+      expect(updated!.text).toContain('CustomerService');
+      expect(updated!.text).toContain('+ email: string');
+      expect(updated!.text).toContain('+ deactivate(): void');
+    });
+
+    it('should dynamically expand UML interface height when methods are added', () => {
+      const ifaceShape = component.createShape('uml-interface', { x: 100, y: 100 });
+      const initialHeight = ifaceShape.height;
+
+      const headerEl = document.createElement('div');
+      headerEl.innerHTML = '«interface»<br>IRepository';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML =
+        '+ findById(id: string): T<br>+ findAll(): T[]<br>+ save(entity: T): void<br>+ delete(id: string): void';
+
+      component.handleUmlInterfaceSectionInput(ifaceShape.id, 'methods', headerEl, methodEl);
+
+      const updated = component.shapes().find((s) => s.id === ifaceShape.id);
+      expect(updated).toBeDefined();
+      expect(updated!.height).toBeGreaterThan(initialHeight);
+      expect(updated!.text).toContain('IRepository');
+      expect(updated!.text).toContain('+ delete(id: string): void');
+    });
+
+    it('should focus the requested UML compartment and retain focus during section input', async () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      component.startEditingShapeText(umlShape.id, 'attributes');
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const attrEditor = fixture.nativeElement.querySelector(
+        '.uml-editor-attributes',
+      ) as HTMLElement;
+      const headerEditor = fixture.nativeElement.querySelector('.uml-editor-header') as HTMLElement;
+      expect(attrEditor).not.toBeNull();
+      expect(headerEditor).not.toBeNull();
+
+      // Attr editor has focus
+      expect(document.activeElement).toBe(attrEditor);
+
+      // Typing one character into attrEditor
+      attrEditor.innerHTML = '+ newAttribute: number';
+      attrEditor.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      // Focus must remain in attrEditor and NOT revert to headerEditor
+      expect(document.activeElement).toBe(attrEditor);
+    });
+
+    it('should preserve locally dragged shape when external diagram data arrives', () => {
+      const s1 = component.createShape('rectangle', { x: 50, y: 50 });
+      const s2 = component.createShape('rectangle', { x: 200, y: 200 });
+
+      // Simulate local drag of s1
+      (component as unknown as { isMovingShapes: boolean }).isMovingShapes = true;
+      (
+        component as unknown as { shapeInitialPositions: Map<string, { x: number; y: number }> }
+      ).shapeInitialPositions.set(s1.id, { x: 50, y: 50 });
+
+      // Move s1 locally to (90, 90)
+      component.updateShape(s1.id, { x: 90, y: 90 });
+
+      // External diagram data arrives moving s2 to (300, 300) while remote still has s1 at (50, 50)
+      const remoteData: CanvasDiagramData = {
+        shapes: [
+          { ...s1, x: 50, y: 50 },
+          { ...s2, x: 300, y: 300 },
+        ],
+        connections: [],
+      };
+
+      component.applyExternalDiagramData(remoteData);
+
+      const localS1 = component.shapes().find((s) => s.id === s1.id);
+      const localS2 = component.shapes().find((s) => s.id === s2.id);
+
+      // Local dragged s1 remains at (90, 90)
+      expect(localS1?.x).toBe(90);
+      expect(localS1?.y).toBe(90);
+      // Non-dragged s2 cleanly receives external update at (300, 300)
+      expect(localS2?.x).toBe(300);
+      expect(localS2?.y).toBe(300);
+    });
+
+    it('should NOT create any shape when double-clicking on selection toolbar buttons', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      component.selectShape(shape.id);
+      fixture.detectChanges();
+
+      const initialCount = component.shapes().length;
+      const dock = fixture.nativeElement.querySelector('.selection-tools-dock') as HTMLElement;
+      expect(dock).not.toBeNull();
+
+      const fontIncreaseBtn = dock.querySelector(
+        'button[aria-label="Increase font size"]',
+      ) as HTMLElement;
+      expect(fontIncreaseBtn).not.toBeNull();
+
+      // Dispatch double click event on the font button
+      const dblClickEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+      fontIncreaseBtn.dispatchEvent(dblClickEvent);
+      fixture.detectChanges();
+
+      // Ensure no new shape was created
+      expect(component.shapes().length).toBe(initialCount);
+
+      // Also test directly invoking handleDoubleClick with event targeting dock button
+      const dblClickDirect = new MouseEvent('dblclick', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        clientY: 100,
+      });
+      Object.defineProperty(dblClickDirect, 'target', { value: fontIncreaseBtn });
+      component.handleDoubleClick(dblClickDirect);
+      expect(component.shapes().length).toBe(initialCount);
+    });
+
+    it('should NOT create any shape when double-clicking canvas-tools-dock buttons', () => {
+      const initialCount = component.shapes().length;
+      const toolBtn = fixture.nativeElement.querySelector(
+        '.canvas-tools-dock button',
+      ) as HTMLElement;
+      expect(toolBtn).not.toBeNull();
+
+      const dblClickEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+      toolBtn.dispatchEvent(dblClickEvent);
+      fixture.detectChanges();
+
+      expect(component.shapes().length).toBe(initialCount);
+
+      const dblClickDirect = new MouseEvent('dblclick', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 20,
+      });
+      Object.defineProperty(dblClickDirect, 'target', { value: toolBtn });
+      component.handleDoubleClick(dblClickDirect);
+      expect(component.shapes().length).toBe(initialCount);
+    });
+
+    it('should emit diagramChange and enter inline text editing when double-clicking empty canvas', () => {
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      const countBefore = component.shapes().length;
+
+      const dblClickEvent = new MouseEvent('dblclick', {
+        bubbles: true,
+        clientX: 450,
+        clientY: 350,
+      });
+      component.handleDoubleClick(dblClickEvent);
+
+      expect(component.shapes().length).toBe(countBefore + 1);
+      const newShape = component.shapes()[component.shapes().length - 1];
+      expect(newShape.type).toBe('rectangle');
+      expect(emitSpy).toHaveBeenCalled();
+      expect(component.editingShapeId()).toBe(newShape.id);
+    });
+
+    it('should create a rectangle when double-tapping empty canvas within 450ms', () => {
+      const countBefore = component.shapes().length;
+
+      const pt1 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: 500,
+        clientY: 400,
+        bubbles: true,
+      });
+      component.handlePointerDown(pt1);
+
+      const pt2 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: 502,
+        clientY: 401,
+        bubbles: true,
+      });
+      component.handlePointerDown(pt2);
+
+      expect(component.shapes().length).toBe(countBefore + 1);
+      const newShape = component.shapes()[component.shapes().length - 1];
+      expect(newShape.type).toBe('rectangle');
+      expect(component.editingShapeId()).toBe(newShape.id);
     });
   });
 });

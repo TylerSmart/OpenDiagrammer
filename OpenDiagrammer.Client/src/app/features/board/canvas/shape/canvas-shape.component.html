@@ -1,12 +1,15 @@
 <div
   class="shape-container"
+  [attr.data-shape-id]="shape().id"
   [class.is-selected]="isSelected()"
+  [class.is-frame]="isFrame()"
   [style.transform]="shapeStyles().transform"
   [style.width]="shapeStyles().width"
   [style.height]="shapeStyles().height"
   [style.z-index]="shapeStyles().zIndex"
   (pointerenter)="isHovered.set(true)"
   (pointerleave)="isHovered.set(false)"
+  (dblclick)="handleDoubleClick($event)"
 >
   <svg class="shape-svg" [attr.viewBox]="'0 0 ' + shape().width + ' ' + shape().height">
     @switch (shape().type) {
@@ -53,22 +56,352 @@
           [attr.stroke-width]="shape().strokeWidth"
         />
       }
+      @case ('triangle') {
+        <polygon
+          [attr.points]="trianglePoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('text-block') {
+        <rect
+          x="0"
+          y="0"
+          [attr.width]="shape().width"
+          [attr.height]="shape().height"
+          fill="transparent"
+          stroke="none"
+        />
+      }
+      @case ('flowchart-process') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-decision') {
+        <polygon
+          [attr.points]="diamondPoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-terminal') {
+        <rect
+          x="1"
+          y="1"
+          [attr.rx]="shape().height / 2"
+          [attr.ry]="shape().height / 2"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-io') {
+        <polygon
+          [attr.points]="flowchartIoPoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-document') {
+        <path
+          [attr.d]="flowchartDocumentPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-database') {
+        <path
+          [attr.d]="flowchartDatabaseBodyPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <ellipse
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="flowchartDatabaseRy()"
+          [attr.rx]="(shape().width - 2) / 2"
+          [attr.ry]="flowchartDatabaseRy()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-class') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-interface') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-actor') {
+        <circle
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="shape().height * 0.2"
+          [attr.r]="shape().height * 0.15"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.35"
+          [attr.x2]="shape().width / 2"
+          [attr.y2]="shape().height * 0.7"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width * 0.15"
+          [attr.y1]="shape().height * 0.45"
+          [attr.x2]="shape().width * 0.85"
+          [attr.y2]="shape().height * 0.45"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.7"
+          [attr.x2]="shape().width * 0.2"
+          [attr.y2]="shape().height - 2"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.7"
+          [attr.x2]="shape().width * 0.8"
+          [attr.y2]="shape().height - 2"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-usecase') {
+        <ellipse
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="shape().height / 2"
+          [attr.rx]="(shape().width - 2) / 2"
+          [attr.ry]="(shape().height - 2) / 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-package') {
+        <path
+          [attr.d]="umlPackageTabPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <rect
+          x="1"
+          [attr.y]="umlPackageTabHeight()"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - umlPackageTabHeight() - 1"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('sticky-note') {
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('sticky-pad') {
+        <rect
+          x="6"
+          y="6"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 8"
+          [attr.height]="shape().height - 8"
+          fill="rgba(0, 0, 0, 0.12)"
+        />
+        <rect
+          x="3"
+          y="3"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 6"
+          [attr.height]="shape().height - 6"
+          [attr.fill]="shape().fillColor || 'var(--canvas-color-amber-fill)'"
+          opacity="0.75"
+        />
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 4"
+          [attr.height]="shape().height - 4"
+          [attr.fill]="shape().fillColor || 'var(--canvas-color-amber-fill)'"
+          [attr.stroke]="shape().strokeColor || 'var(--canvas-color-amber-stroke)'"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 4"
+          height="16"
+          fill="rgba(0, 0, 0, 0.08)"
+        />
+      }
+      @case ('frame') {
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor || 'rgba(128, 128, 128, 0.03)'"
+          [attr.stroke]="shape().strokeColor || 'rgba(140, 140, 160, 0.5)'"
+          [attr.stroke-width]="shape().strokeWidth || 1.5"
+          stroke-dasharray="6,4"
+        />
+      }
     }
   </svg>
 
-  @if (shape().text) {
+  @if (isFrame()) {
+    <div
+      class="frame-header-tab"
+      [class.is-selected]="isSelected()"
+      (dblclick)="handleDoubleClick($event)"
+      aria-label="Frame header"
+    >
+      <span class="frame-hash-icon">#</span>
+      <span class="frame-title-text">{{ shape().text || 'Frame' }}</span>
+      <span class="frame-size-badge">{{ shape().width }} × {{ shape().height }}</span>
+    </div>
+  }
+
+  @if (isMasked()) {
+    <div class="shape-masked-overlay" aria-label="Hidden note">
+      <span class="masked-lock-icon">🔒</span>
+      <span class="masked-dots">••••••</span>
+    </div>
+  } @else if (isUmlClass() && !isEditing()) {
+    <div
+      class="uml-compartments-container"
+      [style.color]="textColor()"
+      [style.--shape-stroke]="shape().strokeColor"
+    >
+      <div
+        class="uml-compartment uml-header"
+        data-uml-section="header"
+        [innerHTML]="umlClassSections().classNameHtml"
+      ></div>
+      <div
+        class="uml-compartment uml-attributes"
+        data-uml-section="attributes"
+        [innerHTML]="umlClassSections().attributesHtml"
+      ></div>
+      <div
+        class="uml-compartment uml-methods"
+        data-uml-section="methods"
+        [innerHTML]="umlClassSections().methodsHtml"
+      ></div>
+    </div>
+  } @else if (isUmlInterface() && !isEditing()) {
+    <div
+      class="uml-compartments-container"
+      [style.color]="textColor()"
+      [style.--shape-stroke]="shape().strokeColor"
+    >
+      <div
+        class="uml-compartment uml-header"
+        data-uml-section="header"
+        [innerHTML]="umlInterfaceSections().nameHtml"
+      ></div>
+      <div
+        class="uml-compartment uml-methods"
+        data-uml-section="methods"
+        [innerHTML]="umlInterfaceSections().methodsHtml"
+      ></div>
+    </div>
+  } @else if (!isFrame() && shape().text && !isEditing()) {
     <div
       class="shape-text-overlay"
-      [style.color]="
-        shape().fillColor.includes('inverse') ? 'var(--canvas-color-inverse-text)' : null
-      "
+      [class.valign-top]="shape().verticalAlign === 'top'"
+      [class.valign-middle]="!shape().verticalAlign || shape().verticalAlign === 'middle'"
+      [class.valign-bottom]="shape().verticalAlign === 'bottom'"
+      [style.color]="textColor()"
+      [style.font-size.px]="fittingFontSize()"
+      [style.text-align]="shape().textAlign || 'center'"
+      [style.font-weight]="shape().isBold ? 'bold' : null"
+      [style.font-style]="shape().isItalic ? 'italic' : null"
+      [style.text-decoration]="shape().isUnderline ? 'underline' : null"
     >
-      <span>{{ shape().text }}</span>
+      <div class="shape-text-content" [innerHTML]="safeHtml()"></div>
+    </div>
+  }
+
+  @if (shape().type === 'sticky-pad') {
+    <button
+      type="button"
+      class="sticky-pad-pull-button"
+      (pointerdown)="$event.stopPropagation()"
+      (click)="handlePullNote($event)"
+      aria-label="Pull sticky note from pad"
+    >
+      + Pull Note
+    </button>
+  }
+
+  @if (
+    shape().type === 'sticky-note' &&
+    shape().showAuthor !== false &&
+    shape().authorName &&
+    !isMasked()
+  ) {
+    <div class="sticky-author-badge" [attr.aria-label]="'Author: ' + shape().authorName">
+      <span class="author-icon">✍</span>
+      <span class="author-name">{{ shape().authorName }}</span>
     </div>
   }
 
   <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->
-  @if (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected()) {
+  @if (!isFrame() && (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected())) {
     @for (anchor of anchors; track anchor) {
       <div
         class="shape-anchor anchor-{{ anchor }}"

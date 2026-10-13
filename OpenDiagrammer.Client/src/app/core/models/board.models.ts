@@ -147,3 +147,23 @@ export function canManageMembers(role: BoardRole): boolean {
 export function canDeleteBoard(role: BoardRole): boolean {
   return role === BoardRole.Owner;
 }
+
+export function canChangeBoardMode(role: BoardRole): boolean {
+  return role === BoardRole.Owner || role === BoardRole.Admin;
+}
+
+export interface ThinkModeGroup {
+  id: string;
+  name: string;
+  memberUsernames: string[];
+}
+
+export interface ThinkModeConfig {
+  timerSeconds?: number;
+  timerStartedAt?: string | null;
+  timerEndsAt?: string | null;
+  isTimerRunning?: boolean;
+  viewerParticipation?: boolean;
+  hideOthersWriting?: boolean;
+  groups?: ThinkModeGroup[];
+}

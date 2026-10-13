@@ -55,6 +55,7 @@ describe('BoardViewComponent', () => {
   let mockBoardService: {
     getBoardById: ReturnType<typeof vi.fn>;
     updateCanvasData: ReturnType<typeof vi.fn>;
+    updateBoard: ReturnType<typeof vi.fn>;
   };
   let mockAuthService: {
     currentUser: ReturnType<typeof vi.fn>;
@@ -74,6 +75,7 @@ describe('BoardViewComponent', () => {
     mockBoardService = {
       getBoardById: vi.fn().mockReturnValue(of(mockBoardDetail)),
       updateCanvasData: vi.fn().mockReturnValue(of({ ...mockBoardDetail })),
+      updateBoard: vi.fn().mockReturnValue(of({ ...mockBoardDetail })),
     };
     mockAuthService = {
       currentUser: vi.fn().mockReturnValue({
@@ -107,6 +109,8 @@ describe('BoardViewComponent', () => {
       stopConnection: vi.fn().mockResolvedValue(undefined),
       sendCrdtUpdate: vi.fn().mockResolvedValue(undefined),
       sendCursor: vi.fn().mockResolvedValue(undefined),
+      sendBoardModeUpdate: vi.fn().mockResolvedValue(undefined),
+      boardModeUpdate: signal(null),
       presences: signal([]),
       otherUsersCursors: signal({}),
       connectionState: signal('connected'),
@@ -402,5 +406,141 @@ describe('BoardViewComponent', () => {
     fixture.detectChanges();
 
     expect(canvas!.shapes().length).toBe(1);
+  });
+
+  describe('Think Mode', () => {
+    it('should switch to Think Mode and update board mode via setBoardMode', () => {
+      fixture.detectChanges();
+      const configJson = JSON.stringify({
+        timerSeconds: 300,
+        viewerParticipation: true,
+        hideOthersWriting: true,
+      });
+
+      component.setBoardMode(BoardMode.ThinkMode, configJson);
+
+      expect(component['board']()?.mode).toBe(BoardMode.ThinkMode);
+      expect(component['thinkModeConfig']()?.timerSeconds).toBe(300);
+      expect(component['thinkModeConfig']()?.viewerParticipation).toBe(true);
+      expect(component['thinkModeConfig']()?.hideOthersWriting).toBe(true);
+      expect(mockBoardService.updateBoard).toHaveBeenCalled();
+    });
+
+    it('should end Think Mode and reset to normal mode', () => {
+      fixture.detectChanges();
+      component.setBoardMode(BoardMode.ThinkMode, JSON.stringify({ timerSeconds: 120 }));
+      expect(component['board']()?.mode).toBe(BoardMode.ThinkMode);
+
+      component.endThinkMode();
+
+      expect(component['board']()?.mode).toBe(BoardMode.Normal);
+      expect(component['board']()?.thinkModeConfigJson).toBeNull();
+      expect(mockSnackBar.open).toHaveBeenCalledWith(
+        'Think Mode ended. Board returned to normal mode.',
+        'Close',
+        expect.any(Object),
+      );
+    });
+
+    it('should format timer string correctly based on timerSecondsRemaining', () => {
+      component['timerSecondsRemaining'].set(275); // 4 mins 35 secs
+      expect(component['timerFormatted']()).toBe('04:35');
+
+      component['timerSecondsRemaining'].set(59); // 0 mins 59 secs
+      expect(component['timerFormatted']()).toBe('00:59');
+
+      component['timerSecondsRemaining'].set(null);
+      expect(component['timerFormatted']()).toBe('--:--');
+    });
+
+    it('should toggle facilitator reveal notes', () => {
+      expect(component['facilitatorRevealNotes']()).toBe(false);
+      component.toggleFacilitatorReveal();
+      expect(component['facilitatorRevealNotes']()).toBe(true);
+      component.toggleFacilitatorReveal();
+      expect(component['facilitatorRevealNotes']()).toBe(false);
+    });
+
+    it('should add time to timer', () => {
+      const config = {
+        timerSeconds: 300,
+        timerEndsAt: new Date(Date.now() + 300000).toISOString(),
+        isTimerRunning: true,
+      };
+      component.setBoardMode(BoardMode.ThinkMode, JSON.stringify(config));
+
+      component.addTimeToTimer(60);
+
+      const updated = component['thinkModeConfig']();
+      expect(updated?.timerSeconds).toBe(360);
+      expect(updated?.isTimerRunning).toBe(true);
+    });
+  });
+
+  describe('Frames and Pages', () => {
+    it('should toggle frames navigator panel open and closed', () => {
+      expect(component['isFramesNavigatorOpen']()).toBe(false);
+      component.toggleFramesNavigator();
+      expect(component['isFramesNavigatorOpen']()).toBe(true);
+      component.toggleFramesNavigator();
+      expect(component['isFramesNavigatorOpen']()).toBe(false);
+    });
+
+    it('should handle frame addition, selection, renaming, and deletion', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const canvas = component['canvasComponent']();
+      expect(canvas).toBeTruthy();
+
+      // Add a frame
+      component.handleFrameAdd({
+        id: 'presentation-16-9',
+        name: 'Presentation (16:9)',
+        width: 1920,
+        height: 1080,
+        icon: 'slideshow',
+      });
+
+      expect(component['framesList']().length).toBe(1);
+      const addedFrame = component['framesList']()[0];
+      expect(addedFrame.type).toBe('frame');
+      expect(component['activeFrameId']()).toBe(addedFrame.id);
+
+      // Rename frame
+      component.handleFrameRename({
+        id: addedFrame.id,
+        title: 'Renamed Frame Title',
+      });
+      const renamedFrame = component['framesList']()[0];
+      expect(renamedFrame.text).toBe('Renamed Frame Title');
+
+      // Select frame
+      component.handleFrameSelect(renamedFrame);
+      expect(component['activeFrameId']()).toBe(renamedFrame.id);
+
+      // Delete frame
+      component.handleFrameDelete(renamedFrame.id);
+      expect(component['framesList']().length).toBe(0);
+      expect(component['activeFrameId']()).toBeNull();
+    });
+
+    it('should trigger fullscreen presentation when handlePresent is called', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const toggleSpy = vi.spyOn(component['fullscreenService'], 'toggleFullscreen');
+
+      component.handleFrameAdd({
+        id: 'custom',
+        name: 'Custom Frame',
+        width: 800,
+        height: 600,
+        icon: 'crop_free',
+      });
+
+      component.handlePresent();
+      expect(toggleSpy).toHaveBeenCalled();
+    });
   });
 });

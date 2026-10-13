@@ -73,4 +73,247 @@ describe('CanvasShapeComponent', () => {
     const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
     expect(anchors.length).toBe(0);
   });
+
+  it('should render rich text HTML safely inside overlay', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: '<b>Hello</b> <i>World</i><script>alert(1)</script>',
+      textAlign: 'left',
+      isBold: true,
+    });
+    fixture.detectChanges();
+
+    const overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay.innerHTML).toContain('<b>Hello</b>');
+    expect(overlay.innerHTML).toContain('<i>World</i>');
+    expect(overlay.innerHTML).not.toContain('<script>');
+  });
+
+  it('should apply vertical alignment classes and default to middle alignment', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+    });
+    fixture.detectChanges();
+
+    let overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay.classList).toContain('valign-middle');
+    expect(overlay.classList).not.toContain('valign-top');
+    expect(overlay.classList).not.toContain('valign-bottom');
+
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+      verticalAlign: 'top',
+    });
+    fixture.detectChanges();
+
+    overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay.classList).toContain('valign-top');
+    expect(overlay.classList).not.toContain('valign-middle');
+
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: 'Sample Node',
+      verticalAlign: 'bottom',
+    });
+    fixture.detectChanges();
+
+    overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay.classList).toContain('valign-bottom');
+    expect(overlay.classList).not.toContain('valign-middle');
+  });
+
+  it('should emit shapeDoubleClick on double click', () => {
+    let emitted: { shape: CanvasShape; section?: string } | undefined;
+    component.shapeDoubleClick.subscribe((s) => {
+      emitted = s;
+    });
+
+    const container = fixture.nativeElement.querySelector('.shape-container');
+    container.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(emitted?.shape).toEqual(mockShape);
+  });
+
+  it('should emit specific section on double click when clicked on a UML compartment', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-class',
+      text: 'User\n---\n+ name: string\n---\n+ login()',
+    });
+    fixture.detectChanges();
+
+    let emitted: { shape: CanvasShape; section?: string } | undefined;
+    component.shapeDoubleClick.subscribe((s) => {
+      emitted = s;
+    });
+
+    const attrEl = fixture.nativeElement.querySelector('.uml-attributes');
+    expect(attrEl).not.toBeNull();
+    attrEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(emitted?.shape.id).toBe(mockShape.id);
+    expect(emitted?.section).toBe('attributes');
+  });
+
+  it('should render flowchart shapes correctly', () => {
+    // Flowchart terminal
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'flowchart-terminal',
+    });
+    fixture.detectChanges();
+    const terminalRect = fixture.nativeElement.querySelector('rect[rx]');
+    expect(terminalRect).toBeTruthy();
+
+    // Flowchart database
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'flowchart-database',
+    });
+    fixture.detectChanges();
+    const dbPath = fixture.nativeElement.querySelector('path');
+    const dbEllipse = fixture.nativeElement.querySelector('ellipse');
+    expect(dbPath).toBeTruthy();
+    expect(dbEllipse).toBeTruthy();
+  });
+
+  it('should render UML shapes correctly', () => {
+    // UML class
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-class',
+      text: 'OrderService\n---\n+ id: string\n---\n+ checkout()',
+    });
+    fixture.detectChanges();
+    const compartments = fixture.nativeElement.querySelectorAll('.uml-compartment');
+    expect(compartments.length).toBe(3);
+    expect(fixture.nativeElement.querySelector('.uml-header')?.textContent).toContain(
+      'OrderService',
+    );
+    expect(fixture.nativeElement.querySelector('.uml-attributes')?.textContent).toContain(
+      '+ id: string',
+    );
+    expect(fixture.nativeElement.querySelector('.uml-methods')?.textContent).toContain(
+      '+ checkout()',
+    );
+
+    // UML actor
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-actor',
+    });
+    fixture.detectChanges();
+    const actorCircle = fixture.nativeElement.querySelector('circle');
+    const actorLines = fixture.nativeElement.querySelectorAll('line');
+    expect(actorCircle).toBeTruthy();
+    expect(actorLines.length).toBe(4);
+  });
+
+  describe('Sticky Notes', () => {
+    it('should render sticky note rect', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+      });
+      fixture.detectChanges();
+      const stickyRect = fixture.nativeElement.querySelector('rect[rx="4"]');
+      expect(stickyRect).toBeTruthy();
+    });
+
+    it('should display author badge when authorName is provided and showAuthor is not false', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        authorName: 'Alice',
+      });
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(badge).toBeTruthy();
+      expect(badge.textContent).toContain('Alice');
+    });
+
+    it('should hide author badge when showAuthor is false', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        authorName: 'Alice',
+        showAuthor: false,
+      });
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(badge).toBeFalsy();
+    });
+
+    it('should show masked overlay and hide text and author when isMasked is true', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        text: 'Secret Idea',
+        authorName: 'Alice',
+      });
+      fixture.componentRef.setInput('isMasked', true);
+      fixture.detectChanges();
+
+      const maskedOverlay = fixture.nativeElement.querySelector('.shape-masked-overlay');
+      expect(maskedOverlay).toBeTruthy();
+      expect(maskedOverlay.textContent).toContain('••••••');
+
+      const textOverlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+      expect(textOverlay).toBeFalsy();
+
+      const authorBadge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(authorBadge).toBeFalsy();
+    });
+
+    it('should render sticky pad and emit pullStickyNote on button click', () => {
+      const padShape: CanvasShape = {
+        ...mockShape,
+        type: 'sticky-pad',
+      };
+      fixture.componentRef.setInput('shape', padShape);
+      fixture.detectChanges();
+
+      let pulledShape: CanvasShape | null = null;
+      component.pullStickyNote.subscribe((s) => {
+        pulledShape = s;
+      });
+
+      const pullBtn = fixture.nativeElement.querySelector('.sticky-pad-pull-button');
+      expect(pullBtn).toBeTruthy();
+
+      pullBtn.click();
+      expect(pulledShape).toEqual(padShape);
+    });
+
+    it('should render frame with header tab, title, and size badge, and without anchors or center text overlay', () => {
+      const frameShape: CanvasShape = {
+        ...mockShape,
+        type: 'frame',
+        width: 1920,
+        height: 1080,
+        text: 'Presentation Slide 1',
+      };
+      fixture.componentRef.setInput('shape', frameShape);
+      component.isHovered.set(true);
+      fixture.detectChanges();
+
+      const container = fixture.nativeElement.querySelector('.shape-container');
+      expect(container.classList).toContain('is-frame');
+
+      const headerTab = fixture.nativeElement.querySelector('.frame-header-tab');
+      expect(headerTab).toBeTruthy();
+      expect(headerTab.textContent).toContain('Presentation Slide 1');
+      expect(headerTab.textContent).toContain('1920 × 1080');
+
+      // Center text overlay should be omitted for frames
+      const textOverlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+      expect(textOverlay).toBeFalsy();
+
+      // Anchors should be omitted for frames
+      const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
+      expect(anchors.length).toBe(0);
+    });
+  });
 });

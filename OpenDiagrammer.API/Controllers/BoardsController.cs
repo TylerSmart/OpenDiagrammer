@@ -1,6 +1,8 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
+using OpenDiagrammer.API.Hubs;
 using OpenDiagrammer.Core.Boards;
 using OpenDiagrammer.Core.Exceptions;
 
@@ -9,7 +11,10 @@ namespace OpenDiagrammer.API.Controllers;
 [ApiController]
 [Route("boards")]
 [Authorize]
-public sealed class BoardsController(IBoardService boardService) : ControllerBase
+public sealed class BoardsController(
+    IBoardService boardService,
+    IHubContext<BoardHub, IBoardClient> hubContext
+) : ControllerBase
 {
     private Guid CurrentUserId =>
         Guid.TryParse(
@@ -74,7 +79,14 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
                 request,
                 cancellationToken
             );
-            return board is not null ? Ok(board) : NotFound();
+            if (board is not null)
+            {
+                await hubContext
+                    .Clients.Group($"board_{id}")
+                    .ReceiveBoardModeUpdate(board.Mode, board.ThinkModeConfigJson);
+                return Ok(board);
+            }
+            return NotFound();
         }
         catch (ForbiddenException)
         {

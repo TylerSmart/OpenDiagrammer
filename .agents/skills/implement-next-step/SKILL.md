@@ -9,12 +9,12 @@ This skill is used to identify and implement the next task in the project's impl
 
 ## Procedure
 
-1. **Read the Implementation Plan**: Open and read the `IMPLEMENTATION.md` file in the root of the repository.
+1. **Read the Implementation Plan & PRD**: Open and read the `IMPLEMENTATION.md` file in the root of the repository. Consult `PRD.md` to reference detailed functional, technical, and architectural requirements for the relevant phase and features.
 2. **Identify the Next Task**:
     - Look for the first task in the list that is not marked as completed (i.e., it has `[ ]` instead of `[x]`).
     - The tasks are organized into Phases. Find the first uncompleted task within the current or next phase.
 3. **Analyze the Task**:
-    - Understand the scope of the task.
+    - Understand the scope of the task by cross-referencing `PRD.md` for specific behavior and acceptance criteria.
     - Determine which files or components need to be created or modified.
     - Check if there are any dependencies for this task (e.g., other tasks that must be completed first).
 4. **Report the Task**:

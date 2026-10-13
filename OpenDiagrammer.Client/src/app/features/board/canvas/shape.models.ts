@@ -1,4 +1,292 @@
-export type ShapeType = 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond';
+export type ShapeCategory = 'basic' | 'flowchart' | 'uml';
+
+export type ShapeType =
+  // Basic Shapes
+  | 'rectangle'
+  | 'rounded-rectangle'
+  | 'ellipse'
+  | 'diamond'
+  | 'triangle'
+  | 'text-block'
+  // Flowchart
+  | 'flowchart-process'
+  | 'flowchart-decision'
+  | 'flowchart-terminal'
+  | 'flowchart-io'
+  | 'flowchart-document'
+  | 'flowchart-database'
+  // UML
+  | 'uml-class'
+  | 'uml-interface'
+  | 'uml-actor'
+  | 'uml-usecase'
+  | 'uml-package'
+  // Sticky note
+  | 'sticky-note'
+  | 'sticky-pad'
+  // Frames & Pages
+  | 'frame';
+
+export interface CatalogShapeItem {
+  type: ShapeType;
+  category: ShapeCategory;
+  label: string;
+  icon: string;
+  defaultWidth: number;
+  defaultHeight: number;
+  defaultText?: string;
+}
+
+export const SHAPE_CATALOG: CatalogShapeItem[] = [
+  // Basic
+  {
+    type: 'rectangle',
+    category: 'basic',
+    label: 'Rectangle',
+    icon: 'crop_square',
+    defaultWidth: 120,
+    defaultHeight: 80,
+  },
+  {
+    type: 'rounded-rectangle',
+    category: 'basic',
+    label: 'Rounded Rectangle',
+    icon: 'square',
+    defaultWidth: 120,
+    defaultHeight: 80,
+  },
+  {
+    type: 'ellipse',
+    category: 'basic',
+    label: 'Circle / Ellipse',
+    icon: 'panorama_fish_eye',
+    defaultWidth: 100,
+    defaultHeight: 100,
+  },
+  {
+    type: 'diamond',
+    category: 'basic',
+    label: 'Diamond',
+    icon: 'change_history',
+    defaultWidth: 110,
+    defaultHeight: 110,
+  },
+  {
+    type: 'triangle',
+    category: 'basic',
+    label: 'Triangle',
+    icon: 'play_arrow',
+    defaultWidth: 100,
+    defaultHeight: 90,
+  },
+  {
+    type: 'text-block',
+    category: 'basic',
+    label: 'Text Block',
+    icon: 'title',
+    defaultWidth: 120,
+    defaultHeight: 40,
+    defaultText: 'Text Note',
+  },
+
+  // Flowchart
+  {
+    type: 'flowchart-process',
+    category: 'flowchart',
+    label: 'Process',
+    icon: 'check_box_outline_blank',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Process',
+  },
+  {
+    type: 'flowchart-decision',
+    category: 'flowchart',
+    label: 'Decision',
+    icon: 'diamond',
+    defaultWidth: 120,
+    defaultHeight: 90,
+    defaultText: 'Decision',
+  },
+  {
+    type: 'flowchart-terminal',
+    category: 'flowchart',
+    label: 'Start / End',
+    icon: 'stadium',
+    defaultWidth: 130,
+    defaultHeight: 60,
+    defaultText: 'Start',
+  },
+  {
+    type: 'flowchart-io',
+    category: 'flowchart',
+    label: 'Input / Output',
+    icon: 'input',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Input / Output',
+  },
+  {
+    type: 'flowchart-document',
+    category: 'flowchart',
+    label: 'Document',
+    icon: 'description',
+    defaultWidth: 120,
+    defaultHeight: 80,
+    defaultText: 'Document',
+  },
+  {
+    type: 'flowchart-database',
+    category: 'flowchart',
+    label: 'Database',
+    icon: 'storage',
+    defaultWidth: 100,
+    defaultHeight: 90,
+    defaultText: 'Database',
+  },
+
+  // UML
+  {
+    type: 'uml-class',
+    category: 'uml',
+    label: 'UML Class',
+    icon: 'view_agenda',
+    defaultWidth: 160,
+    defaultHeight: 120,
+    defaultText: 'ClassName\n---\n+ attribute: type\n---\n+ method(): void',
+  },
+  {
+    type: 'uml-interface',
+    category: 'uml',
+    label: 'UML Interface',
+    icon: 'integration_instructions',
+    defaultWidth: 150,
+    defaultHeight: 100,
+    defaultText: '«interface»\nInterfaceName\n---\n+ operation()',
+  },
+  {
+    type: 'uml-actor',
+    category: 'uml',
+    label: 'UML Actor',
+    icon: 'person',
+    defaultWidth: 60,
+    defaultHeight: 90,
+    defaultText: 'Actor',
+  },
+  {
+    type: 'uml-usecase',
+    category: 'uml',
+    label: 'UML Use Case',
+    icon: 'radio_button_unchecked',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Use Case',
+  },
+  {
+    type: 'uml-package',
+    category: 'uml',
+    label: 'UML Package',
+    icon: 'folder',
+    defaultWidth: 150,
+    defaultHeight: 100,
+    defaultText: 'Package',
+  },
+  {
+    type: 'sticky-note',
+    category: 'basic',
+    label: 'Sticky Note',
+    icon: 'sticky_note_2',
+    defaultWidth: 120,
+    defaultHeight: 120,
+    defaultText: 'Note',
+  },
+  {
+    type: 'sticky-pad',
+    category: 'basic',
+    label: 'Sticky Note Pad',
+    icon: 'note_stack',
+    defaultWidth: 130,
+    defaultHeight: 130,
+    defaultText: 'Sticky Pad',
+  },
+  {
+    type: 'frame',
+    category: 'basic',
+    label: 'Frame / Page',
+    icon: 'crop_free',
+    defaultWidth: 800,
+    defaultHeight: 600,
+    defaultText: 'Frame 1',
+  },
+];
+
+export interface FramePreset {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  icon: string;
+  description?: string;
+}
+
+export const FRAME_PRESETS: FramePreset[] = [
+  {
+    id: 'custom',
+    name: 'Custom Frame',
+    width: 800,
+    height: 600,
+    icon: 'crop_free',
+    description: '800 × 600',
+  },
+  {
+    id: 'presentation-16-9',
+    name: 'Presentation (16:9)',
+    width: 1920,
+    height: 1080,
+    icon: 'slideshow',
+    description: '1920 × 1080 (HD)',
+  },
+  {
+    id: 'presentation-4-3',
+    name: 'Presentation (4:3)',
+    width: 1024,
+    height: 768,
+    icon: 'present_to_all',
+    description: '1024 × 768 (Standard)',
+  },
+  {
+    id: 'desktop',
+    name: 'Desktop Display',
+    width: 1440,
+    height: 900,
+    icon: 'desktop_windows',
+    description: '1440 × 900',
+  },
+  {
+    id: 'tablet',
+    name: 'Tablet Screen',
+    width: 768,
+    height: 1024,
+    icon: 'tablet',
+    description: '768 × 1024 (iPad)',
+  },
+  {
+    id: 'mobile',
+    name: 'Mobile Phone',
+    width: 375,
+    height: 812,
+    icon: 'smartphone',
+    description: '375 × 812 (Phone)',
+  },
+  {
+    id: 'a4',
+    name: 'A4 Document',
+    width: 842,
+    height: 595,
+    icon: 'article',
+    description: '842 × 595 (Landscape)',
+  },
+];
 
 export interface CanvasShape {
   id: string;
@@ -11,6 +299,14 @@ export interface CanvasShape {
   strokeColor: string;
   strokeWidth: number;
   text?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  verticalAlign?: 'top' | 'middle' | 'bottom';
+  fontSize?: number;
+  isBold?: boolean;
+  isItalic?: boolean;
+  isUnderline?: boolean;
+  authorName?: string;
+  showAuthor?: boolean;
   zIndex: number;
   locked?: boolean;
   groupId?: string;
@@ -34,8 +330,7 @@ export interface MarqueeBox {
   currentY: number;
 }
 
-export type ActiveTool =
-  'select' | 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond' | 'connection';
+export type ActiveTool = 'select' | 'connection' | ShapeType;
 
 export interface CanvasColorPreset {
   id: string;
@@ -44,6 +339,58 @@ export interface CanvasColorPreset {
   stroke: string;
   swatch: string;
 }
+
+export const STICKY_NOTE_COLORS: CanvasColorPreset[] = [
+  {
+    id: 'yellow',
+    label: 'Yellow',
+    fill: 'var(--canvas-color-amber-fill)',
+    stroke: 'var(--canvas-color-amber-stroke)',
+    swatch: 'var(--canvas-color-amber-stroke)',
+  },
+  {
+    id: 'green',
+    label: 'Green',
+    fill: 'var(--canvas-color-green-fill)',
+    stroke: 'var(--canvas-color-green-stroke)',
+    swatch: 'var(--canvas-color-green-stroke)',
+  },
+  {
+    id: 'pink',
+    label: 'Pink',
+    fill: 'var(--canvas-color-pink-fill)',
+    stroke: 'var(--canvas-color-pink-stroke)',
+    swatch: 'var(--canvas-color-pink-stroke)',
+  },
+  {
+    id: 'blue',
+    label: 'Blue',
+    fill: 'var(--canvas-color-blue-fill)',
+    stroke: 'var(--canvas-color-blue-stroke)',
+    swatch: 'var(--canvas-color-blue-stroke)',
+  },
+  {
+    id: 'purple',
+    label: 'Purple',
+    fill: 'var(--canvas-color-purple-fill)',
+    stroke: 'var(--canvas-color-purple-stroke)',
+    swatch: 'var(--canvas-color-purple-stroke)',
+  },
+  {
+    id: 'orange',
+    label: 'Orange',
+    fill: 'var(--canvas-color-orange-fill)',
+    stroke: 'var(--canvas-color-orange-stroke)',
+    swatch: 'var(--canvas-color-orange-stroke)',
+  },
+  {
+    id: 'teal',
+    label: 'Teal',
+    fill: 'var(--canvas-color-teal-fill)',
+    stroke: 'var(--canvas-color-teal-stroke)',
+    swatch: 'var(--canvas-color-teal-stroke)',
+  },
+];
 
 export const CANVAS_COLOR_PRESETS: CanvasColorPreset[] = [
   {
@@ -551,4 +898,139 @@ export function computeShapeResizeSnapping(
     newHeight: Math.round(newHeight),
     guides,
   };
+}
+
+/**
+ * Computes an auto-fitting font size that scales down to fit available width and height,
+ * stopping at a minimum font size (default 10px).
+ */
+export function computeFittingFontSize(
+  text: string | undefined | null,
+  width: number,
+  height: number,
+  baseSize = 14,
+  minSize = 10,
+): number {
+  if (!text) {
+    return baseSize;
+  }
+  const plain = text.replace(/<[^>]+>/g, '').trim();
+  if (!plain) {
+    return baseSize;
+  }
+  const lines = plain.split(/\r?\n/).length;
+  const chars = plain.length;
+  const usableWidth = Math.max(20, width - 24);
+  const usableHeight = Math.max(20, height - 20);
+
+  let size = baseSize;
+  while (size > minSize) {
+    const charsPerLine = Math.floor(usableWidth / (size * 0.55));
+    const estimatedLines = Math.max(lines, Math.ceil(chars / Math.max(1, charsPerLine)));
+    const neededHeight = estimatedLines * (size * 1.35);
+    if (neededHeight <= usableHeight) {
+      break;
+    }
+    size -= 1;
+  }
+  return Math.max(minSize, size);
+}
+
+/**
+ * Cleans user-entered rich text HTML to ensure safe display without malicious scripts.
+ */
+export function sanitizeRichText(html: string | undefined | null): string {
+  if (!html) {
+    return '';
+  }
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:[^"']*/gi, '');
+}
+
+export interface UmlClassSections {
+  className: string;
+  attributes: string;
+  methods: string;
+}
+
+export function parseUmlClassText(text: string | undefined | null): UmlClassSections {
+  if (!text) {
+    return { className: 'ClassName', attributes: '+ attribute: type', methods: '+ method(): void' };
+  }
+  const parts = text.split(/\s*(?:---|<hr\s*\/?>)\s*/);
+  return {
+    className: parts[0] ?? '',
+    attributes: parts[1] ?? '',
+    methods: parts.slice(2).join('\n---\n') ?? '',
+  };
+}
+
+export function formatUmlClassText(sections: UmlClassSections): string {
+  return `${sections.className.trim()}\n---\n${sections.attributes.trim()}\n---\n${sections.methods.trim()}`;
+}
+
+export interface UmlInterfaceSections {
+  interfaceName: string;
+  methods: string;
+}
+
+export function parseUmlInterfaceText(text: string | undefined | null): UmlInterfaceSections {
+  if (!text) {
+    return { interfaceName: '«interface»\nInterfaceName', methods: '+ operation()' };
+  }
+  const parts = text.split(/\s*(?:---|<hr\s*\/?>)\s*/);
+  return {
+    interfaceName: parts[0] ?? '',
+    methods: parts.slice(1).join('\n---\n') ?? '',
+  };
+}
+
+export function formatUmlInterfaceText(sections: UmlInterfaceSections): string {
+  return `${sections.interfaceName.trim()}\n---\n${sections.methods.trim()}`;
+}
+
+function countLines(text: string | undefined | null): number {
+  if (!text) {
+    return 1;
+  }
+  const normalized = text
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/p>/gi, '\n')
+    .replace(/<p[^>]*>/gi, '')
+    .replace(/<\/div>/gi, '\n')
+    .replace(/<div[^>]*>/gi, '')
+    .replace(/<[^>]+>/g, '');
+  const lines = normalized.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  return Math.max(1, lines.length);
+}
+
+export function computeUmlClassRequiredHeight(sections: UmlClassSections, fontSize = 13): number {
+  const lineH = Math.max(18, Math.round(fontSize * 1.4));
+  const classLines = countLines(sections.className);
+  const attrLines = countLines(sections.attributes);
+  const methodLines = countLines(sections.methods);
+
+  const headerH = Math.max(32, classLines * lineH + 14);
+  const attrH = Math.max(26, attrLines * lineH + 12);
+  const methodH = Math.max(26, methodLines * lineH + 12);
+
+  return Math.max(120, headerH + attrH + methodH);
+}
+
+export function computeUmlInterfaceRequiredHeight(
+  sections: UmlInterfaceSections,
+  fontSize = 13,
+): number {
+  const lineH = Math.max(18, Math.round(fontSize * 1.4));
+  const ifaceLines = countLines(sections.interfaceName);
+  const methodLines = countLines(sections.methods);
+
+  const headerH = Math.max(34, ifaceLines * lineH + 14);
+  const methodH = Math.max(26, methodLines * lineH + 12);
+
+  return Math.max(100, headerH + methodH);
 }

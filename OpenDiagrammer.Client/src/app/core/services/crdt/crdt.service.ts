@@ -166,18 +166,25 @@ export class CrdtService {
   private isShapeEqual(a: CanvasShape, b: CanvasShape): boolean {
     return (
       a.id === b.id &&
-      a.x === b.x &&
-      a.y === b.y &&
-      a.width === b.width &&
-      a.height === b.height &&
+      Math.round(a.x) === Math.round(b.x) &&
+      Math.round(a.y) === Math.round(b.y) &&
+      Math.round(a.width) === Math.round(b.width) &&
+      Math.round(a.height) === Math.round(b.height) &&
       a.zIndex === b.zIndex &&
       a.type === b.type &&
-      a.strokeColor === b.strokeColor &&
-      a.fillColor === b.fillColor &&
+      (a.strokeColor ?? '') === (b.strokeColor ?? '') &&
+      (a.fillColor ?? '') === (b.fillColor ?? '') &&
       a.strokeWidth === b.strokeWidth &&
-      a.text === b.text &&
-      a.locked === b.locked &&
-      a.groupId === b.groupId
+      (a.text ?? '') === (b.text ?? '') &&
+      (a.textAlign ?? 'center') === (b.textAlign ?? 'center') &&
+      (a.fontSize ?? 14) === (b.fontSize ?? 14) &&
+      !!a.isBold === !!b.isBold &&
+      !!a.isItalic === !!b.isItalic &&
+      !!a.isUnderline === !!b.isUnderline &&
+      (a.authorName ?? '') === (b.authorName ?? '') &&
+      !!a.showAuthor === !!b.showAuthor &&
+      !!a.locked === !!b.locked &&
+      (a.groupId ?? '') === (b.groupId ?? '')
     );
   }
 

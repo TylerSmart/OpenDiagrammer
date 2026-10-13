@@ -136,6 +136,36 @@
           <span>{{ currentBoard.members.length }}</span>
         </button>
 
+        <!-- Frames button -->
+        <button
+          mat-button
+          class="frames-header-btn"
+          [class.active-toggle]="isFramesNavigatorOpen()"
+          (click)="toggleFramesNavigator()"
+          aria-label="Frames and Pages"
+          matTooltip="Frames & Pages Navigator"
+        >
+          <mat-icon>art_track</mat-icon>
+          <span>Frames</span>
+          @if (framesList().length > 0) {
+            <span class="frames-header-count-pill">{{ framesList().length }}</span>
+          }
+        </button>
+
+        <!-- Think Mode Start button (when not in Think Mode) -->
+        @if (canChangeMode(currentBoard.userRole) && currentBoard.mode !== BoardMode.ThinkMode) {
+          <button
+            mat-stroked-button
+            class="start-think-header-btn"
+            (click)="openThinkModeDialog()"
+            aria-label="Start Think Mode"
+            matTooltip="Start Think Mode brainstorming session"
+          >
+            <mat-icon>psychology</mat-icon>
+            <span>Think Mode</span>
+          </button>
+        }
+
         <!-- Settings button -->
         @if (canManageSettings(currentBoard.userRole)) {
           <button
@@ -186,6 +216,102 @@
       </div>
     </header>
 
+    <!-- Think Mode Control Bar -->
+    @if (currentBoard.mode === BoardMode.ThinkMode) {
+      <div class="think-mode-bar" role="region" aria-label="Think Mode controls">
+        <div class="think-bar-left">
+          <div class="think-mode-pill">
+            <mat-icon>psychology</mat-icon>
+            <span>Think Mode</span>
+          </div>
+
+          @if (thinkModeConfig()?.timerSeconds) {
+            <div
+              class="think-timer-pill"
+              [class.timer-warning]="(timerSecondsRemaining() ?? 0) <= 60"
+            >
+              <mat-icon>timer</mat-icon>
+              <span class="timer-display">{{ timerFormatted() }}</span>
+              @if (canChangeMode(currentBoard.userRole)) {
+                <button
+                  mat-icon-button
+                  class="timer-mini-btn"
+                  (click)="toggleTimerPause()"
+                  [matTooltip]="isTimerPaused() ? 'Resume timer' : 'Pause timer'"
+                  [attr.aria-label]="isTimerPaused() ? 'Resume timer' : 'Pause timer'"
+                >
+                  <mat-icon>{{ isTimerPaused() ? 'play_arrow' : 'pause' }}</mat-icon>
+                </button>
+                <button
+                  mat-icon-button
+                  class="timer-mini-btn"
+                  (click)="addTimeToTimer(60)"
+                  matTooltip="Add 1 minute"
+                  aria-label="Add 1 minute"
+                >
+                  <mat-icon>more_time</mat-icon>
+                </button>
+              }
+            </div>
+          }
+
+          @if (thinkModeConfig()?.hideOthersWriting) {
+            <div class="think-status-pill">
+              <mat-icon>visibility_off</mat-icon>
+              <span>Blind Ideation</span>
+              @if (canChangeMode(currentBoard.userRole)) {
+                <button
+                  mat-button
+                  class="facilitator-reveal-btn"
+                  (click)="toggleFacilitatorReveal()"
+                  [class.revealed]="facilitatorRevealNotes()"
+                  [attr.aria-label]="
+                    facilitatorRevealNotes() ? 'Hide Others' : 'Facilitator Reveal'
+                  "
+                >
+                  <mat-icon>{{
+                    facilitatorRevealNotes() ? 'visibility' : 'visibility_off'
+                  }}</mat-icon>
+                  <span>{{ facilitatorRevealNotes() ? 'Hide Others' : 'Facilitator Reveal' }}</span>
+                </button>
+              }
+            </div>
+          }
+
+          @if (thinkModeConfig()?.viewerParticipation) {
+            <div class="think-status-pill viewer-active">
+              <mat-icon>how_to_reg</mat-icon>
+              <span>Viewer Notes Active</span>
+            </div>
+          }
+        </div>
+
+        <div class="think-bar-right">
+          @if (canChangeMode(currentBoard.userRole)) {
+            <button
+              mat-stroked-button
+              class="think-settings-btn"
+              (click)="openThinkModeDialog()"
+              matTooltip="Configure Think Mode options"
+            >
+              <mat-icon>tune</mat-icon>
+              <span>Configure</span>
+            </button>
+            <button
+              mat-flat-button
+              color="warn"
+              class="end-think-mode-btn"
+              (click)="endThinkMode()"
+              matTooltip="Exit Think Mode and return board to normal mode"
+            >
+              <mat-icon>stop</mat-icon>
+              <span>End Think Mode</span>
+            </button>
+          }
+        </div>
+      </div>
+    }
+
     <!-- Canvas Viewport -->
     <main class="canvas-viewport">
       <app-canvas
@@ -195,9 +321,37 @@
         [readOnly]="currentBoard.userRole === BoardRole.Viewer"
         [liveCursors]="liveCursorsList()"
         [showLiveCursors]="showLiveCursors()"
+        [currentUsername]="authService.currentUser()?.username ?? null"
+        [thinkMode]="currentBoard.mode === BoardMode.ThinkMode"
+        [thinkModeConfig]="thinkModeConfig()"
+        [canViewerParticipate]="thinkModeConfig()?.viewerParticipation === true"
+        [facilitatorReveal]="facilitatorRevealNotes()"
+        [isFramesNavigatorOpen]="isFramesNavigatorOpen()"
         (cursorMove)="handleCursorMove($event)"
         (diagramChange)="handleDiagramChange($event)"
+        (openFramesNavigator)="toggleFramesNavigator()"
       ></app-canvas>
+
+      @if (isFramesNavigatorOpen()) {
+        <aside
+          class="frames-navigator-sidebar"
+          (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
+        >
+          <app-frames-navigator
+            [frames]="framesList()"
+            [activeFrameId]="activeFrameId()"
+            [readOnly]="currentBoard.userRole === BoardRole.Viewer"
+            (frameSelect)="handleFrameSelect($event)"
+            (frameAdd)="handleFrameAdd($event)"
+            (frameRename)="handleFrameRename($event)"
+            (frameDelete)="handleFrameDelete($event)"
+            (frameReorder)="handleFrameReorder($event)"
+            (closeNavigator)="isFramesNavigatorOpen.set(false)"
+            (present)="handlePresent()"
+          ></app-frames-navigator>
+        </aside>
+      }
     </main>
   </div>
 }

@@ -3,7 +3,6 @@
   [class.is-panning]="isPanning()"
   [class.is-space-pressed]="isSpacePressed"
   [class.is-creation-tool]="activeTool() !== 'select'"
-  (dblclick)="handleDoubleClick($event)"
 >
   <!-- Infinite Grid/Dot background layer -->
   <div
@@ -137,8 +136,11 @@
     <!-- Rendered Shapes -->
     @for (shape of shapes(); track shape.id) {
       <app-canvas-shape
+        [attr.data-shape-id]="shape.id"
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
+        [isEditing]="editingShapeId() === shape.id"
+        [isMasked]="isShapeMasked(shape)"
         [showAnchors]="
           !readOnly() &&
           (activeTool() === 'connection' ||
@@ -148,6 +150,8 @@
         "
         [allowHoverAnchors]="!readOnly() && !hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
+        (shapeDoubleClick)="startEditingShapeText(shape.id, $event.section)"
+        (pullStickyNote)="pullStickyNoteFromPad($event)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"
       ></app-canvas-shape>
@@ -333,6 +337,7 @@
         [style.left.px]="sPos.x"
         [style.top.px]="sPos.y"
         (pointerdown)="$event.stopPropagation()"
+        (dblclick)="$event.stopPropagation()"
       >
         <!-- Shape Color Picker Trigger -->
         <button
@@ -350,7 +355,11 @@
         </button>
 
         <mat-menu #shapePaletteMenu="matMenu" class="color-palette-menu">
-          <div class="color-palette-grid" (pointerdown)="$event.stopPropagation()">
+          <div
+            class="color-palette-grid"
+            (pointerdown)="$event.stopPropagation()"
+            (dblclick)="$event.stopPropagation()"
+          >
             @for (preset of canvasColorPresets; track preset.id) {
               <button
                 type="button"
@@ -370,6 +379,178 @@
         </mat-menu>
 
         <div class="dock-divider"></div>
+
+        @if (singleSelectedShape(); as selShape) {
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            (click)="startEditingShapeText(selShape.id)"
+            matTooltip="Edit Text (Enter / Double-Click)"
+            aria-label="Edit node text"
+          >
+            <mat-icon>edit_note</mat-icon>
+          </button>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="isFormatActive(selShape, 'bold')"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="toggleShapeFormat(selShape.id, 'bold')"
+            matTooltip="Bold (Ctrl+B)"
+            aria-label="Bold text"
+          >
+            <mat-icon>format_bold</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="isFormatActive(selShape, 'italic')"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="toggleShapeFormat(selShape.id, 'italic')"
+            matTooltip="Italic (Ctrl+I)"
+            aria-label="Italic text"
+          >
+            <mat-icon>format_italic</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="isFormatActive(selShape, 'underline')"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="toggleShapeFormat(selShape.id, 'underline')"
+            matTooltip="Underline (Ctrl+U)"
+            aria-label="Underline text"
+          >
+            <mat-icon>format_underlined</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small font-size-btn"
+            (pointerdown)="$event.preventDefault()"
+            (click)="adjustShapeFontSize(selShape.id, -2)"
+            matTooltip="Decrease Font Size"
+            aria-label="Decrease font size"
+            [disabled]="(selShape.fontSize || 14) <= 8"
+          >
+            <mat-icon>text_decrease</mat-icon>
+          </button>
+          <span class="font-size-label" matTooltip="Font Size"
+            >{{ selShape.fontSize || 14 }}px</span
+          >
+          <button
+            mat-icon-button
+            class="tool-btn small font-size-btn"
+            (pointerdown)="$event.preventDefault()"
+            (click)="adjustShapeFontSize(selShape.id, 2)"
+            matTooltip="Increase Font Size"
+            aria-label="Increase font size"
+            [disabled]="(selShape.fontSize || 14) >= 72"
+          >
+            <mat-icon>text_increase</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.textAlign === 'left'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeTextAlign(selShape.id, 'left')"
+            matTooltip="Align Left"
+            aria-label="Align text left"
+          >
+            <mat-icon>format_align_left</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="!selShape.textAlign || selShape.textAlign === 'center'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeTextAlign(selShape.id, 'center')"
+            matTooltip="Align Center"
+            aria-label="Align text center"
+          >
+            <mat-icon>format_align_center</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.textAlign === 'right'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeTextAlign(selShape.id, 'right')"
+            matTooltip="Align Right"
+            aria-label="Align text right"
+          >
+            <mat-icon>format_align_right</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.verticalAlign === 'top'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeVerticalAlign(selShape.id, 'top')"
+            matTooltip="Align Top"
+            aria-label="Align text top"
+          >
+            <mat-icon>vertical_align_top</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="!selShape.verticalAlign || selShape.verticalAlign === 'middle'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeVerticalAlign(selShape.id, 'middle')"
+            matTooltip="Align Middle"
+            aria-label="Align text middle"
+          >
+            <mat-icon>vertical_align_center</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.verticalAlign === 'bottom'"
+            (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
+            (click)="setShapeVerticalAlign(selShape.id, 'bottom')"
+            matTooltip="Align Bottom"
+            aria-label="Align text bottom"
+          >
+            <mat-icon>vertical_align_bottom</mat-icon>
+          </button>
+
+          @if (selShape.type === 'sticky-note') {
+            <div class="dock-divider"></div>
+
+            <button
+              mat-icon-button
+              class="tool-btn small"
+              [class.active]="selShape.showAuthor !== false"
+              (click)="toggleStickyAuthorVisibility(selShape.id)"
+              matTooltip="Toggle author name visibility"
+              aria-label="Toggle author name"
+            >
+              <mat-icon>{{ selShape.showAuthor === false ? 'visibility_off' : 'badge' }}</mat-icon>
+            </button>
+          }
+
+          <div class="dock-divider"></div>
+        }
 
         @if (selectedShapeIds().size >= 2) {
           <button
@@ -564,6 +745,7 @@
           [style.left.px]="pos.x"
           [style.top.px]="pos.y"
           (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
         >
           <!-- Routing Type: Straight, Orthogonal, Curved -->
           <button
@@ -759,6 +941,168 @@
         </div>
       }
     }
+
+    <!-- Inline Shape Rich Text Editor -->
+    @if (editingShape(); as editShape) {
+      <div
+        class="shape-text-inline-editor-wrapper"
+        [class.is-frame-editor]="editShape.type === 'frame'"
+        [class.is-uml-editor]="editShape.type === 'uml-class' || editShape.type === 'uml-interface'"
+        [style.transform]="
+          editShape.type === 'frame'
+            ? 'translate(' + editShape.x + 'px, ' + (editShape.y - 30) + 'px)'
+            : 'translate(' + editShape.x + 'px, ' + editShape.y + 'px)'
+        "
+        [style.width.px]="editShape.type === 'frame' ? 220 : editShape.width"
+        [style.height.px]="editShape.type === 'frame' ? 28 : editShape.height"
+        [style.z-index]="50 + editShape.zIndex"
+        (pointerdown)="$event.stopPropagation()"
+      >
+        @if (editShape.type === 'uml-class') {
+          <div
+            class="uml-sections-inline-editor"
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            (focusout)="handleUmlEditorFocusOut($event, editShape.id)"
+          >
+            <div
+              #umlClassHeaderEditor
+              class="uml-editor-section uml-editor-header"
+              contenteditable="true"
+              (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'className',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassHeaderEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
+            ></div>
+            <div
+              #umlClassAttrEditor
+              class="uml-editor-section uml-editor-attributes"
+              contenteditable="true"
+              (focus)="activeUmlSection = 'attributes'; saveCurrentEditorSelection()"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'attributes',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassAttrEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
+            ></div>
+            <div
+              #umlClassMethodEditor
+              class="uml-editor-section uml-editor-methods"
+              contenteditable="true"
+              (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
+              (input)="
+                handleUmlClassSectionInput(
+                  editShape.id,
+                  'methods',
+                  umlClassHeaderEditor,
+                  umlClassAttrEditor,
+                  umlClassMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlClassMethodEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
+            ></div>
+          </div>
+        } @else if (editShape.type === 'uml-interface') {
+          <div
+            class="uml-sections-inline-editor"
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            (focusout)="handleUmlEditorFocusOut($event, editShape.id)"
+          >
+            <div
+              #umlIfaceHeaderEditor
+              class="uml-editor-section uml-editor-header"
+              contenteditable="true"
+              (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
+              (input)="
+                handleUmlInterfaceSectionInput(
+                  editShape.id,
+                  'header',
+                  umlIfaceHeaderEditor,
+                  umlIfaceMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceHeaderEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
+            ></div>
+            <div
+              #umlIfaceMethodEditor
+              class="uml-editor-section uml-editor-methods"
+              contenteditable="true"
+              (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
+              (input)="
+                handleUmlInterfaceSectionInput(
+                  editShape.id,
+                  'methods',
+                  umlIfaceHeaderEditor,
+                  umlIfaceMethodEditor
+                )
+              "
+              (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceMethodEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
+            ></div>
+          </div>
+        } @else {
+          <div
+            #shapeTextEditor
+            class="shape-rich-text-editor"
+            [class.frame-title-editor]="editShape.type === 'frame'"
+            [class.valign-top]="editShape.type !== 'frame' && editShape.verticalAlign === 'top'"
+            [class.valign-middle]="
+              editShape.type !== 'frame' &&
+              (!editShape.verticalAlign || editShape.verticalAlign === 'middle')
+            "
+            [class.valign-bottom]="
+              editShape.type !== 'frame' && editShape.verticalAlign === 'bottom'
+            "
+            contenteditable="true"
+            [style.text-align]="
+              editShape.type === 'frame' ? 'left' : editShape.textAlign || 'center'
+            "
+            [style.color]="
+              editShape.fillColor.includes('inverse')
+                ? 'var(--canvas-color-inverse-text)'
+                : 'var(--mat-sys-on-surface)'
+            "
+            [style.font-size.px]="editShape.type === 'frame' ? 12 : editShape.fontSize || 14"
+            [style.font-weight]="editShape.type === 'frame' || editShape.isBold ? 'bold' : null"
+            [style.font-style]="editShape.isItalic ? 'italic' : null"
+            [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
+            (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
+            (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
+            (keyup)="saveCurrentEditorSelection()"
+            (mouseup)="saveCurrentEditorSelection()"
+          ></div>
+        }
+      </div>
+    }
+
     <!-- Real-Time Collaborative Cursors Layer -->
     @if (showLiveCursors() && liveCursors().length > 0) {
       <div class="live-cursors-layer" aria-hidden="true">
@@ -791,6 +1135,7 @@
       role="toolbar"
       aria-label="Shape creation tools"
       (pointerdown)="$event.stopPropagation()"
+      (dblclick)="$event.stopPropagation()"
     >
       <button
         mat-icon-button
@@ -822,7 +1167,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'rectangle'"
-        (click)="setActiveTool('rectangle')"
+        (click)="handleToolButtonClick('rectangle')"
         (pointerdown)="handleToolPointerDown($event, 'rectangle')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -836,7 +1181,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'rounded-rectangle'"
-        (click)="setActiveTool('rounded-rectangle')"
+        (click)="handleToolButtonClick('rounded-rectangle')"
         (pointerdown)="handleToolPointerDown($event, 'rounded-rectangle')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -850,7 +1195,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'ellipse'"
-        (click)="setActiveTool('ellipse')"
+        (click)="handleToolButtonClick('ellipse')"
         (pointerdown)="handleToolPointerDown($event, 'ellipse')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -864,7 +1209,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'diamond'"
-        (click)="setActiveTool('diamond')"
+        (click)="handleToolButtonClick('diamond')"
         (pointerdown)="handleToolPointerDown($event, 'diamond')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -873,6 +1218,169 @@
       >
         <mat-icon>change_history</mat-icon>
       </button>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'sticky-note'"
+        (click)="handleToolButtonClick('sticky-note')"
+        (pointerdown)="handleToolPointerDown($event, 'sticky-note')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Sticky Note"
+        matTooltip="Sticky Note (N) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>sticky_note_2</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'frame'"
+        (click)="handleToolButtonClick('frame')"
+        (pointerdown)="handleToolPointerDown($event, 'frame')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Frame"
+        matTooltip="Frame / Page (F) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>crop_free</mat-icon>
+      </button>
+
+      <div class="dock-divider"></div>
+
+      <!-- Shapes Catalog Trigger -->
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="isCatalogToolActive()"
+        [matMenuTriggerFor]="shapesCatalogMenu"
+        aria-label="Shapes Catalog"
+        [matTooltip]="
+          activeCatalogItem()
+            ? 'Catalog: ' + activeCatalogItem()!.label + ' active'
+            : 'Shapes Catalog (UML, Flowcharts, Shapes)'
+        "
+      >
+        <mat-icon>category</mat-icon>
+      </button>
+
+      <mat-menu #shapesCatalogMenu="matMenu" class="shapes-catalog-menu" xPosition="after">
+        <div
+          class="shapes-catalog-panel"
+          (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
+        >
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>shapes</mat-icon>
+              <span>Basic Shapes</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of basicCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="catalog-divider"></div>
+
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>account_tree</mat-icon>
+              <span>Flowchart</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of flowchartCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="catalog-divider"></div>
+
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>schema</mat-icon>
+              <span>UML</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of umlCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </mat-menu>
+    </div>
+  } @else if (thinkMode() && canViewerParticipate()) {
+    <div
+      class="canvas-tools-dock viewer-think-dock"
+      role="toolbar"
+      aria-label="Viewer Think Mode tools"
+      (pointerdown)="$event.stopPropagation()"
+      (dblclick)="$event.stopPropagation()"
+    >
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'select'"
+        (click)="setActiveTool('select')"
+        aria-label="Selection Tool"
+        matTooltip="Select tool (V)"
+      >
+        <mat-icon>near_me</mat-icon>
+      </button>
+
+      <div class="dock-divider"></div>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'sticky-note'"
+        (click)="setActiveTool('sticky-note')"
+        (pointerdown)="handleToolPointerDown($event, 'sticky-note')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Sticky Note"
+        matTooltip="Sticky Note (N) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>sticky_note_2</mat-icon>
+      </button>
+
+      <div class="viewer-participation-pill">
+        <span>Think Mode: Sticky Notes Enabled</span>
+      </div>
     </div>
   }
 
@@ -882,6 +1390,7 @@
     role="toolbar"
     aria-label="Canvas zoom and view controls"
     (pointerdown)="$event.stopPropagation()"
+    (dblclick)="$event.stopPropagation()"
   >
     <button
       mat-icon-button
@@ -914,6 +1423,17 @@
     </button>
 
     <div class="dock-divider"></div>
+
+    <button
+      mat-icon-button
+      class="control-btn"
+      [class.active]="isFramesNavigatorOpen()"
+      (click)="toggleFramesNavigator()"
+      aria-label="Frames and Pages"
+      matTooltip="Frames & Pages Navigator"
+    >
+      <mat-icon>art_track</mat-icon>
+    </button>
 
     <button
       mat-icon-button
