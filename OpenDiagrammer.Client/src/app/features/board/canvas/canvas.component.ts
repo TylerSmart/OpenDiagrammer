@@ -7,6 +7,7 @@ import {
   input,
   output,
   signal,
+  untracked,
   viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
@@ -19,6 +20,7 @@ import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.
 import {
   CANVAS_CONSTANTS,
   CanvasClipboardData,
+  CanvasDiagramData,
   CanvasPoint,
   CanvasTransform,
 } from './canvas.models';
@@ -90,11 +92,14 @@ export interface ReconnectingPreview {
   },
 })
 export class CanvasComponent {
-  // Inputs for board settings
+  // Inputs for board settings and canvas persistence
   readonly backgroundType = input<BoardBackgroundType>(BoardBackgroundType.GridLines);
+  readonly initialCanvasData = input<string | null>(null);
+  readonly readOnly = input<boolean>(false);
 
-  // Transform change output event
+  // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
+  readonly diagramChange = output<CanvasDiagramData>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -663,6 +668,11 @@ export class CanvasComponent {
   readonly fullscreenService = inject(FullscreenService);
   readonly connTextInput = viewChild<ElementRef<HTMLInputElement>>('textInput');
 
+  // Persistence state tracking
+  private lastLoadedDataJson: string | null = null;
+  private lastEmittedJson: string | null = null;
+  private hasLoadedInitialData = false;
+
   constructor() {
     effect(() => {
       const editId = this.editingConnectionId();
@@ -672,6 +682,72 @@ export class CanvasComponent {
         inputRef.nativeElement.select();
       }
     });
+
+    effect(() => {
+      const dataJson = this.initialCanvasData();
+      untracked(() => {
+        if (dataJson !== this.lastLoadedDataJson) {
+          this.loadCanvasData(dataJson);
+        }
+      });
+    });
+
+    effect(() => {
+      const shapes = this.shapes();
+      const connections = this.connections();
+      if (!this.hasLoadedInitialData || this.readOnly()) {
+        return;
+      }
+      untracked(() => {
+        const currentJson = JSON.stringify({ shapes, connections });
+        if (currentJson === this.lastEmittedJson) {
+          return;
+        }
+        this.lastEmittedJson = currentJson;
+        this.diagramChange.emit({
+          shapes,
+          connections,
+          zoom: this.zoom(),
+          panX: this.panX(),
+          panY: this.panY(),
+        });
+      });
+    });
+  }
+
+  loadCanvasData(dataJson: string | null): void {
+    this.lastLoadedDataJson = dataJson;
+    if (!dataJson) {
+      this.shapes.set([]);
+      this.connections.set([]);
+      this.lastEmittedJson = JSON.stringify({ shapes: [], connections: [] });
+      this.hasLoadedInitialData = true;
+      return;
+    }
+
+    try {
+      const parsed: CanvasDiagramData = JSON.parse(dataJson);
+      const shapes = Array.isArray(parsed.shapes) ? parsed.shapes : [];
+      const connections = Array.isArray(parsed.connections) ? parsed.connections : [];
+      this.shapes.set(shapes);
+      this.connections.set(connections);
+      if (typeof parsed.zoom === 'number' && parsed.zoom > 0) {
+        this.zoom.set(parsed.zoom);
+      }
+      if (typeof parsed.panX === 'number') {
+        this.panX.set(parsed.panX);
+      }
+      if (typeof parsed.panY === 'number') {
+        this.panY.set(parsed.panY);
+      }
+      this.lastEmittedJson = JSON.stringify({ shapes, connections });
+      this.hasLoadedInitialData = true;
+    } catch {
+      this.shapes.set([]);
+      this.connections.set([]);
+      this.lastEmittedJson = JSON.stringify({ shapes: [], connections: [] });
+      this.hasLoadedInitialData = true;
+    }
   }
 
   // Computed zoom percentage formatted string
@@ -890,6 +966,9 @@ export class CanvasComponent {
   }
 
   setActiveTool(tool: ActiveTool): void {
+    if (this.readOnly() && tool !== 'select') {
+      return;
+    }
     if (this.inProgressConnection()) {
       this.inProgressConnection.set(null);
       this.connectionStartScreenPos = null;

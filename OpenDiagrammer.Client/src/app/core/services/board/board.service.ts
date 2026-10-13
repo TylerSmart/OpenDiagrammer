@@ -11,6 +11,7 @@ import {
   TransferOwnershipRequest,
   UpdateBoardMemberRoleRequest,
   UpdateBoardRequest,
+  UpdateCanvasDataRequest,
 } from '../../models/board.models';
 
 @Service()
@@ -31,6 +32,10 @@ export class BoardService {
 
   updateBoard(id: string, request: UpdateBoardRequest): Observable<BoardDetailDto> {
     return this.http.put<BoardDetailDto>(apiUrl(`/boards/${id}`), request);
+  }
+
+  updateCanvasData(id: string, request: UpdateCanvasDataRequest): Observable<BoardDetailDto> {
+    return this.http.put<BoardDetailDto>(apiUrl(`/boards/${id}/canvas`), request);
   }
 
   deleteBoard(id: string): Observable<void> {

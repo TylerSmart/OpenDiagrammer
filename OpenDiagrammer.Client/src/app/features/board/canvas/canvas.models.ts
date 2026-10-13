@@ -22,6 +22,14 @@ export interface CanvasClipboardData {
   connections: CanvasConnection[];
 }
 
+export interface CanvasDiagramData {
+  shapes: CanvasShape[];
+  connections: CanvasConnection[];
+  zoom?: number;
+  panX?: number;
+  panY?: number;
+}
+
 export const CANVAS_CONSTANTS = {
   MIN_ZOOM: 0.1, // 10%
   MAX_ZOOM: 5.0, // 500%

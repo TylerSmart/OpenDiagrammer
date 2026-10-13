@@ -121,4 +121,16 @@ describe('BoardService', () => {
       },
     ]);
   });
+
+  it('should update canvas data of board', () => {
+    const updateReq = { canvasDataJson: '{"shapes":[]}' };
+    service.updateCanvasData('b1', updateReq).subscribe((board) => {
+      expect(board.id).toBe('b1');
+    });
+
+    const req = httpMock.expectOne('/api/boards/b1/canvas');
+    expect(req.request.method).toBe('PUT');
+    expect(req.request.body).toEqual(updateReq);
+    req.flush({ id: 'b1', canvasDataJson: '{"shapes":[]}' });
+  });
 });

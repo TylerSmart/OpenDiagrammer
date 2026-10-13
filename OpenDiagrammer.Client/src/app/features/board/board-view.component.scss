@@ -64,6 +64,40 @@
   }
 }
 
+.save-status-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  user-select: none;
+  white-space: nowrap;
+  transition: all 0.2s ease;
+
+  mat-icon {
+    font-size: 0.875rem;
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  &.status-saved {
+    color: var(--mat-sys-outline);
+    background-color: transparent;
+  }
+
+  &.status-saving {
+    color: var(--mat-sys-primary);
+    background-color: var(--mat-sys-surface-container-high);
+  }
+
+  &.status-error {
+    color: var(--mat-sys-error);
+    background-color: var(--mat-sys-error-container);
+  }
+}
+
 .canvas-viewport {
   flex: 1;
   position: relative;

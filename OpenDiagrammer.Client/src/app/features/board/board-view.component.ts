@@ -1,4 +1,5 @@
-import { Component, OnInit, computed, inject, signal } from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
 import { MatIconModule } from '@angular/material/icon';
@@ -7,11 +8,14 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
+import { Subject, of } from 'rxjs';
+import { catchError, debounceTime, switchMap, tap } from 'rxjs/operators';
 import {
   BoardBackgroundType,
   BoardDetailDto,
   BoardMode,
   BoardRole,
+  UpdateCanvasDataRequest,
   canManageBoardSettings,
   getRoleName,
 } from '../../core/models/board.models';
@@ -20,6 +24,7 @@ import { BoardService } from '../../core/services/board/board.service';
 import { ThemeMode, ThemeService } from '../../core/services/theme/theme.service';
 import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
 import { CanvasComponent } from './canvas/canvas.component';
+import { CanvasDiagramData } from './canvas/canvas.models';
 import {
   BoardMembersDialogComponent,
   BoardMembersDialogData,
@@ -64,18 +69,56 @@ export class BoardViewComponent implements OnInit {
   protected readonly fullscreenService = inject(FullscreenService);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly saveTrigger$ = new Subject<CanvasDiagramData>();
 
   protected readonly board = signal<BoardDetailDto | null>(null);
   protected readonly isLoading = signal<boolean>(false);
   protected readonly errorMessage = signal<string | null>(null);
+  protected readonly isBoardEmpty = signal<boolean>(true);
+  protected readonly saveStatus = signal<'saved' | 'saving' | 'error'>('saved');
 
   protected readonly BoardBackgroundType = BoardBackgroundType;
   protected readonly BoardMode = BoardMode;
+  protected readonly BoardRole = BoardRole;
   protected readonly getRoleName = getRoleName;
   protected readonly canManageSettings = canManageBoardSettings;
 
   protected readonly themeIcon = computed(() => THEME_ICONS[this.themeService.mode()]);
   protected readonly themeLabel = computed(() => THEME_LABELS[this.themeService.mode()]);
+
+  constructor() {
+    this.saveTrigger$
+      .pipe(
+        debounceTime(800),
+        switchMap((diagramData) => {
+          const current = this.board();
+          if (!current || current.userRole === BoardRole.Viewer) {
+            return of(null);
+          }
+          const request: UpdateCanvasDataRequest = {
+            canvasDataJson: JSON.stringify(diagramData),
+          };
+          return this.boardService.updateCanvasData(current.id, request).pipe(
+            tap(() => {
+              this.saveStatus.set('saved');
+              this.board.update((b) =>
+                b ? { ...b, canvasDataJson: request.canvasDataJson } : null,
+              );
+            }),
+            catchError(() => {
+              this.saveStatus.set('error');
+              this.snackBar.open('Failed to save diagram changes.', 'Dismiss', {
+                duration: 4000,
+              });
+              return of(null);
+            }),
+          );
+        }),
+        takeUntilDestroyed(this.destroyRef),
+      )
+      .subscribe();
+  }
 
   ngOnInit(): void {
     const id = this.route.snapshot.paramMap.get('id');
@@ -93,6 +136,16 @@ export class BoardViewComponent implements OnInit {
     this.boardService.getBoardById(id).subscribe({
       next: (b) => {
         this.board.set(b);
+        if (b.canvasDataJson) {
+          try {
+            const parsed = JSON.parse(b.canvasDataJson);
+            this.isBoardEmpty.set(!parsed.shapes || parsed.shapes.length === 0);
+          } catch {
+            this.isBoardEmpty.set(true);
+          }
+        } else {
+          this.isBoardEmpty.set(true);
+        }
         this.isLoading.set(false);
       },
       error: (err) => {
@@ -106,6 +159,16 @@ export class BoardViewComponent implements OnInit {
         );
       },
     });
+  }
+
+  handleDiagramChange(data: CanvasDiagramData): void {
+    const current = this.board();
+    if (!current || current.userRole === BoardRole.Viewer) {
+      return;
+    }
+    this.isBoardEmpty.set(data.shapes.length === 0);
+    this.saveStatus.set('saving');
+    this.saveTrigger$.next(data);
   }
 
   goBack(): void {

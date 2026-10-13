@@ -42,6 +42,29 @@
               <span>Think Mode</span>
             </span>
           }
+
+          @if (currentBoard.userRole !== BoardRole.Viewer) {
+            <span
+              class="save-status-indicator"
+              [class]="'status-' + saveStatus()"
+              [attr.aria-label]="'Save status: ' + saveStatus()"
+            >
+              @switch (saveStatus()) {
+                @case ('saving') {
+                  <mat-spinner diameter="12"></mat-spinner>
+                  <span>Saving...</span>
+                }
+                @case ('error') {
+                  <mat-icon>cloud_off</mat-icon>
+                  <span>Save error</span>
+                }
+                @default {
+                  <mat-icon>cloud_done</mat-icon>
+                  <span>Saved</span>
+                }
+              }
+            </span>
+          }
         </div>
       </div>
 
@@ -109,15 +132,22 @@
 
     <!-- Canvas Viewport -->
     <main class="canvas-viewport">
-      <app-canvas [backgroundType]="currentBoard.backgroundType">
+      <app-canvas
+        [backgroundType]="currentBoard.backgroundType"
+        [initialCanvasData]="currentBoard.canvasDataJson"
+        [readOnly]="currentBoard.userRole === BoardRole.Viewer"
+        (diagramChange)="handleDiagramChange($event)"
+      >
         <!-- Canvas Content (Nodes & Connections in future Phase 4 tasks) -->
-        <div class="canvas-center-welcome" aria-hidden="true">
-          <div class="welcome-card">
-            <mat-icon>draw</mat-icon>
-            <h2>{{ currentBoard.name }}</h2>
-            <p>{{ currentBoard.description || 'Welcome to your diagramming board!' }}</p>
+        @if (isBoardEmpty()) {
+          <div class="canvas-center-welcome" aria-hidden="true">
+            <div class="welcome-card">
+              <mat-icon>draw</mat-icon>
+              <h2>{{ currentBoard.name }}</h2>
+              <p>{{ currentBoard.description || 'Welcome to your diagramming board!' }}</p>
+            </div>
           </div>
-        </div>
+        }
       </app-canvas>
     </main>
   </div>

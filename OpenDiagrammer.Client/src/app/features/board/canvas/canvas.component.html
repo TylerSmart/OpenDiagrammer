@@ -139,12 +139,13 @@
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
         [showAnchors]="
-          activeTool() === 'connection' ||
-          inProgressConnection() !== null ||
-          isShapeSelected(shape.id) ||
-          draggingEndpoint() !== null
+          !readOnly() &&
+          (activeTool() === 'connection' ||
+            inProgressConnection() !== null ||
+            isShapeSelected(shape.id) ||
+            draggingEndpoint() !== null)
         "
-        [allowHoverAnchors]="!hasSelectedConnection()"
+        [allowHoverAnchors]="!readOnly() && !hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"
@@ -152,101 +153,103 @@
     }
 
     <!-- Interactive Selected Connection Handles Overlay (Endpoints, Waypoints, Segments placed above shapes) -->
-    <svg class="canvas-connection-handles-layer" overflow="visible" aria-hidden="true">
-      @for (conn of renderedConnections(); track conn.id) {
-        @if (isConnectionSelected(conn.id)) {
-          <!-- Source Endpoint Reconnect Handle -->
-          <circle
-            class="connection-endpoint-handle source-endpoint"
-            [attr.cx]="
-              reconnectingPreview()?.connId === conn.id &&
-              reconnectingPreview()?.endpoint === 'source'
-                ? reconnectingPreview()!.currentPoint.x
-                : conn.startPoint.x
-            "
-            [attr.cy]="
-              reconnectingPreview()?.connId === conn.id &&
-              reconnectingPreview()?.endpoint === 'source'
-                ? reconnectingPreview()!.currentPoint.y
-                : conn.startPoint.y
-            "
-            r="6.5"
-            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
-          />
+    @if (!readOnly()) {
+      <svg class="canvas-connection-handles-layer" overflow="visible" aria-hidden="true">
+        @for (conn of renderedConnections(); track conn.id) {
+          @if (isConnectionSelected(conn.id)) {
+            <!-- Source Endpoint Reconnect Handle -->
+            <circle
+              class="connection-endpoint-handle source-endpoint"
+              [attr.cx]="
+                reconnectingPreview()?.connId === conn.id &&
+                reconnectingPreview()?.endpoint === 'source'
+                  ? reconnectingPreview()!.currentPoint.x
+                  : conn.startPoint.x
+              "
+              [attr.cy]="
+                reconnectingPreview()?.connId === conn.id &&
+                reconnectingPreview()?.endpoint === 'source'
+                  ? reconnectingPreview()!.currentPoint.y
+                  : conn.startPoint.y
+              "
+              r="6.5"
+              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'source')"
+            />
 
-          <!-- Target Endpoint Reconnect Handle -->
-          <circle
-            class="connection-endpoint-handle target-endpoint"
-            [attr.cx]="
-              reconnectingPreview()?.connId === conn.id &&
-              reconnectingPreview()?.endpoint === 'target'
-                ? reconnectingPreview()!.currentPoint.x
-                : conn.endPoint.x
-            "
-            [attr.cy]="
-              reconnectingPreview()?.connId === conn.id &&
-              reconnectingPreview()?.endpoint === 'target'
-                ? reconnectingPreview()!.currentPoint.y
-                : conn.endPoint.y
-            "
-            r="6.5"
-            (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
-          />
+            <!-- Target Endpoint Reconnect Handle -->
+            <circle
+              class="connection-endpoint-handle target-endpoint"
+              [attr.cx]="
+                reconnectingPreview()?.connId === conn.id &&
+                reconnectingPreview()?.endpoint === 'target'
+                  ? reconnectingPreview()!.currentPoint.x
+                  : conn.endPoint.x
+              "
+              [attr.cy]="
+                reconnectingPreview()?.connId === conn.id &&
+                reconnectingPreview()?.endpoint === 'target'
+                  ? reconnectingPreview()!.currentPoint.y
+                  : conn.endPoint.y
+              "
+              r="6.5"
+              (pointerdown)="handleEndpointPointerDown($event, conn.id, 'target')"
+            />
 
-          <!-- Reshaping handles (hidden while actively dragging an endpoint) -->
-          @if (reconnectingPreview()?.connId !== conn.id) {
-            <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
-            @if (conn.routing !== 'orthogonal') {
-              @for (wp of conn.waypoints; track $index) {
-                <circle
-                  class="connection-waypoint-handle"
-                  [attr.cx]="wp.x"
-                  [attr.cy]="wp.y"
-                  r="6"
-                  (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
-                  (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
-                />
-              }
-            }
-
-            <!-- Miro-style Orthogonal Segment Drag Handles (1D displacement on segments >= 30px) -->
-            @if (conn.routing === 'orthogonal') {
-              @for (seg of conn.segments; track seg.index) {
-                <rect
-                  class="connection-segment-handle"
-                  [class.is-horizontal]="seg.orientation === 'horizontal'"
-                  [class.is-vertical]="seg.orientation === 'vertical'"
-                  [attr.x]="
-                    seg.orientation === 'horizontal' ? seg.midpoint.x - 10 : seg.midpoint.x - 4
-                  "
-                  [attr.y]="
-                    seg.orientation === 'horizontal' ? seg.midpoint.y - 4 : seg.midpoint.y - 10
-                  "
-                  [attr.width]="seg.orientation === 'horizontal' ? 20 : 8"
-                  [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
-                  rx="3"
-                  (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
-                  (dblclick)="handleSegmentDblClick($event, conn.id)"
-                />
-              }
-            } @else {
-              <!-- Segment Midpoint Handles for straight / curved connections -->
-              @for (p of conn.points; track $index) {
-                @if ($index < conn.points.length - 1) {
+            <!-- Reshaping handles (hidden while actively dragging an endpoint) -->
+            @if (reconnectingPreview()?.connId !== conn.id) {
+              <!-- Existing Waypoint Drag Handles (allow moving or removing on dblclick) for curved & straight routing -->
+              @if (conn.routing !== 'orthogonal') {
+                @for (wp of conn.waypoints; track $index) {
                   <circle
-                    class="connection-midpoint-handle"
-                    [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
-                    [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
-                    r="4.5"
-                    (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+                    class="connection-waypoint-handle"
+                    [attr.cx]="wp.x"
+                    [attr.cy]="wp.y"
+                    r="6"
+                    (pointerdown)="handleWaypointPointerDown($event, conn.id, $index)"
+                    (dblclick)="handleWaypointDblClick($event, conn.id, $index)"
                   />
+                }
+              }
+
+              <!-- Miro-style Orthogonal Segment Drag Handles (1D displacement on segments >= 30px) -->
+              @if (conn.routing === 'orthogonal') {
+                @for (seg of conn.segments; track seg.index) {
+                  <rect
+                    class="connection-segment-handle"
+                    [class.is-horizontal]="seg.orientation === 'horizontal'"
+                    [class.is-vertical]="seg.orientation === 'vertical'"
+                    [attr.x]="
+                      seg.orientation === 'horizontal' ? seg.midpoint.x - 10 : seg.midpoint.x - 4
+                    "
+                    [attr.y]="
+                      seg.orientation === 'horizontal' ? seg.midpoint.y - 4 : seg.midpoint.y - 10
+                    "
+                    [attr.width]="seg.orientation === 'horizontal' ? 20 : 8"
+                    [attr.height]="seg.orientation === 'horizontal' ? 8 : 20"
+                    rx="3"
+                    (pointerdown)="handleSegmentPointerDown($event, conn.id, seg)"
+                    (dblclick)="handleSegmentDblClick($event, conn.id)"
+                  />
+                }
+              } @else {
+                <!-- Segment Midpoint Handles for straight / curved connections -->
+                @for (p of conn.points; track $index) {
+                  @if ($index < conn.points.length - 1) {
+                    <circle
+                      class="connection-midpoint-handle"
+                      [attr.cx]="(p.x + conn.points[$index + 1].x) / 2"
+                      [attr.cy]="(p.y + conn.points[$index + 1].y) / 2"
+                      r="4.5"
+                      (pointerdown)="handleMidpointPointerDown($event, conn.id, $index)"
+                    />
+                  }
                 }
               }
             }
           }
         }
-      }
-    </svg>
+      </svg>
+    }
 
     <!-- Dynamic Alignment & Snapping Guides Layer -->
     <svg class="canvas-alignment-guides-layer" overflow="visible" aria-hidden="true">
@@ -280,7 +283,7 @@
         [style.width.px]="box.width"
         [style.height.px]="box.height"
       >
-        @if (selectedShapeIds().size === 1) {
+        @if (!readOnly() && selectedShapeIds().size === 1) {
           <!-- Full-length OS-window edge resize strips -->
           <div
             class="resize-edge edge-n"
@@ -321,7 +324,7 @@
     }
 
     <!-- Contextual Selection Toolbar Dock (Alignment, Grouping, Layer Management) -->
-    @if (selectionToolbarPos(); as sPos) {
+    @if (!readOnly() && selectionToolbarPos(); as sPos) {
       <div
         class="selection-tools-dock"
         role="toolbar"
@@ -549,7 +552,7 @@
       ></div>
     }
     <!-- Contextual Connection Customization Toolbar -->
-    @if (singleSelectedConnection(); as selConn) {
+    @if (!readOnly() && singleSelectedConnection(); as selConn) {
       @if (connectionToolbarPos(); as pos) {
         <div
           class="connection-tools-dock"
@@ -758,82 +761,84 @@
   </div>
 
   <!-- Top Shape Creation Tool Palette Dock -->
-  <div
-    class="canvas-tools-dock"
-    role="toolbar"
-    aria-label="Shape creation tools"
-    (pointerdown)="$event.stopPropagation()"
-  >
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'select'"
-      (click)="setActiveTool('select')"
-      aria-label="Selection Tool"
-      matTooltip="Select tool (V)"
+  @if (!readOnly()) {
+    <div
+      class="canvas-tools-dock"
+      role="toolbar"
+      aria-label="Shape creation tools"
+      (pointerdown)="$event.stopPropagation()"
     >
-      <mat-icon>near_me</mat-icon>
-    </button>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'select'"
+        (click)="setActiveTool('select')"
+        aria-label="Selection Tool"
+        matTooltip="Select tool (V)"
+      >
+        <mat-icon>near_me</mat-icon>
+      </button>
 
-    <div class="dock-divider"></div>
+      <div class="dock-divider"></div>
 
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'connection'"
-      (click)="setActiveTool('connection')"
-      aria-label="Connection Tool"
-      matTooltip="Connector Line / Arrow (C)"
-    >
-      <mat-icon>trending_flat</mat-icon>
-    </button>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'connection'"
+        (click)="setActiveTool('connection')"
+        aria-label="Connection Tool"
+        matTooltip="Connector Line / Arrow (C)"
+      >
+        <mat-icon>trending_flat</mat-icon>
+      </button>
 
-    <div class="dock-divider"></div>
+      <div class="dock-divider"></div>
 
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'rectangle'"
-      (click)="setActiveTool('rectangle')"
-      aria-label="Add Rectangle"
-      matTooltip="Rectangle (R)"
-    >
-      <mat-icon>crop_square</mat-icon>
-    </button>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'rectangle'"
+        (click)="setActiveTool('rectangle')"
+        aria-label="Add Rectangle"
+        matTooltip="Rectangle (R)"
+      >
+        <mat-icon>crop_square</mat-icon>
+      </button>
 
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'rounded-rectangle'"
-      (click)="setActiveTool('rounded-rectangle')"
-      aria-label="Add Rounded Rectangle"
-      matTooltip="Rounded Rectangle"
-    >
-      <mat-icon>square</mat-icon>
-    </button>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'rounded-rectangle'"
+        (click)="setActiveTool('rounded-rectangle')"
+        aria-label="Add Rounded Rectangle"
+        matTooltip="Rounded Rectangle"
+      >
+        <mat-icon>square</mat-icon>
+      </button>
 
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'ellipse'"
-      (click)="setActiveTool('ellipse')"
-      aria-label="Add Ellipse/Circle"
-      matTooltip="Circle / Ellipse (O)"
-    >
-      <mat-icon>panorama_fish_eye</mat-icon>
-    </button>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'ellipse'"
+        (click)="setActiveTool('ellipse')"
+        aria-label="Add Ellipse/Circle"
+        matTooltip="Circle / Ellipse (O)"
+      >
+        <mat-icon>panorama_fish_eye</mat-icon>
+      </button>
 
-    <button
-      mat-icon-button
-      class="tool-btn"
-      [class.active]="activeTool() === 'diamond'"
-      (click)="setActiveTool('diamond')"
-      aria-label="Add Diamond"
-      matTooltip="Diamond / Decision (D)"
-    >
-      <mat-icon>change_history</mat-icon>
-    </button>
-  </div>
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'diamond'"
+        (click)="setActiveTool('diamond')"
+        aria-label="Add Diamond"
+        matTooltip="Diamond / Decision (D)"
+      >
+        <mat-icon>change_history</mat-icon>
+      </button>
+    </div>
+  }
 
   <!-- Floating Canvas Controls Dock (Bottom Left) -->
   <div

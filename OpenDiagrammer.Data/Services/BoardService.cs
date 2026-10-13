@@ -97,6 +97,7 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             BackgroundOpacity: board.BackgroundOpacity,
             Mode: board.Mode,
             ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
             Members: memberDtos
@@ -158,6 +159,7 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             BackgroundOpacity: board.BackgroundOpacity,
             Mode: board.Mode,
             ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
             Members: [memberDto]
@@ -211,6 +213,10 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
         board.BackgroundOpacity = request.BackgroundOpacity;
         board.Mode = request.Mode;
         board.ThinkModeConfigJson = request.ThinkModeConfigJson;
+        if (request.CanvasDataJson is not null)
+        {
+            board.CanvasDataJson = request.CanvasDataJson;
+        }
 
         await dbContext.SaveChangesAsync(cancellationToken);
 
@@ -238,6 +244,73 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             BackgroundOpacity: board.BackgroundOpacity,
             Mode: board.Mode,
             ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
+            CreatedAt: board.CreatedAt,
+            ModifiedAt: board.ModifiedAt,
+            Members: memberDtos
+        );
+    }
+
+    public async Task<BoardDetailDto?> UpdateCanvasDataAsync(
+        Guid userId,
+        Guid boardId,
+        UpdateCanvasDataRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.Include(b => b.Owner)
+            .Include(b => b.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException("You are not a member of this board.");
+        }
+
+        var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
+
+        if (!userRole.CanEditBoard())
+        {
+            throw new ForbiddenException("You do not have permission to edit this board.");
+        }
+
+        board.CanvasDataJson = request.CanvasDataJson;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var memberDtos = board
+            .Members.Select(m => new BoardMemberDto(
+                Id: m.Id,
+                BoardId: m.BoardId,
+                UserId: m.UserId,
+                Username: m.User.Username,
+                Email: m.User.Email,
+                Role: m.Role,
+                CreatedAt: m.CreatedAt
+            ))
+            .ToList();
+
+        return new BoardDetailDto(
+            Id: board.Id,
+            Name: board.Name,
+            Description: board.Description,
+            OwnerId: board.OwnerId,
+            OwnerUsername: board.Owner.Username,
+            UserRole: userRole,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: board.Mode,
+            ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
             Members: memberDtos

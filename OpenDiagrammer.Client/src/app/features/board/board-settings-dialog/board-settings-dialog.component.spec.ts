@@ -30,6 +30,7 @@ describe('BoardSettingsDialogComponent', () => {
     backgroundOpacity: 1,
     mode: BoardMode.Normal,
     thinkModeConfigJson: null,
+    canvasDataJson: null,
     createdAt: '2026-10-10T00:00:00Z',
     modifiedAt: '2026-10-10T00:00:00Z',
     members: [],

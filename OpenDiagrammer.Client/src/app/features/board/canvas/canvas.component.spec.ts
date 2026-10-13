@@ -2467,4 +2467,100 @@ describe('CanvasComponent', () => {
       expect(component.isShapeSelected(s2.id)).toBe(true);
     });
   });
+
+  describe('Canvas persistence and read-only mode', () => {
+    it('should load initial canvas diagram state via loadCanvasData', () => {
+      const initialData = {
+        shapes: [
+          {
+            id: 's-persisted',
+            type: 'rectangle',
+            x: 200,
+            y: 150,
+            width: 140,
+            height: 90,
+            strokeColor: '#333333',
+            fillColor: '#fafafa',
+            strokeWidth: 2,
+            zIndex: 1,
+            text: 'Persisted Shape',
+          },
+        ],
+        connections: [
+          {
+            id: 'c-persisted',
+            sourceShapeId: 's-persisted',
+            sourceAnchor: 'right',
+            targetPoint: { x: 400, y: 200 },
+            strokeColor: '#333333',
+            strokeWidth: 2,
+            pattern: 'solid',
+            routing: 'straight',
+            startMarker: 'none',
+            endMarker: 'arrow',
+          },
+        ],
+        zoom: 1.5,
+        panX: 120,
+        panY: -40,
+      };
+
+      component.loadCanvasData(JSON.stringify(initialData));
+
+      expect(component.shapes().length).toBe(1);
+      expect(component.shapes()[0].id).toBe('s-persisted');
+      expect(component.shapes()[0].text).toBe('Persisted Shape');
+      expect(component.connections().length).toBe(1);
+      expect(component.connections()[0].id).toBe('c-persisted');
+      expect(component.zoom()).toBe(1.5);
+      expect(component.panX()).toBe(120);
+      expect(component.panY()).toBe(-40);
+    });
+
+    it('should handle corrupt or null canvas data gracefully', () => {
+      component.loadCanvasData('invalid-json{{{');
+      expect(component.shapes()).toEqual([]);
+      expect(component.connections()).toEqual([]);
+
+      component.loadCanvasData(null);
+      expect(component.shapes()).toEqual([]);
+      expect(component.connections()).toEqual([]);
+    });
+
+    it('should emit diagramChange when shapes are modified after initial load', () => {
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+
+      // First load initial empty state
+      component.loadCanvasData(null);
+      fixture.detectChanges();
+
+      // Add a shape
+      component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      expect(emitSpy).toHaveBeenCalled();
+      const emitted = emitSpy.mock.calls[emitSpy.mock.calls.length - 1][0];
+      expect(emitted.shapes.length).toBe(1);
+      expect(emitted.shapes[0].type).toBe('rectangle');
+    });
+
+    it('should hide docks and disable modifications when in readOnly mode', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.detectChanges();
+
+      // Creation dock should not be rendered in readOnly mode
+      const dock = fixture.nativeElement.querySelector('.canvas-dock');
+      expect(dock).toBeNull();
+
+      // Shape creation tool selection should be disabled
+      component.setActiveTool('rectangle');
+      expect(component.activeTool()).toBe('select');
+
+      // Diagram changes should not be emitted
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      component.createShape('rectangle', { x: 50, y: 50 });
+      fixture.detectChanges();
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+  });
 });
