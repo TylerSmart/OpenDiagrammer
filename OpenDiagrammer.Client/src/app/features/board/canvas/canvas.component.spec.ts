@@ -322,7 +322,7 @@ describe('CanvasComponent', () => {
     expect(zoomedInSize).toBeLessThanOrEqual(72);
   });
 
-  it('should create and select shapes using tools while retaining active tool until returning to select', () => {
+  it('should create and select shapes using tools and return to select tool after placing a single shape', () => {
     component.setActiveTool('rectangle');
     expect(component.activeTool()).toBe('rectangle');
 
@@ -330,8 +330,8 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(1);
     expect(shape.type).toBe('rectangle');
     expect(component.isShapeSelected(shape.id)).toBe(true);
-    // Tool remains active!
-    expect(component.activeTool()).toBe('rectangle');
+    // Tool returns to select after placing a single shape!
+    expect(component.activeTool()).toBe('select');
 
     // Selection bounding box should match shape bounds
     const box = component.selectionBox();
@@ -339,35 +339,48 @@ describe('CanvasComponent', () => {
     expect(box?.minX).toBe(shape.x);
     expect(box?.minY).toBe(shape.y);
 
-    // Creating another shape still keeps the tool active
-    const shape2 = component.createShape('rectangle', { x: 400, y: 150 });
-    expect(shape2.type).toBe('rectangle');
+    // Clicking canvas with a shape tool creates shape and resets tool to select
+    component.setActiveTool('ellipse');
+    expect(component.activeTool()).toBe('ellipse');
+    component.handlePointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: 300, clientY: 300 }),
+    );
     expect(component.shapes().length).toBe(2);
-    expect(component.activeTool()).toBe('rectangle');
+    expect(component.shapes()[1].type).toBe('ellipse');
+    expect(component.activeTool()).toBe('select');
 
-    // Clicking on an existing shape with shape tool selects/moves that shape without creating duplicate
+    // Placing a catalog shape also resets tool to select and clears catalog highlight
+    component.setActiveTool('uml-class');
+    expect(component.activeTool()).toBe('uml-class');
+    expect(component.isCatalogToolActive()).toBe(true);
+    component.handlePointerDown(
+      new PointerEvent('pointerdown', { button: 0, clientX: 400, clientY: 400 }),
+    );
+    expect(component.shapes().length).toBe(3);
+    expect(component.shapes()[2].type).toBe('uml-class');
+    expect(component.activeTool()).toBe('select');
+    expect(component.isCatalogToolActive()).toBe(false);
+
+    // Clicking on an existing shape selects that shape without creating duplicate
     component.handleShapePointerDown(
       new PointerEvent('pointerdown', { button: 0, clientX: 200, clientY: 150 }),
       shape,
     );
-    expect(component.shapes().length).toBe(2);
+    expect(component.shapes().length).toBe(3);
     expect(component.isShapeSelected(shape.id)).toBe(true);
-    expect(component.activeTool()).toBe('rectangle');
-
-    // Returns to select tool when user explicitly chooses select
-    component.setActiveTool('select');
     expect(component.activeTool()).toBe('select');
   });
 
-  it('should insert shape at viewport center when clicking an already-active shape tool', () => {
+  it('should insert shape at viewport center and return to select tool when clicking an already-active shape tool', () => {
     component.setActiveTool('rectangle');
     expect(component.activeTool()).toBe('rectangle');
     const countBefore = component.shapes().length;
 
-    // Clicking again should insert shape at center
+    // Clicking again should insert shape at center and return to select
     component.setActiveTool('rectangle');
     expect(component.shapes().length).toBe(countBefore + 1);
     expect(component.shapes()[component.shapes().length - 1].type).toBe('rectangle');
+    expect(component.activeTool()).toBe('select');
   });
 
   it('should create a rectangle when double-clicking on empty canvas area', () => {

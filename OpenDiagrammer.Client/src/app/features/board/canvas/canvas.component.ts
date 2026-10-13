@@ -1961,6 +1961,9 @@ export class CanvasComponent {
 
     this.shapes.update((list) => [...list, newShape]);
     this.selectShape(newShape.id);
+    if (this.activeTool() !== 'connection') {
+      this.activeTool.set('select');
+    }
     return newShape;
   }
 
@@ -1992,6 +1995,9 @@ export class CanvasComponent {
 
     this.shapes.update((list) => [...list, newShape]);
     this.selectShape(newShape.id);
+    if (this.activeTool() !== 'connection') {
+      this.activeTool.set('select');
+    }
     return newShape;
   }
 
