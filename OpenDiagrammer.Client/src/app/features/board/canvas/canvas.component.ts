@@ -48,6 +48,8 @@ import {
   ShapeType,
   computeShapeMovementSnapping,
   computeShapeResizeSnapping,
+  computeFittingFontSize,
+  sanitizeRichText,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -321,6 +323,27 @@ export class CanvasComponent {
     }
     const id = Array.from(selectedIds)[0];
     return this.renderedConnections().find((c) => c.id === id) || null;
+  });
+
+  // Single selected shape for contextual rich text and formatting
+  readonly singleSelectedShape = computed<CanvasShape | null>(() => {
+    const selectedIds = this.selectedShapeIds();
+    if (selectedIds.size !== 1) {
+      return null;
+    }
+    const id = Array.from(selectedIds)[0];
+    return this.shapes().find((s) => s.id === id) || null;
+  });
+
+  // Inline shape rich text editing state
+  readonly editingShapeId = signal<string | null>(null);
+
+  readonly editingShape = computed<CanvasShape | null>(() => {
+    const id = this.editingShapeId();
+    if (!id) {
+      return null;
+    }
+    return this.shapes().find((s) => s.id === id) || null;
   });
 
   readonly hasSelectedConnection = computed<boolean>(() => this.selectedConnectionIds().size > 0);
@@ -634,6 +657,119 @@ export class CanvasComponent {
     this.editingConnectionId.set(null);
   }
 
+  startEditingShapeText(shapeId: string): void {
+    if (this.readOnly()) {
+      return;
+    }
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+    this.selectedShapeIds.set(new Set([shapeId]));
+    this.editingShapeId.set(shapeId);
+    queueMicrotask(() => {
+      const editorEl = this.shapeRichTextEditor()?.nativeElement;
+      if (editorEl) {
+        editorEl.innerHTML = shape.text || '';
+        editorEl.focus();
+        try {
+          const selection = window.getSelection();
+          if (selection) {
+            const range = document.createRange();
+            range.selectNodeContents(editorEl);
+            range.collapse(false);
+            selection.removeAllRanges();
+            selection.addRange(range);
+          }
+        } catch {
+          // Ignore selection range errors in headless or unsupported environments
+        }
+      }
+    });
+  }
+
+  finishEditingShapeText(shapeId: string, contentHtml: string): void {
+    if (this.editingShapeId() !== shapeId) {
+      return;
+    }
+    const sanitized = sanitizeRichText(contentHtml.trim());
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: sanitized || undefined } : s)),
+    );
+    this.editingShapeId.set(null);
+    this.emitDiagramChange();
+  }
+
+  toggleShapeFormat(shapeId: string, format: 'bold' | 'italic' | 'underline'): void {
+    if (this.readOnly()) {
+      return;
+    }
+    try {
+      document.execCommand(format, false);
+    } catch {
+      // Ignore formatting command errors if unsupported
+    }
+
+    this.shapes.update((list) =>
+      list.map((s) => {
+        if (s.id !== shapeId) {
+          return s;
+        }
+        if (format === 'bold') {
+          return { ...s, isBold: !s.isBold };
+        }
+        if (format === 'italic') {
+          return { ...s, isItalic: !s.isItalic };
+        }
+        if (format === 'underline') {
+          return { ...s, isUnderline: !s.isUnderline };
+        }
+        return s;
+      }),
+    );
+    this.emitDiagramChange();
+  }
+
+  setShapeTextAlign(shapeId: string, align: 'left' | 'center' | 'right'): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, textAlign: align } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  getShapeFittingFontSize(shape: CanvasShape): number {
+    return computeFittingFontSize(shape.text, shape.width, shape.height, shape.fontSize || 14);
+  }
+
+  handleRichTextKeydown(event: KeyboardEvent, shapeId: string, editorEl: HTMLElement): void {
+    event.stopPropagation();
+    if (event.ctrlKey || event.metaKey) {
+      const key = event.key.toLowerCase();
+      if (key === 'b') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'bold');
+        return;
+      }
+      if (key === 'i') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'italic');
+        return;
+      }
+      if (key === 'u') {
+        event.preventDefault();
+        this.toggleShapeFormat(shapeId, 'underline');
+        return;
+      }
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault();
+      this.finishEditingShapeText(shapeId, editorEl.innerHTML);
+    }
+  }
+
   getConnectionFillColor(strokeColor: string): string {
     const preset = this.canvasColorPresets.find((p) => p.stroke === strokeColor);
     return preset ? preset.fill : 'var(--mat-sys-surface)';
@@ -670,6 +806,7 @@ export class CanvasComponent {
   private readonly elementRef = inject<ElementRef<HTMLElement>>(ElementRef);
   readonly fullscreenService = inject(FullscreenService);
   readonly connTextInput = viewChild<ElementRef<HTMLInputElement>>('textInput');
+  readonly shapeRichTextEditor = viewChild<ElementRef<HTMLElement>>('shapeTextEditor');
 
   // Persistence state tracking
   private lastLoadedDataJson: string | null | undefined = undefined;
@@ -1134,6 +1271,9 @@ export class CanvasComponent {
   }
 
   clearSelection(): void {
+    if (this.editingShapeId()) {
+      this.editingShapeId.set(null);
+    }
     this.selectedShapeIds.set(new Set<string>());
     this.selectedConnectionIds.set(new Set<string>());
   }
@@ -2890,7 +3030,11 @@ export class CanvasComponent {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
-    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+    if (
+      event.target instanceof HTMLInputElement ||
+      event.target instanceof HTMLTextAreaElement ||
+      (event.target as HTMLElement)?.isContentEditable
+    ) {
       return;
     }
 
@@ -2899,6 +3043,10 @@ export class CanvasComponent {
     }
 
     if (event.key === 'Escape') {
+      if (this.editingShapeId()) {
+        this.editingShapeId.set(null);
+        return;
+      }
       if (this.isResizing && this.resizeInitialShape) {
         const initial = this.resizeInitialShape;
         this.shapes.update((list) => list.map((s) => (s.id === initial.id ? { ...initial } : s)));
@@ -2933,6 +3081,14 @@ export class CanvasComponent {
     }
 
     if (!event.ctrlKey && !event.metaKey && !event.altKey) {
+      if (event.key === 'Enter') {
+        const singleShape = this.singleSelectedShape();
+        if (singleShape && !this.editingShapeId() && !this.readOnly()) {
+          event.preventDefault();
+          this.startEditingShapeText(singleShape.id);
+          return;
+        }
+      }
       if (event.key === 'v' || event.key === 'V') {
         this.setActiveTool('select');
         return;

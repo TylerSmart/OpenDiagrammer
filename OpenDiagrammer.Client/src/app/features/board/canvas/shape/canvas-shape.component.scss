@@ -39,17 +39,28 @@
   position: absolute;
   inset: 0;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
   padding: 0.5rem;
+  box-sizing: border-box;
   text-align: center;
   pointer-events: none;
   font-size: 0.875rem;
+  line-height: 1.35;
   color: var(--mat-sys-on-surface);
   overflow: hidden;
   text-overflow: ellipsis;
   word-break: break-word;
+  white-space: pre-wrap;
   z-index: 2;
+
+  &[style*='text-align: left'] {
+    align-items: flex-start;
+  }
+  &[style*='text-align: right'] {
+    align-items: flex-end;
+  }
 }
 
 // Connection Anchors (offset from shape border by 14px so resize borders and handles coexist cleanly)

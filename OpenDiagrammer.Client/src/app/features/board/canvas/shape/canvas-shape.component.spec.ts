@@ -73,4 +73,31 @@ describe('CanvasShapeComponent', () => {
     const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
     expect(anchors.length).toBe(0);
   });
+
+  it('should render rich text HTML safely inside overlay', () => {
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      text: '<b>Hello</b> <i>World</i><script>alert(1)</script>',
+      textAlign: 'left',
+      isBold: true,
+    });
+    fixture.detectChanges();
+
+    const overlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+    expect(overlay).toBeTruthy();
+    expect(overlay.innerHTML).toContain('<b>Hello</b>');
+    expect(overlay.innerHTML).toContain('<i>World</i>');
+    expect(overlay.innerHTML).not.toContain('<script>');
+  });
+
+  it('should emit shapeDoubleClick on double click', () => {
+    let emittedShape: CanvasShape | null = null;
+    component.shapeDoubleClick.subscribe((s) => {
+      emittedShape = s;
+    });
+
+    const container = fixture.nativeElement.querySelector('.shape-container');
+    container.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    expect(emittedShape).toEqual(mockShape);
+  });
 });

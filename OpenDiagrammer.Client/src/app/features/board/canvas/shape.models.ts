@@ -11,6 +11,11 @@ export interface CanvasShape {
   strokeColor: string;
   strokeWidth: number;
   text?: string;
+  textAlign?: 'left' | 'center' | 'right';
+  fontSize?: number;
+  isBold?: boolean;
+  isItalic?: boolean;
+  isUnderline?: boolean;
   zIndex: number;
   locked?: boolean;
   groupId?: string;
@@ -551,4 +556,55 @@ export function computeShapeResizeSnapping(
     newHeight: Math.round(newHeight),
     guides,
   };
+}
+
+/**
+ * Computes an auto-fitting font size that scales down to fit available width and height,
+ * stopping at a minimum font size (default 10px).
+ */
+export function computeFittingFontSize(
+  text: string | undefined | null,
+  width: number,
+  height: number,
+  baseSize = 14,
+  minSize = 10,
+): number {
+  if (!text) {
+    return baseSize;
+  }
+  const plain = text.replace(/<[^>]+>/g, '').trim();
+  if (!plain) {
+    return baseSize;
+  }
+  const lines = plain.split(/\r?\n/).length;
+  const chars = plain.length;
+  const usableWidth = Math.max(20, width - 24);
+  const usableHeight = Math.max(20, height - 20);
+
+  let size = baseSize;
+  while (size > minSize) {
+    const charsPerLine = Math.floor(usableWidth / (size * 0.55));
+    const estimatedLines = Math.max(lines, Math.ceil(chars / Math.max(1, charsPerLine)));
+    const neededHeight = estimatedLines * (size * 1.35);
+    if (neededHeight <= usableHeight) {
+      break;
+    }
+    size -= 1;
+  }
+  return Math.max(minSize, size);
+}
+
+/**
+ * Cleans user-entered rich text HTML to ensure safe display without malicious scripts.
+ */
+export function sanitizeRichText(html: string | undefined | null): string {
+  if (!html) {
+    return '';
+  }
+  return html
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, '')
+    .replace(/on\w+="[^"]*"/gi, '')
+    .replace(/on\w+='[^']*'/gi, '')
+    .replace(/javascript:[^"']*/gi, '');
 }

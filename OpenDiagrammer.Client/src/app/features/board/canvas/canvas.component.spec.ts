@@ -2682,4 +2682,96 @@ describe('CanvasComponent', () => {
       expect(lastCall.shapes.find((s) => s.id === shape.id)?.x).not.toBe(50);
     });
   });
+
+  describe('Rich Text Editing Within Nodes', () => {
+    it('should start editing shape text on double click or Enter key and finish on blur', async () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      // Start editing via double-click method
+      component.startEditingShapeText(shape.id);
+      expect(component.editingShapeId()).toBe(shape.id);
+      expect(component.editingShape()?.id).toBe(shape.id);
+
+      // Finish editing
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      component.finishEditingShapeText(shape.id, '<b>Bold Node Text</b>');
+      expect(component.editingShapeId()).toBeNull();
+
+      const updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.text).toBe('<b>Bold Node Text</b>');
+      expect(emitSpy).toHaveBeenCalled();
+    });
+
+    it('should start editing on Enter key when single shape is selected', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      component.selectShape(shape.id);
+      fixture.detectChanges();
+
+      expect(component.singleSelectedShape()?.id).toBe(shape.id);
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Enter' }));
+      expect(component.editingShapeId()).toBe(shape.id);
+    });
+
+    it('should toggle rich text formats: bold, italic, and underline', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.toggleShapeFormat(shape.id, 'bold');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'italic');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isItalic).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'underline');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isUnderline).toBe(true);
+    });
+
+    it('should change text alignment for shape', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.setShapeTextAlign(shape.id, 'right');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.textAlign).toBe('right');
+
+      component.setShapeTextAlign(shape.id, 'left');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.textAlign).toBe('left');
+    });
+
+    it('should compute fitting font size down to minimum', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      // Short text
+      const smallTextSize = component.getShapeFittingFontSize({
+        ...shape,
+        width: 100,
+        height: 60,
+        text: 'Short',
+      });
+      expect(smallTextSize).toBe(14);
+
+      // Long multi-line text should scale down towards minimum
+      const longTextSize = component.getShapeFittingFontSize({
+        ...shape,
+        width: 80,
+        height: 40,
+        text: 'Very long text that spans multiple lines and needs to fit tightly inside the small rectangle',
+      });
+      expect(longTextSize).toBeLessThan(14);
+      expect(longTextSize).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should cancel editing on Escape key', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      component.startEditingShapeText(shape.id);
+      expect(component.editingShapeId()).toBe(shape.id);
+
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      expect(component.editingShapeId()).toBeNull();
+    });
+  });
 });

@@ -7,6 +7,7 @@
   [style.z-index]="shapeStyles().zIndex"
   (pointerenter)="isHovered.set(true)"
   (pointerleave)="isHovered.set(false)"
+  (dblclick)="handleDoubleClick($event)"
 >
   <svg class="shape-svg" [attr.viewBox]="'0 0 ' + shape().width + ' ' + shape().height">
     @switch (shape().type) {
@@ -56,15 +57,17 @@
     }
   </svg>
 
-  @if (shape().text) {
+  @if (shape().text && !isEditing()) {
     <div
       class="shape-text-overlay"
-      [style.color]="
-        shape().fillColor.includes('inverse') ? 'var(--canvas-color-inverse-text)' : null
-      "
-    >
-      <span>{{ shape().text }}</span>
-    </div>
+      [style.color]="textColor()"
+      [style.font-size.px]="fittingFontSize()"
+      [style.text-align]="shape().textAlign || 'center'"
+      [style.font-weight]="shape().isBold ? 'bold' : null"
+      [style.font-style]="shape().isItalic ? 'italic' : null"
+      [style.text-decoration]="shape().isUnderline ? 'underline' : null"
+      [innerHTML]="safeHtml()"
+    ></div>
   }
 
   <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->

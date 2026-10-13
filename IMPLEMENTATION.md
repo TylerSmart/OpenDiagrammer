@@ -61,7 +61,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 ## Phase 6: Advanced Node Types & Think Mode
 *Add specific node behaviors and structured collaborative modes.*
 *Note: Rich text editing and Think Mode build directly on Phase 5's CRDT primitives and real-time synchronization.*
-- [ ] Implement rich text editing within nodes
+- [x] Implement rich text editing within nodes
 - [ ] Build specific node catalogs (UML, Flowcharts, etc.)
 - [ ] Implement Sticky Notes (colors, author names)
 - [ ] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)

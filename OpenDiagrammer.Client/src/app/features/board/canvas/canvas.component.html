@@ -139,6 +139,7 @@
       <app-canvas-shape
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
+        [isEditing]="editingShapeId() === shape.id"
         [showAnchors]="
           !readOnly() &&
           (activeTool() === 'connection' ||
@@ -148,6 +149,7 @@
         "
         [allowHoverAnchors]="!readOnly() && !hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
+        (shapeDoubleClick)="startEditingShapeText(shape.id)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"
       ></app-canvas-shape>
@@ -370,6 +372,84 @@
         </mat-menu>
 
         <div class="dock-divider"></div>
+
+        @if (singleSelectedShape(); as selShape) {
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            (click)="startEditingShapeText(selShape.id)"
+            matTooltip="Edit Text (Enter / Double-Click)"
+            aria-label="Edit node text"
+          >
+            <mat-icon>edit_note</mat-icon>
+          </button>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.isBold"
+            (click)="toggleShapeFormat(selShape.id, 'bold')"
+            matTooltip="Bold (Ctrl+B)"
+            aria-label="Bold text"
+          >
+            <mat-icon>format_bold</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.isItalic"
+            (click)="toggleShapeFormat(selShape.id, 'italic')"
+            matTooltip="Italic (Ctrl+I)"
+            aria-label="Italic text"
+          >
+            <mat-icon>format_italic</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.isUnderline"
+            (click)="toggleShapeFormat(selShape.id, 'underline')"
+            matTooltip="Underline (Ctrl+U)"
+            aria-label="Underline text"
+          >
+            <mat-icon>format_underlined</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.textAlign === 'left'"
+            (click)="setShapeTextAlign(selShape.id, 'left')"
+            matTooltip="Align Left"
+            aria-label="Align text left"
+          >
+            <mat-icon>format_align_left</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="!selShape.textAlign || selShape.textAlign === 'center'"
+            (click)="setShapeTextAlign(selShape.id, 'center')"
+            matTooltip="Align Center"
+            aria-label="Align text center"
+          >
+            <mat-icon>format_align_center</mat-icon>
+          </button>
+          <button
+            mat-icon-button
+            class="tool-btn small"
+            [class.active]="selShape.textAlign === 'right'"
+            (click)="setShapeTextAlign(selShape.id, 'right')"
+            matTooltip="Align Right"
+            aria-label="Align text right"
+          >
+            <mat-icon>format_align_right</mat-icon>
+          </button>
+
+          <div class="dock-divider"></div>
+        }
 
         @if (selectedShapeIds().size >= 2) {
           <button
@@ -759,6 +839,37 @@
         </div>
       }
     }
+
+    <!-- Inline Shape Rich Text Editor -->
+    @if (editingShape(); as editShape) {
+      <div
+        class="shape-text-inline-editor-wrapper"
+        [style.transform]="'translate(' + editShape.x + 'px, ' + editShape.y + 'px)'"
+        [style.width.px]="editShape.width"
+        [style.height.px]="editShape.height"
+        [style.z-index]="50 + editShape.zIndex"
+        (pointerdown)="$event.stopPropagation()"
+      >
+        <div
+          #shapeTextEditor
+          class="shape-rich-text-editor"
+          contenteditable="true"
+          [style.text-align]="editShape.textAlign || 'center'"
+          [style.color]="
+            editShape.fillColor.includes('inverse')
+              ? 'var(--canvas-color-inverse-text)'
+              : 'var(--mat-sys-on-surface)'
+          "
+          [style.font-size.px]="getShapeFittingFontSize(editShape)"
+          [style.font-weight]="editShape.isBold ? 'bold' : null"
+          [style.font-style]="editShape.isItalic ? 'italic' : null"
+          [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
+          (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
+          (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
+        ></div>
+      </div>
+    }
+
     <!-- Real-Time Collaborative Cursors Layer -->
     @if (showLiveCursors() && liveCursors().length > 0) {
       <div class="live-cursors-layer" aria-hidden="true">

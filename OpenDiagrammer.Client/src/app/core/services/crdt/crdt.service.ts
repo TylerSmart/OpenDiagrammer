@@ -176,6 +176,11 @@ export class CrdtService {
       a.fillColor === b.fillColor &&
       a.strokeWidth === b.strokeWidth &&
       a.text === b.text &&
+      a.textAlign === b.textAlign &&
+      a.fontSize === b.fontSize &&
+      a.isBold === b.isBold &&
+      a.isItalic === b.isItalic &&
+      a.isUnderline === b.isUnderline &&
       a.locked === b.locked &&
       a.groupId === b.groupId
     );
