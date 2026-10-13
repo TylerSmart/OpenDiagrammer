@@ -99,7 +99,7 @@
                   class="connection-label-text"
                   text-anchor="middle"
                   dy="4"
-                  [attr.fill]="conn.strokeColor"
+                  [attr.fill]="getConnectionTextColor(conn.strokeColor)"
                 >
                   {{ conn.text }}
                 </text>
@@ -745,8 +745,8 @@
             [style.width.ch]="(textInput.value || selConn.text || '').length + 3"
             [style.backgroundColor]="getConnectionFillColor(selConn.strokeColor)"
             [style.borderColor]="selConn.strokeColor"
-            [style.color]="selConn.strokeColor"
-            [style.caretColor]="selConn.strokeColor"
+            [style.color]="getConnectionTextColor(selConn.strokeColor)"
+            [style.caretColor]="getConnectionTextColor(selConn.strokeColor)"
             (blur)="finishEditingConnectionText(editConnId, textInput.value)"
             (keydown.enter)="finishEditingConnectionText(editConnId, textInput.value)"
             (keydown.escape)="editingConnectionId.set(null)"

@@ -481,6 +481,105 @@ describe('CanvasComponent', () => {
     expect(finalShape?.height).toBe(s1.height + 60);
   });
 
+  it('should snap shape resizing to another shape within threshold and emit alignment guides', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.updateShape(s1.id, { x: 100, y: 100, width: 120, height: 80 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    component.updateShape(s2.id, { x: 300, y: 100, width: 120, height: 80 });
+
+    component.selectShape(s1.id);
+
+    // Resize s1 via East handle towards s2 at x: 300
+    // s1 is at x: 100 with width 120 -> right edge is at 220
+    const downEast = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 220,
+      clientY: 140,
+    });
+    component.handleResizePointerDown(downEast, 'e');
+
+    // Drag by +77px (cursor at 297, right edge at 297), which is within 8px of s2's left edge at 300
+    const moveEast = new PointerEvent('pointermove', {
+      clientX: 297,
+      clientY: 140,
+    });
+    component.handlePointerMove(moveEast);
+
+    // It should snap s1's right edge to 300, so newWidth = 200
+    const resizedS1 = component.shapes().find((s) => s.id === s1.id);
+    expect(resizedS1?.width).toBe(200);
+
+    // Alignment guides should be emitted with vertical guide at coordinate 300
+    const guides = component.alignmentGuides();
+    expect(guides.length).toBeGreaterThanOrEqual(1);
+    expect(guides.some((g) => g.type === 'vertical' && g.coordinate === 300)).toBe(true);
+
+    // Pointer up clears alignment guides
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+    expect(component.alignmentGuides().length).toBe(0);
+  });
+
+  it('should bypass resize snapping when Alt key is held', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.updateShape(s1.id, { x: 100, y: 100, width: 120, height: 80 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    component.updateShape(s2.id, { x: 300, y: 100, width: 120, height: 80 });
+
+    component.selectShape(s1.id);
+
+    const downEast = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 220,
+      clientY: 140,
+    });
+    component.handleResizePointerDown(downEast, 'e');
+
+    // Drag by +77px with altKey: true
+    const moveEast = new PointerEvent('pointermove', {
+      clientX: 297,
+      clientY: 140,
+      altKey: true,
+    });
+    component.handlePointerMove(moveEast);
+
+    // It should NOT snap; width should be raw 120 + 77 = 197
+    const resizedS1 = component.shapes().find((s) => s.id === s1.id);
+    expect(resizedS1?.width).toBe(197);
+    expect(component.alignmentGuides().length).toBe(0);
+
+    component.handlePointerUp(new PointerEvent('pointerup', { button: 0 }));
+  });
+
+  it('should clear alignment guides and restore shape when resize is cancelled via Escape', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.updateShape(s1.id, { x: 100, y: 100, width: 120, height: 80 });
+    const s2 = component.createShape('rectangle', { x: 300, y: 100 });
+    component.updateShape(s2.id, { x: 300, y: 100, width: 120, height: 80 });
+
+    component.selectShape(s1.id);
+
+    const downEast = new PointerEvent('pointerdown', {
+      button: 0,
+      clientX: 220,
+      clientY: 140,
+    });
+    component.handleResizePointerDown(downEast, 'e');
+
+    const moveEast = new PointerEvent('pointermove', {
+      clientX: 297,
+      clientY: 140,
+    });
+    component.handlePointerMove(moveEast);
+    expect(component.alignmentGuides().length).toBeGreaterThanOrEqual(1);
+
+    // Cancel via Escape key
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+
+    expect(component.alignmentGuides().length).toBe(0);
+    const restoredS1 = component.shapes().find((s) => s.id === s1.id);
+    expect(restoredS1?.width).toBe(120);
+  });
+
   it('should select shapes via marquee drag selection', () => {
     const s1 = component.createShape('rectangle', { x: 100, y: 100 });
     const s2 = component.createShape('diamond', { x: 400, y: 400 });
@@ -2145,7 +2244,7 @@ describe('CanvasComponent', () => {
       expect(component.canvasColorPresets.length).toBe(12);
       const expectedIds = [
         'default',
-        'stone',
+        'inverse',
         'blue',
         'teal',
         'green',
@@ -2162,6 +2261,15 @@ describe('CanvasComponent', () => {
         expect(preset.fill).toContain(`--canvas-color-${preset.id}-fill`);
         expect(preset.stroke).toContain(`--canvas-color-${preset.id}-stroke`);
       }
+    });
+
+    it('should return inverse text color for inverse connections and stroke color otherwise', () => {
+      const inversePreset = component.canvasColorPresets.find((p) => p.id === 'inverse')!;
+      const bluePreset = component.canvasColorPresets.find((p) => p.id === 'blue')!;
+      expect(component.getConnectionTextColor(inversePreset.stroke)).toBe(
+        'var(--canvas-color-inverse-text)',
+      );
+      expect(component.getConnectionTextColor(bluePreset.stroke)).toBe(bluePreset.stroke);
     });
 
     it('should compute current selected shape fill and stroke colors correctly', () => {

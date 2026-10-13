@@ -45,6 +45,7 @@ import {
   SHAPE_CONSTANTS,
   ShapeType,
   computeShapeMovementSnapping,
+  computeShapeResizeSnapping,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -628,6 +629,13 @@ export class CanvasComponent {
   getConnectionFillColor(strokeColor: string): string {
     const preset = this.canvasColorPresets.find((p) => p.stroke === strokeColor);
     return preset ? preset.fill : 'var(--mat-sys-surface)';
+  }
+
+  getConnectionTextColor(strokeColor: string): string {
+    if (strokeColor.includes('inverse')) {
+      return 'var(--canvas-color-inverse-text)';
+    }
+    return strokeColor;
   }
 
   resetConnectionWaypoints(connId: string): void {
@@ -2361,7 +2369,8 @@ export class CanvasComponent {
       this.activeResizeHandle
     ) {
       const keep1to1 = event.ctrlKey || event.metaKey;
-      this.applyResize(currentWorld, event.shiftKey, keep1to1);
+      const shouldSnap = !event.altKey;
+      this.applyResize(currentWorld, event.shiftKey, keep1to1, shouldSnap);
       return;
     }
 
@@ -2525,6 +2534,7 @@ export class CanvasComponent {
       this.activeResizeHandle = null;
       this.resizeStartPoint = null;
       this.resizeInitialShape = null;
+      this.alignmentGuides.set([]);
     }
 
     if (this.marqueeStart) {
@@ -2554,84 +2564,69 @@ export class CanvasComponent {
     currentWorld: CanvasPoint,
     maintainAspectRatio: boolean,
     keep1to1 = false,
+    shouldSnap = true,
   ): void {
     if (!this.resizeInitialShape || !this.resizeStartPoint || !this.activeResizeHandle) {
       return;
     }
 
     const init = this.resizeInitialShape;
-    const deltaX = currentWorld.x - this.resizeStartPoint.x;
-    const deltaY = currentWorld.y - this.resizeStartPoint.y;
+    const rawDeltaX = currentWorld.x - this.resizeStartPoint.x;
+    const rawDeltaY = currentWorld.y - this.resizeStartPoint.y;
     const handle = this.activeResizeHandle;
 
-    let newX = init.x;
-    let newY = init.y;
-    let newWidth = init.width;
-    let newHeight = init.height;
-
-    if (handle.includes('e')) {
-      newWidth = Math.max(SHAPE_CONSTANTS.MIN_WIDTH, init.width + deltaX);
-    } else if (handle.includes('w')) {
-      const potentialWidth = init.width - deltaX;
-      if (potentialWidth >= SHAPE_CONSTANTS.MIN_WIDTH) {
-        newWidth = potentialWidth;
-        newX = init.x + deltaX;
-      } else {
-        newWidth = SHAPE_CONSTANTS.MIN_WIDTH;
-        newX = init.x + (init.width - SHAPE_CONSTANTS.MIN_WIDTH);
-      }
+    if (!shouldSnap) {
+      this.alignmentGuides.set([]);
+      const res = computeShapeResizeSnapping(
+        init,
+        handle,
+        rawDeltaX,
+        rawDeltaY,
+        [],
+        0,
+        maintainAspectRatio,
+        keep1to1,
+      );
+      this.shapes.update((list) =>
+        list.map((s) =>
+          s.id === init.id
+            ? {
+                ...s,
+                x: res.newX,
+                y: res.newY,
+                width: res.newWidth,
+                height: res.newHeight,
+              }
+            : s,
+        ),
+      );
+      return;
     }
 
-    if (handle.includes('s')) {
-      newHeight = Math.max(SHAPE_CONSTANTS.MIN_HEIGHT, init.height + deltaY);
-    } else if (handle.includes('n')) {
-      const potentialHeight = init.height - deltaY;
-      if (potentialHeight >= SHAPE_CONSTANTS.MIN_HEIGHT) {
-        newHeight = potentialHeight;
-        newY = init.y + deltaY;
-      } else {
-        newHeight = SHAPE_CONSTANTS.MIN_HEIGHT;
-        newY = init.y + (init.height - SHAPE_CONSTANTS.MIN_HEIGHT);
-      }
-    }
+    const otherShapes = this.shapes().filter((s) => s.id !== init.id);
 
-    // When holding Ctrl (keep1to1), force Width === Height (1:1 perfect square/circle)
-    if (keep1to1) {
-      if (handle === 'e' || handle === 'w') {
-        newHeight = newWidth;
-      } else if (handle === 'n' || handle === 's') {
-        newWidth = newHeight;
-      } else {
-        const side = Math.max(newWidth, newHeight);
-        if (handle.includes('w')) {
-          newX = init.x + (init.width - side);
-        }
-        if (handle.includes('n')) {
-          newY = init.y + (init.height - side);
-        }
-        newWidth = side;
-        newHeight = side;
-      }
-    } else if (maintainAspectRatio && init.width > 0 && init.height > 0) {
-      const aspectRatio = init.width / init.height;
-      if (handle === 'e' || handle === 'w') {
-        newHeight = newWidth / aspectRatio;
-      } else if (handle === 'n' || handle === 's') {
-        newWidth = newHeight * aspectRatio;
-      } else {
-        newHeight = newWidth / aspectRatio;
-      }
-    }
+    const res = computeShapeResizeSnapping(
+      init,
+      handle,
+      rawDeltaX,
+      rawDeltaY,
+      otherShapes,
+      8,
+      maintainAspectRatio,
+      keep1to1,
+    );
+
+    this.alignmentGuides.set(res.guides);
 
     this.shapes.update((list) =>
       list.map((s) =>
         s.id === init.id
           ? {
               ...s,
-              x: Math.round(newX),
-              y: Math.round(newY),
-              width: Math.round(newWidth),
-              height: Math.round(newHeight),
+              x: res.newX,
+              y: res.newY,
+              width: res.newWidth,
+              height: res.newHeight,
             }
           : s,
       ),
@@ -2648,6 +2643,16 @@ export class CanvasComponent {
     }
 
     if (event.key === 'Escape') {
+      if (this.isResizing && this.resizeInitialShape) {
+        const initial = this.resizeInitialShape;
+        this.shapes.update((list) => list.map((s) => (s.id === initial.id ? { ...initial } : s)));
+        this.isResizing = false;
+        this.activeResizeHandle = null;
+        this.resizeStartPoint = null;
+        this.resizeInitialShape = null;
+        this.alignmentGuides.set([]);
+        return;
+      }
       if (this.draggingEndpoint() && this.initialReconnectingConn) {
         this.updateConnection(this.initialReconnectingConn.id, {
           sourceShapeId: this.initialReconnectingConn.sourceShapeId,

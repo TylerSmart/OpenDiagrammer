@@ -57,7 +57,12 @@
   </svg>
 
   @if (shape().text) {
-    <div class="shape-text-overlay">
+    <div
+      class="shape-text-overlay"
+      [style.color]="
+        shape().fillColor.includes('inverse') ? 'var(--canvas-color-inverse-text)' : null
+      "
+    >
       <span>{{ shape().text }}</span>
     </div>
   }
