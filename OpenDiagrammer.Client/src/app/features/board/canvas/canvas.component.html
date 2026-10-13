@@ -3,7 +3,6 @@
   [class.is-panning]="isPanning()"
   [class.is-space-pressed]="isSpacePressed"
   [class.is-creation-tool]="activeTool() !== 'select'"
-  (dblclick)="handleDoubleClick($event)"
 >
   <!-- Infinite Grid/Dot background layer -->
   <div
@@ -338,6 +337,7 @@
         [style.left.px]="sPos.x"
         [style.top.px]="sPos.y"
         (pointerdown)="$event.stopPropagation()"
+        (dblclick)="$event.stopPropagation()"
       >
         <!-- Shape Color Picker Trigger -->
         <button
@@ -355,7 +355,11 @@
         </button>
 
         <mat-menu #shapePaletteMenu="matMenu" class="color-palette-menu">
-          <div class="color-palette-grid" (pointerdown)="$event.stopPropagation()">
+          <div
+            class="color-palette-grid"
+            (pointerdown)="$event.stopPropagation()"
+            (dblclick)="$event.stopPropagation()"
+          >
             @for (preset of canvasColorPresets; track preset.id) {
               <button
                 type="button"
@@ -693,6 +697,7 @@
           [style.left.px]="pos.x"
           [style.top.px]="pos.y"
           (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
         >
           <!-- Routing Type: Straight, Orthogonal, Curved -->
           <button
@@ -1057,6 +1062,7 @@
       role="toolbar"
       aria-label="Shape creation tools"
       (pointerdown)="$event.stopPropagation()"
+      (dblclick)="$event.stopPropagation()"
     >
       <button
         mat-icon-button
@@ -1182,7 +1188,11 @@
       </button>
 
       <mat-menu #shapesCatalogMenu="matMenu" class="shapes-catalog-menu" xPosition="after">
-        <div class="shapes-catalog-panel" (pointerdown)="$event.stopPropagation()">
+        <div
+          class="shapes-catalog-panel"
+          (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
+        >
           <div class="catalog-section">
             <div class="catalog-section-title">
               <mat-icon>shapes</mat-icon>
@@ -1261,6 +1271,7 @@
       role="toolbar"
       aria-label="Viewer Think Mode tools"
       (pointerdown)="$event.stopPropagation()"
+      (dblclick)="$event.stopPropagation()"
     >
       <button
         mat-icon-button
@@ -1301,6 +1312,7 @@
     role="toolbar"
     aria-label="Canvas zoom and view controls"
     (pointerdown)="$event.stopPropagation()"
+    (dblclick)="$event.stopPropagation()"
   >
     <button
       mat-icon-button

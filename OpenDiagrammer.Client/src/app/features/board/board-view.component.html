@@ -333,7 +333,11 @@
       ></app-canvas>
 
       @if (isFramesNavigatorOpen()) {
-        <aside class="frames-navigator-sidebar" (pointerdown)="$event.stopPropagation()">
+        <aside
+          class="frames-navigator-sidebar"
+          (pointerdown)="$event.stopPropagation()"
+          (dblclick)="$event.stopPropagation()"
+        >
           <app-frames-navigator
             [frames]="framesList()"
             [activeFrameId]="activeFrameId()"

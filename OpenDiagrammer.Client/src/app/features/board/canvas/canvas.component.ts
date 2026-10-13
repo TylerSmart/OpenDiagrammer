@@ -177,6 +177,9 @@ export class CanvasComponent {
   private lastShapePointerDownId: string | null = null;
   private lastShapePointerDownPos: CanvasPoint | null = null;
   private activeUmlSection: 'header' | 'attributes' | 'methods' | undefined;
+  private lastCanvasPointerDownTime = 0;
+  private lastCanvasPointerDownPos: CanvasPoint | null = null;
+  private hasPointerCaptureForMarquee = false;
 
   // Resize state
   private isResizing = false;
@@ -1560,7 +1563,9 @@ export class CanvasComponent {
     const centerX = rect.width > 0 ? rect.left + rect.width / 2 : 400;
     const centerY = rect.height > 0 ? rect.top + rect.height / 2 : 300;
     const centerWorld = this.screenToWorld({ x: centerX, y: centerY });
-    return this.createShape(type, centerWorld);
+    const shape = this.createShape(type, centerWorld);
+    this.emitDiagramChange();
+    return shape;
   }
 
   handleToolPointerDown(event: PointerEvent, tool: ShapeType): void {
@@ -1597,6 +1602,7 @@ export class CanvasComponent {
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
       this.createShape(tool, worldPoint);
       this.setActiveTool('select');
+      this.emitDiagramChange();
     }
     this.draggingTool.set(null);
     this.toolDragStartPos = null;
@@ -1613,11 +1619,20 @@ export class CanvasComponent {
       (target.closest('.canvas-tools-dock') ||
         target.closest('.canvas-controls-dock') ||
         target.closest('.connection-text-editor') ||
+        target.closest('.selection-tools-dock') ||
         target.closest('.selection-toolbar-dock') ||
+        target.closest('.connection-tools-dock') ||
         target.closest('.connection-toolbar-dock') ||
         target.closest('.welcome-card') ||
         target.closest('.frames-navigator-sidebar') ||
-        target.closest('.shape-text-inline-editor-wrapper'))
+        target.closest('.shape-text-inline-editor-wrapper') ||
+        target.closest('button') ||
+        target.closest('[role="toolbar"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.mat-mdc-button-base') ||
+        target.closest('.mat-mdc-menu-panel') ||
+        target.closest('.cdk-overlay-container'))
     ) {
       return;
     }
@@ -1651,7 +1666,9 @@ export class CanvasComponent {
     }
 
     // 3. Double-clicking on empty canvas creates a rectangle
-    this.createShape('rectangle', worldPoint);
+    const newShape = this.createShape('rectangle', worldPoint);
+    this.emitDiagramChange();
+    this.startEditingShapeText(newShape.id);
   }
 
   findShapeAtPoint(point: CanvasPoint): CanvasShape | null {
@@ -2869,7 +2886,24 @@ export class CanvasComponent {
 
     // Prevent canvas interactions if clicking inside floating docks or UI controls
     const target = event.target as HTMLElement | null;
-    if (target?.closest('.canvas-tools-dock') || target?.closest('.canvas-controls-dock')) {
+    if (
+      target &&
+      (target.closest('.canvas-tools-dock') ||
+        target.closest('.canvas-controls-dock') ||
+        target.closest('.selection-tools-dock') ||
+        target.closest('.selection-toolbar-dock') ||
+        target.closest('.connection-tools-dock') ||
+        target.closest('.connection-toolbar-dock') ||
+        target.closest('.welcome-card') ||
+        target.closest('.frames-navigator-sidebar') ||
+        target.closest('button') ||
+        target.closest('[role="toolbar"]') ||
+        target.closest('[role="menu"]') ||
+        target.closest('[role="dialog"]') ||
+        target.closest('.mat-mdc-button-base') ||
+        target.closest('.mat-mdc-menu-panel') ||
+        target.closest('.cdk-overlay-container'))
+    ) {
       return;
     }
 
@@ -2927,7 +2961,32 @@ export class CanvasComponent {
       }
 
       if (currentTool === 'select') {
+        const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+        if (!isMultiSelect) {
+          const now = performance.now();
+          const isCanvasDoubleTap =
+            now - this.lastCanvasPointerDownTime < 450 &&
+            this.lastCanvasPointerDownPos &&
+            Math.hypot(
+              event.clientX - this.lastCanvasPointerDownPos.x,
+              event.clientY - this.lastCanvasPointerDownPos.y,
+            ) < 12;
+
+          this.lastCanvasPointerDownTime = now;
+          this.lastCanvasPointerDownPos = { x: event.clientX, y: event.clientY };
+
+          if (isCanvasDoubleTap) {
+            this.lastCanvasPointerDownTime = 0;
+            this.lastCanvasPointerDownPos = null;
+            this.marqueeStart = null;
+            this.marqueeBox.set(null);
+            this.handleDoubleClick(event);
+            return;
+          }
+        }
+
         this.marqueeStart = worldPoint;
+        this.hasPointerCaptureForMarquee = false;
         this.marqueeBox.set({
           minX: worldPoint.x,
           minY: worldPoint.y,
@@ -2936,12 +2995,6 @@ export class CanvasComponent {
           width: 0,
           height: 0,
         });
-
-        try {
-          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
-        } catch {
-          // Ignored
-        }
       }
     }
   }
@@ -3430,6 +3483,21 @@ export class CanvasComponent {
       const maxX = Math.max(this.marqueeStart.x, currentWorld.x);
       const maxY = Math.max(this.marqueeStart.y, currentWorld.y);
 
+      if (!this.hasPointerCaptureForMarquee) {
+        const dist = Math.hypot(
+          currentWorld.x - this.marqueeStart.x,
+          currentWorld.y - this.marqueeStart.y,
+        );
+        if (dist > 3) {
+          this.hasPointerCaptureForMarquee = true;
+          try {
+            (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+          } catch {
+            // Ignored
+          }
+        }
+      }
+
       this.marqueeBox.set({
         minX,
         minY,
@@ -3612,6 +3680,7 @@ export class CanvasComponent {
         }
         this.selectedShapeIds.set(matchingIds);
       }
+      this.hasPointerCaptureForMarquee = false;
       this.marqueeStart = null;
       this.marqueeBox.set(null);
     }

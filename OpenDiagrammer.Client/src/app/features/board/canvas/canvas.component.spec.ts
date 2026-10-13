@@ -3265,5 +3265,106 @@ describe('CanvasComponent', () => {
       expect(localS2?.x).toBe(300);
       expect(localS2?.y).toBe(300);
     });
+
+    it('should NOT create any shape when double-clicking on selection toolbar buttons', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      component.selectShape(shape.id);
+      fixture.detectChanges();
+
+      const initialCount = component.shapes().length;
+      const dock = fixture.nativeElement.querySelector('.selection-tools-dock') as HTMLElement;
+      expect(dock).not.toBeNull();
+
+      const fontIncreaseBtn = dock.querySelector(
+        'button[aria-label="Increase font size"]',
+      ) as HTMLElement;
+      expect(fontIncreaseBtn).not.toBeNull();
+
+      // Dispatch double click event on the font button
+      const dblClickEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+      fontIncreaseBtn.dispatchEvent(dblClickEvent);
+      fixture.detectChanges();
+
+      // Ensure no new shape was created
+      expect(component.shapes().length).toBe(initialCount);
+
+      // Also test directly invoking handleDoubleClick with event targeting dock button
+      const dblClickDirect = new MouseEvent('dblclick', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 200,
+        clientY: 100,
+      });
+      Object.defineProperty(dblClickDirect, 'target', { value: fontIncreaseBtn });
+      component.handleDoubleClick(dblClickDirect);
+      expect(component.shapes().length).toBe(initialCount);
+    });
+
+    it('should NOT create any shape when double-clicking canvas-tools-dock buttons', () => {
+      const initialCount = component.shapes().length;
+      const toolBtn = fixture.nativeElement.querySelector(
+        '.canvas-tools-dock button',
+      ) as HTMLElement;
+      expect(toolBtn).not.toBeNull();
+
+      const dblClickEvent = new MouseEvent('dblclick', { bubbles: true, cancelable: true });
+      toolBtn.dispatchEvent(dblClickEvent);
+      fixture.detectChanges();
+
+      expect(component.shapes().length).toBe(initialCount);
+
+      const dblClickDirect = new MouseEvent('dblclick', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 400,
+        clientY: 20,
+      });
+      Object.defineProperty(dblClickDirect, 'target', { value: toolBtn });
+      component.handleDoubleClick(dblClickDirect);
+      expect(component.shapes().length).toBe(initialCount);
+    });
+
+    it('should emit diagramChange and enter inline text editing when double-clicking empty canvas', () => {
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      const countBefore = component.shapes().length;
+
+      const dblClickEvent = new MouseEvent('dblclick', {
+        bubbles: true,
+        clientX: 450,
+        clientY: 350,
+      });
+      component.handleDoubleClick(dblClickEvent);
+
+      expect(component.shapes().length).toBe(countBefore + 1);
+      const newShape = component.shapes()[component.shapes().length - 1];
+      expect(newShape.type).toBe('rectangle');
+      expect(emitSpy).toHaveBeenCalled();
+      expect(component.editingShapeId()).toBe(newShape.id);
+    });
+
+    it('should create a rectangle when double-tapping empty canvas within 450ms', () => {
+      const countBefore = component.shapes().length;
+
+      const pt1 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: 500,
+        clientY: 400,
+        bubbles: true,
+      });
+      component.handlePointerDown(pt1);
+
+      const pt2 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: 502,
+        clientY: 401,
+        bubbles: true,
+      });
+      component.handlePointerDown(pt2);
+
+      expect(component.shapes().length).toBe(countBefore + 1);
+      const newShape = component.shapes()[component.shapes().length - 1];
+      expect(newShape.type).toBe('rectangle');
+      expect(component.editingShapeId()).toBe(newShape.id);
+    });
   });
 });
