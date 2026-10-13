@@ -394,8 +394,9 @@
           <button
             mat-icon-button
             class="tool-btn small"
-            [class.active]="selShape.isBold"
+            [class.active]="isFormatActive(selShape, 'bold')"
             (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'bold')"
             matTooltip="Bold (Ctrl+B)"
             aria-label="Bold text"
@@ -405,8 +406,9 @@
           <button
             mat-icon-button
             class="tool-btn small"
-            [class.active]="selShape.isItalic"
+            [class.active]="isFormatActive(selShape, 'italic')"
             (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'italic')"
             matTooltip="Italic (Ctrl+I)"
             aria-label="Italic text"
@@ -416,8 +418,9 @@
           <button
             mat-icon-button
             class="tool-btn small"
-            [class.active]="selShape.isUnderline"
+            [class.active]="isFormatActive(selShape, 'underline')"
             (pointerdown)="$event.preventDefault()"
+            (mousedown)="$event.preventDefault()"
             (click)="toggleShapeFormat(selShape.id, 'underline')"
             matTooltip="Underline (Ctrl+U)"
             aria-label="Underline text"
@@ -924,6 +927,7 @@
               #umlClassHeaderEditor
               class="uml-editor-section uml-editor-header"
               contenteditable="true"
+              (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
               (input)="
                 handleUmlClassSectionInput(
                   editShape.id,
@@ -934,11 +938,14 @@
                 )
               "
               (keydown)="handleRichTextKeydown($event, editShape.id, umlClassHeaderEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
             ></div>
             <div
               #umlClassAttrEditor
               class="uml-editor-section uml-editor-attributes"
               contenteditable="true"
+              (focus)="activeUmlSection = 'attributes'; saveCurrentEditorSelection()"
               (input)="
                 handleUmlClassSectionInput(
                   editShape.id,
@@ -949,11 +956,14 @@
                 )
               "
               (keydown)="handleRichTextKeydown($event, editShape.id, umlClassAttrEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
             ></div>
             <div
               #umlClassMethodEditor
               class="uml-editor-section uml-editor-methods"
               contenteditable="true"
+              (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
               (input)="
                 handleUmlClassSectionInput(
                   editShape.id,
@@ -964,6 +974,8 @@
                 )
               "
               (keydown)="handleRichTextKeydown($event, editShape.id, umlClassMethodEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
             ></div>
           </div>
         } @else if (editShape.type === 'uml-interface') {
@@ -980,6 +992,7 @@
               #umlIfaceHeaderEditor
               class="uml-editor-section uml-editor-header"
               contenteditable="true"
+              (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
               (input)="
                 handleUmlInterfaceSectionInput(
                   editShape.id,
@@ -989,11 +1002,14 @@
                 )
               "
               (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceHeaderEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
             ></div>
             <div
               #umlIfaceMethodEditor
               class="uml-editor-section uml-editor-methods"
               contenteditable="true"
+              (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
               (input)="
                 handleUmlInterfaceSectionInput(
                   editShape.id,
@@ -1003,6 +1019,8 @@
                 )
               "
               (keydown)="handleRichTextKeydown($event, editShape.id, umlIfaceMethodEditor)"
+              (keyup)="saveCurrentEditorSelection()"
+              (mouseup)="saveCurrentEditorSelection()"
             ></div>
           </div>
         } @else {
@@ -1025,6 +1043,8 @@
             [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
             (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
             (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
+            (keyup)="saveCurrentEditorSelection()"
+            (mouseup)="saveCurrentEditorSelection()"
           ></div>
         }
       </div>

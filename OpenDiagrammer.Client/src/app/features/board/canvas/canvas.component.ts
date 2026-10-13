@@ -176,7 +176,8 @@ export class CanvasComponent {
   private lastShapePointerDownTime = 0;
   private lastShapePointerDownId: string | null = null;
   private lastShapePointerDownPos: CanvasPoint | null = null;
-  private activeUmlSection: 'header' | 'attributes' | 'methods' | undefined;
+  activeUmlSection: 'header' | 'attributes' | 'methods' | undefined;
+  savedEditorRange: Range | null = null;
   private lastCanvasPointerDownTime = 0;
   private lastCanvasPointerDownPos: CanvasPoint | null = null;
   private hasPointerCaptureForMarquee = false;
@@ -746,6 +747,7 @@ export class CanvasComponent {
             range.collapse(false);
             selection.removeAllRanges();
             selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
           }
         } catch {
           // Ignore selection range errors in headless or unsupported environments
@@ -769,6 +771,7 @@ export class CanvasComponent {
             range.collapse(false);
             selection.removeAllRanges();
             selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
           }
         } catch {
           // Ignore selection range errors in headless or unsupported environments
@@ -787,6 +790,7 @@ export class CanvasComponent {
             range.collapse(false);
             selection.removeAllRanges();
             selection.addRange(range);
+            this.savedEditorRange = range.cloneRange();
           }
         } catch {
           // Ignore selection range errors in headless or unsupported environments
@@ -799,6 +803,7 @@ export class CanvasComponent {
     if (this.editingShapeId() !== shapeId) {
       return;
     }
+    this.savedEditorRange = null;
     const sanitized = sanitizeRichText(contentHtml.trim());
     this.shapes.update((list) =>
       list.map((s) => (s.id === shapeId ? { ...s, text: sanitized || undefined } : s)),
@@ -807,32 +812,195 @@ export class CanvasComponent {
     this.emitDiagramChange();
   }
 
+  saveCurrentEditorSelection(): void {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) {
+      const range = sel.getRangeAt(0);
+      const activeEditor = this.getActiveEditorElement();
+      if (
+        activeEditor &&
+        (activeEditor.contains(range.commonAncestorContainer) ||
+          activeEditor === range.commonAncestorContainer)
+      ) {
+        this.savedEditorRange = range.cloneRange();
+      }
+    }
+  }
+
+  getActiveEditorElement(): HTMLElement | null {
+    const editId = this.editingShapeId();
+    if (!editId) {
+      return null;
+    }
+    const shape = this.shapes().find((s) => s.id === editId);
+    if (!shape) {
+      return null;
+    }
+
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (document.activeElement === attrEl) return attrEl ?? null;
+      if (document.activeElement === methodEl) return methodEl ?? null;
+      if (document.activeElement === headerEl) return headerEl ?? null;
+
+      if (this.activeUmlSection === 'attributes') return attrEl ?? null;
+      if (this.activeUmlSection === 'methods') return methodEl ?? null;
+      return headerEl ?? null;
+    }
+
+    if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (document.activeElement === methodEl) return methodEl ?? null;
+      if (document.activeElement === headerEl) return headerEl ?? null;
+
+      if (this.activeUmlSection === 'methods') return methodEl ?? null;
+      return headerEl ?? null;
+    }
+
+    return this.shapeRichTextEditor()?.nativeElement ?? null;
+  }
+
+  isFormatActive(shape: CanvasShape, format: 'bold' | 'italic' | 'underline'): boolean {
+    if (this.editingShapeId() === shape.id) {
+      try {
+        if (document.queryCommandState(format)) {
+          return true;
+        }
+      } catch {
+        // Query command state might throw in non-browser/test environments
+      }
+    }
+    if (format === 'bold') return !!shape.isBold;
+    if (format === 'italic') return !!shape.isItalic;
+    if (format === 'underline') return !!shape.isUnderline;
+    return false;
+  }
+
+  persistActiveEditorContent(shapeId: string, editorEl: HTMLElement): void {
+    const shape = this.shapes().find((s) => s.id === shapeId);
+    if (!shape) {
+      return;
+    }
+
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (headerEl && attrEl && methodEl) {
+        const sections: UmlClassSections = {
+          className: sanitizeRichText(headerEl.innerHTML.trim()),
+          attributes: sanitizeRichText(attrEl.innerHTML.trim()),
+          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+        };
+        const formatted = formatUmlClassText(sections);
+        const requiredH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13);
+        const newHeight = Math.max(requiredH, shape.height);
+        this.shapes.update((list) =>
+          list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+        );
+        this.emitDiagramChange();
+      }
+      return;
+    }
+
+    if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (headerEl && methodEl) {
+        const sections: UmlInterfaceSections = {
+          interfaceName: sanitizeRichText(headerEl.innerHTML.trim()),
+          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+        };
+        const formatted = formatUmlInterfaceText(sections);
+        const requiredH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13);
+        const newHeight = Math.max(requiredH, shape.height);
+        this.shapes.update((list) =>
+          list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
+        );
+        this.emitDiagramChange();
+      }
+      return;
+    }
+
+    const sanitized = sanitizeRichText(editorEl.innerHTML);
+    this.shapes.update((list) =>
+      list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
   toggleShapeFormat(shapeId: string, format: 'bold' | 'italic' | 'underline'): void {
     if (this.readOnly()) {
       return;
     }
 
-    const editorEl = this.shapeRichTextEditor()?.nativeElement;
-    if (this.editingShapeId() === shapeId && editorEl) {
+    const isCurrentlyEditing = this.editingShapeId() === shapeId;
+    const editorEl = isCurrentlyEditing ? this.getActiveEditorElement() : null;
+
+    if (isCurrentlyEditing && editorEl) {
+      const sel = window.getSelection();
+      if (
+        this.savedEditorRange &&
+        (!sel || sel.rangeCount === 0 || !editorEl.contains(sel.anchorNode))
+      ) {
+        try {
+          editorEl.focus();
+          sel?.removeAllRanges();
+          sel?.addRange(this.savedEditorRange);
+        } catch {
+          // Ignored
+        }
+      }
+
+      const currentSel = window.getSelection();
+      const currentRange =
+        currentSel && currentSel.rangeCount > 0 && !currentSel.getRangeAt(0).collapsed
+          ? currentSel.getRangeAt(0)
+          : this.savedEditorRange && !this.savedEditorRange.collapsed
+            ? this.savedEditorRange
+            : currentSel && currentSel.rangeCount > 0
+              ? currentSel.getRangeAt(0)
+              : this.savedEditorRange;
+      const hasTextSelection =
+        !!currentRange && !currentRange.collapsed && currentRange.toString().length > 0;
+
+      if (hasTextSelection) {
+        try {
+          document.execCommand(format, false);
+        } catch {
+          // Fallback
+        }
+        this.persistActiveEditorContent(shapeId, editorEl);
+        this.saveCurrentEditorSelection();
+        editorEl.focus();
+        return;
+      }
+
+      // No range selected (collapsed caret or cursor at start/end of text):
+      // Toggle the format on the shape itself so that newly typed characters and the overall shape
+      // take on the toggled format, and the toolbar button is visibly active.
       try {
         document.execCommand(format, false);
       } catch {
         // Fallback
       }
-      const sanitized = sanitizeRichText(editorEl.innerHTML);
       this.shapes.update((list) =>
-        list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
+        list.map((s) => {
+          if (s.id !== shapeId) {
+            return s;
+          }
+          if (format === 'bold') return { ...s, isBold: !s.isBold };
+          if (format === 'italic') return { ...s, isItalic: !s.isItalic };
+          if (format === 'underline') return { ...s, isUnderline: !s.isUnderline };
+          return s;
+        }),
       );
       this.emitDiagramChange();
-      return;
-    }
-
-    if (this.editingShapeId() === shapeId) {
-      try {
-        document.execCommand(format, false);
-      } catch {
-        // Fallback
-      }
+      editorEl.focus();
+      this.saveCurrentEditorSelection();
       return;
     }
 
@@ -1016,44 +1184,17 @@ export class CanvasComponent {
       const key = event.key.toLowerCase();
       if (key === 'b') {
         event.preventDefault();
-        try {
-          document.execCommand('bold', false);
-        } catch {
-          // Ignored
-        }
-        const sanitized = sanitizeRichText(editorEl.innerHTML);
-        this.shapes.update((list) =>
-          list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
-        );
-        this.emitDiagramChange();
+        this.toggleShapeFormat(shapeId, 'bold');
         return;
       }
       if (key === 'i') {
         event.preventDefault();
-        try {
-          document.execCommand('italic', false);
-        } catch {
-          // Ignored
-        }
-        const sanitized = sanitizeRichText(editorEl.innerHTML);
-        this.shapes.update((list) =>
-          list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
-        );
-        this.emitDiagramChange();
+        this.toggleShapeFormat(shapeId, 'italic');
         return;
       }
       if (key === 'u') {
         event.preventDefault();
-        try {
-          document.execCommand('underline', false);
-        } catch {
-          // Ignored
-        }
-        const sanitized = sanitizeRichText(editorEl.innerHTML);
-        this.shapes.update((list) =>
-          list.map((s) => (s.id === shapeId ? { ...s, text: sanitized } : s)),
-        );
-        this.emitDiagramChange();
+        this.toggleShapeFormat(shapeId, 'underline');
         return;
       }
     }

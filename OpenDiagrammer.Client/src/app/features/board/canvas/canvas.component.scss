@@ -400,15 +400,18 @@
   line-height: 1.35;
   cursor: text;
   caret-color: var(--mat-sys-primary);
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
+  display: block;
+  align-content: center;
+  white-space: pre-wrap;
 
-  &[style*='text-align: left'] {
-    align-items: flex-start;
-  }
-  &[style*='text-align: right'] {
-    align-items: flex-end;
+  b,
+  strong,
+  i,
+  em,
+  u,
+  span,
+  a {
+    display: inline;
   }
 }
 
@@ -462,6 +465,16 @@
     word-break: break-word;
     white-space: pre-wrap;
     outline: none;
+
+    b,
+    strong,
+    i,
+    em,
+    u,
+    span,
+    a {
+      display: inline;
+    }
 
     &:focus {
       background-color: var(--mat-sys-surface-container-highest);

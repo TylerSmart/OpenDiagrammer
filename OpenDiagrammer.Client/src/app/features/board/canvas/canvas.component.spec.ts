@@ -2721,14 +2721,105 @@ describe('CanvasComponent', () => {
       component.toggleShapeFormat(shape.id, 'bold');
       let current = component.shapes().find((s) => s.id === shape.id);
       expect(current?.isBold).toBe(true);
+      expect(component.isFormatActive(current!, 'bold')).toBe(true);
 
       component.toggleShapeFormat(shape.id, 'italic');
       current = component.shapes().find((s) => s.id === shape.id);
       expect(current?.isItalic).toBe(true);
+      expect(component.isFormatActive(current!, 'italic')).toBe(true);
 
       component.toggleShapeFormat(shape.id, 'underline');
       current = component.shapes().find((s) => s.id === shape.id);
       expect(current?.isUnderline).toBe(true);
+      expect(component.isFormatActive(current!, 'underline')).toBe(true);
+    });
+
+    it('should toggle format on shape while actively editing text without selection', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      expect(component.editingShapeId()).toBe(shape.id);
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+
+      // Active editing with collapsed caret (no selection)
+      component.toggleShapeFormat(shape.id, 'bold');
+      let current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(true);
+      expect(component.isFormatActive(current!, 'bold')).toBe(true);
+
+      component.toggleShapeFormat(shape.id, 'bold');
+      current = component.shapes().find((s) => s.id === shape.id);
+      expect(current?.isBold).toBe(false);
+      expect(component.isFormatActive(current!, 'bold')).toBe(false);
+    });
+
+    it('should apply rich text command and persist innerHTML when text is selected in editor', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      if (editorEl) {
+        editorEl.innerHTML = 'Hello World';
+        const range = document.createRange();
+        range.selectNodeContents(editorEl);
+        component.savedEditorRange = range;
+
+        const originalExecCommand = (document as unknown as { execCommand?: unknown }).execCommand;
+        const execSpy = vi.fn((cmd: string) => {
+          if (cmd === 'bold') {
+            editorEl.innerHTML = '<b>Hello World</b>';
+            return true;
+          }
+          return false;
+        });
+        (document as unknown as { execCommand: unknown }).execCommand = execSpy;
+
+        component.toggleShapeFormat(shape.id, 'bold');
+        expect(execSpy).toHaveBeenCalledWith('bold', false);
+
+        const current = component.shapes().find((s) => s.id === shape.id);
+        expect(current?.text).toBe('<b>Hello World</b>');
+
+        if (originalExecCommand !== undefined) {
+          (document as unknown as { execCommand: unknown }).execCommand = originalExecCommand;
+        } else {
+          delete (document as unknown as { execCommand?: unknown }).execCommand;
+        }
+      }
+    });
+
+    it('should handle Ctrl+B, Ctrl+I, Ctrl+U shortcuts in handleRichTextKeydown', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      if (editorEl) {
+        const toggleSpy = vi.spyOn(component, 'toggleShapeFormat');
+
+        const ctrlB = new KeyboardEvent('keydown', { key: 'b', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlB, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'bold');
+
+        const ctrlI = new KeyboardEvent('keydown', { key: 'i', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlI, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'italic');
+
+        const ctrlU = new KeyboardEvent('keydown', { key: 'u', ctrlKey: true });
+        component.handleRichTextKeydown(ctrlU, shape.id, editorEl);
+        expect(toggleSpy).toHaveBeenCalledWith(shape.id, 'underline');
+      }
     });
 
     it('should change text alignment for shape', () => {

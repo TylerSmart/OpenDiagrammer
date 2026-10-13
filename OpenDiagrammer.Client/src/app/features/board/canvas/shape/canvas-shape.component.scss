@@ -118,6 +118,16 @@
   max-height: 100%;
   z-index: 2;
 
+  b,
+  strong,
+  i,
+  em,
+  u,
+  span,
+  a {
+    display: inline;
+  }
+
   &[style*='text-align: left'] {
     align-items: flex-start;
   }
@@ -144,6 +154,16 @@
     white-space: pre-wrap;
     word-break: break-word;
     pointer-events: auto;
+
+    b,
+    strong,
+    i,
+    em,
+    u,
+    span,
+    a {
+      display: inline;
+    }
 
     &.uml-header {
       text-align: center;
