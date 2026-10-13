@@ -82,6 +82,32 @@ public sealed class BoardsController(IBoardService boardService) : ControllerBas
         }
     }
 
+    [HttpPut("{id:guid}/canvas")]
+    [ProducesResponseType(typeof(BoardDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> UpdateCanvasData(
+        Guid id,
+        [FromBody] UpdateCanvasDataRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var board = await boardService.UpdateCanvasDataAsync(
+                CurrentUserId,
+                id,
+                request,
+                cancellationToken
+            );
+            return board is not null ? Ok(board) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+    }
+
     [HttpDelete("{id:guid}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]

@@ -30,6 +30,7 @@ describe('BoardSettingsDialogComponent', () => {
     backgroundOpacity: 1,
     mode: BoardMode.Normal,
     thinkModeConfigJson: null,
+    canvasDataJson: null,
     createdAt: '2026-10-10T00:00:00Z',
     modifiedAt: '2026-10-10T00:00:00Z',
     members: [],
@@ -88,7 +89,11 @@ describe('BoardSettingsDialogComponent', () => {
 
     expect(mockBoardService.updateBoard).toHaveBeenCalledWith(
       'b-settings-id',
-      expect.objectContaining({ name: 'Updated Name' }),
+      expect.objectContaining({
+        name: 'Updated Name',
+        backgroundColor: null,
+        backgroundOpacity: 1.0,
+      }),
     );
     expect(mockDialogRef.close).toHaveBeenCalledWith({
       action: 'updated',

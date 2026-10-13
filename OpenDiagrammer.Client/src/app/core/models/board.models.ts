@@ -54,6 +54,7 @@ export interface BoardDetailDto {
   backgroundOpacity: number;
   mode: BoardMode;
   thinkModeConfigJson: string | null;
+  canvasDataJson: string | null;
   createdAt: string;
   modifiedAt: string;
   members: BoardMemberDto[];
@@ -75,6 +76,11 @@ export interface UpdateBoardRequest {
   backgroundOpacity: number;
   mode: BoardMode;
   thinkModeConfigJson?: string | null;
+  canvasDataJson?: string | null;
+}
+
+export interface UpdateCanvasDataRequest {
+  canvasDataJson: string | null;
 }
 
 export interface TransferOwnershipRequest {

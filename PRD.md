@@ -58,7 +58,25 @@ Diagram nodes are the different shapes that can be inserted into a diagram from 
 
 #### Diagram Connections
 
-All nodes should support connections. Connections are most simply lines that extend from nodes to either another node or a point in space. They can be customized in color, shape (straight, angled, curved, etc.), pattern (solid, dotted, lined, etc.), ends (can be either a simple line or can have arrows at the ends), and can have text in or along them. Connections are created by using the anchors on a shape. The anchor should be in the midpoint of each of the four bounding boxes of the shape in addition to the four corners. Some shapes should have the line start from the closest point on the border of the shape (For example, two sides of a triangle do not touch the bounding box in the middle, but the connector line should still originate from the cloest point inward from that anchor point.) while other shapes will just have the line start from the anchor point regardless of the border (For example, a bracket with text on one side may have the arrow start on the other side of the bracket by the text which doesn't necessarily have a visible border to the user. Padding should be used appropriately in these cases.). 
+All nodes should support connections. Connections are lines that extend from nodes to either another node or a point in space. 
+
+##### Customization Options
+- **End Markers**: Customizable endpoints on both sides independently (none, arrowhead, open arrow, circle, diamond, etc.).
+- **Line Style & Patterns**: Solid, dashed, or dotted lines with customizable line width and color palette.
+- **Routing Types**:
+  - *Straight*: Direct point-to-point line segments.
+  - *Orthogonal (Cornered)*: Right-angled stepped line routing.
+  - *Curved*: Smooth Bézier splines connecting source and target.
+- **Connection Text / Labels**:
+  - Ability to add text along or in the line.
+  - Centered label text box with background badge or text following/aligned with the line trajectory, editable on double-click.
+
+##### Interactive Waypoints & Drag Handles (Miro-style Line Adjustments)
+- When a connection is selected, interactive midpoint/segment drag handles appear:
+  - **Cornered (Orthogonal) Lines**: Drag handles on line segments allow shifting corners/segments horizontally or vertically, and dragging segment handles introduces new corners and step segments as needed.
+  - **Straight Lines**: Midpoint handles allow dragging a point off the line to create an elbow/inflection waypoint, dividing the line into two straight segments, each with their own midpoint handles to add further waypoints.
+  - **Curved Lines**: Midpoint handles allow adjusting Bézier control waypoints, curving smoothly through or around the dragged points.
+- Waypoints can be removed (e.g., double-clicking a waypoint handle or dragging it in-line) to simplify the route back.
 
 #### Node Snapping
 

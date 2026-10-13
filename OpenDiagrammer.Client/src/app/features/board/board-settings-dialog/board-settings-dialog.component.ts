@@ -14,7 +14,6 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
 import { MatSelectModule } from '@angular/material/select';
-import { MatSliderModule } from '@angular/material/slider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   BoardBackgroundType,
@@ -44,7 +43,6 @@ export type BoardSettingsDialogResult =
     MatFormFieldModule,
     MatInputModule,
     MatSelectModule,
-    MatSliderModule,
     MatButtonModule,
     MatIconModule,
     MatDividerModule,
@@ -90,41 +88,14 @@ export type BoardSettingsDialogResult =
           ></textarea>
         </mat-form-field>
 
-        <div class="row">
-          <mat-form-field appearance="outline" class="half-width">
-            <mat-label>Canvas Background</mat-label>
-            <mat-select formControlName="backgroundType">
-              <mat-option [value]="BoardBackgroundType.GridLines">Grid Lines</mat-option>
-              <mat-option [value]="BoardBackgroundType.GridDots">Grid Dots</mat-option>
-              <mat-option [value]="BoardBackgroundType.None">Blank / None</mat-option>
-            </mat-select>
-          </mat-form-field>
-
-          <mat-form-field appearance="outline" class="half-width">
-            <mat-label>Canvas Color</mat-label>
-            <input
-              matInput
-              type="color"
-              formControlName="backgroundColor"
-              class="color-picker-input"
-            />
-          </mat-form-field>
-        </div>
-
-        <div class="slider-field">
-          <span id="settings-opacity-label" class="slider-label">
-            Background Opacity: {{ (form.controls.backgroundOpacity.value * 100).toFixed(0) }}%
-          </span>
-          <mat-slider
-            min="0"
-            max="1"
-            step="0.05"
-            class="full-width"
-            aria-labelledby="settings-opacity-label"
-          >
-            <input matSliderThumb formControlName="backgroundOpacity" />
-          </mat-slider>
-        </div>
+        <mat-form-field appearance="outline" class="full-width">
+          <mat-label>Canvas Background</mat-label>
+          <mat-select formControlName="backgroundType">
+            <mat-option [value]="BoardBackgroundType.GridLines">Grid Lines</mat-option>
+            <mat-option [value]="BoardBackgroundType.GridDots">Grid Dots</mat-option>
+            <mat-option [value]="BoardBackgroundType.None">Blank / None</mat-option>
+          </mat-select>
+        </mat-form-field>
 
         <mat-form-field appearance="outline" class="full-width">
           <mat-label>Board Mode</mat-label>
@@ -221,38 +192,6 @@ export type BoardSettingsDialogResult =
       width: 100%;
       box-sizing: border-box;
     }
-    .row {
-      display: flex;
-      gap: 1rem;
-      width: 100%;
-      box-sizing: border-box;
-    }
-    .half-width {
-      flex: 1;
-      min-width: 0;
-    }
-    .color-picker-input {
-      padding: 0;
-      height: 2rem;
-      cursor: pointer;
-    }
-    .slider-field {
-      display: flex;
-      flex-direction: column;
-      margin-bottom: 0.5rem;
-      width: 100%;
-      box-sizing: border-box;
-
-      mat-slider {
-        width: calc(100% - 16px);
-        max-width: calc(100% - 16px);
-      }
-    }
-    .slider-label {
-      font-size: 0.875rem;
-      color: var(--mat-sys-on-surface-variant);
-      margin-bottom: 0.25rem;
-    }
     .section-divider {
       margin: 1.5rem 0 1rem;
     }
@@ -333,12 +272,6 @@ export class BoardSettingsDialogComponent {
     backgroundType: new FormControl<BoardBackgroundType>(this.data.board.backgroundType, {
       nonNullable: true,
     }),
-    backgroundColor: new FormControl<string>(this.data.board.backgroundColor || '#ffffff', {
-      nonNullable: true,
-    }),
-    backgroundOpacity: new FormControl<number>(this.data.board.backgroundOpacity ?? 1.0, {
-      nonNullable: true,
-    }),
     mode: new FormControl<BoardMode>(this.data.board.mode, {
       nonNullable: true,
     }),
@@ -368,8 +301,8 @@ export class BoardSettingsDialogComponent {
       name: value.name.trim(),
       description: value.description?.trim() || null,
       backgroundType: value.backgroundType,
-      backgroundColor: value.backgroundColor,
-      backgroundOpacity: value.backgroundOpacity,
+      backgroundColor: null,
+      backgroundOpacity: 1.0,
       mode: value.mode,
       thinkModeConfigJson: null,
     };

@@ -40,6 +40,7 @@ public sealed record BoardDetailDto(
     double BackgroundOpacity,
     BoardMode Mode,
     string? ThinkModeConfigJson,
+    string? CanvasDataJson,
     DateTimeOffset CreatedAt,
     DateTimeOffset ModifiedAt,
     IReadOnlyList<BoardMemberDto> Members
@@ -60,8 +61,11 @@ public sealed record UpdateBoardRequest(
     [MaxLength(50)] string? BackgroundColor,
     [Range(0.0, 1.0)] double BackgroundOpacity,
     BoardMode Mode,
-    [MaxLength(4000)] string? ThinkModeConfigJson
+    [MaxLength(4000)] string? ThinkModeConfigJson,
+    string? CanvasDataJson = null
 );
+
+public sealed record UpdateCanvasDataRequest(string? CanvasDataJson);
 
 public sealed record TransferOwnershipRequest([Required] Guid NewOwnerId);
 

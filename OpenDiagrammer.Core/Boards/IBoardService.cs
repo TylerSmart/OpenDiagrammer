@@ -26,6 +26,13 @@ public interface IBoardService
         CancellationToken cancellationToken = default
     );
 
+    Task<BoardDetailDto?> UpdateCanvasDataAsync(
+        Guid userId,
+        Guid boardId,
+        UpdateCanvasDataRequest request,
+        CancellationToken cancellationToken = default
+    );
+
     Task<bool> DeleteBoardAsync(
         Guid userId,
         Guid boardId,

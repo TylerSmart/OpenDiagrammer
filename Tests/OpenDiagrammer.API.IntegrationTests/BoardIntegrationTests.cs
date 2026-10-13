@@ -571,4 +571,86 @@ public sealed class BoardIntegrationTests
         var res = await _client.DeleteAsync($"/api/boards/{board.Id}/members/{admin2.Id}");
         Assert.AreEqual(HttpStatusCode.Forbidden, res.StatusCode);
     }
+
+    [TestMethod]
+    public async Task UpdateCanvasData_WhenOwnerOrEditor_PersistsCanvasDataAndReturnsOk()
+    {
+        var owner = await RegisterUserAsync("canvas_owner", "canvas_owner@example.com");
+        var editor = await RegisterUserAsync("canvas_editor", "canvas_editor@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Canvas Persistence Test Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+        Assert.IsNull(board.CanvasDataJson);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(editor.Email, BoardRole.Editor)
+        );
+
+        // Editor updates canvas data
+        SetAuthToken(editor.Token);
+        const string testCanvasJson =
+            "{\"shapes\":[{\"id\":\"s1\",\"type\":\"rectangle\",\"x\":50,\"y\":60}],\"connections\":[]}";
+        var updateRes = await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/canvas",
+            new UpdateCanvasDataRequest(testCanvasJson)
+        );
+        Assert.AreEqual(HttpStatusCode.OK, updateRes.StatusCode);
+        var updated = await updateRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(updated);
+        Assert.AreEqual(testCanvasJson, updated.CanvasDataJson);
+
+        // Fetch board again to confirm persistence in DB
+        var getRes = await _client.GetAsync($"/api/boards/{board.Id}");
+        Assert.AreEqual(HttpStatusCode.OK, getRes.StatusCode);
+        var fetched = await getRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(fetched);
+        Assert.AreEqual(testCanvasJson, fetched.CanvasDataJson);
+    }
+
+    [TestMethod]
+    public async Task UpdateCanvasData_WhenViewer_ReturnsForbidden()
+    {
+        var owner = await RegisterUserAsync("canvas_v_owner", "canvas_v_owner@example.com");
+        var viewer = await RegisterUserAsync("canvas_viewer", "canvas_viewer@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Viewer Canvas Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(viewer.Email, BoardRole.Viewer)
+        );
+
+        // Viewer attempts to update canvas data -> Forbidden
+        SetAuthToken(viewer.Token);
+        var updateRes = await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/canvas",
+            new UpdateCanvasDataRequest("{\"shapes\":[]}")
+        );
+        Assert.AreEqual(HttpStatusCode.Forbidden, updateRes.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task UpdateCanvasData_NonExistentBoard_ReturnsNotFound()
+    {
+        var user = await RegisterUserAsync("canvas_404_user", "canvas_404@example.com");
+        SetAuthToken(user.Token);
+
+        var updateRes = await _client.PutAsJsonAsync(
+            $"/api/boards/{Guid.NewGuid()}/canvas",
+            new UpdateCanvasDataRequest("{\"shapes\":[]}")
+        );
+        Assert.AreEqual(HttpStatusCode.NotFound, updateRes.StatusCode);
+    }
 }

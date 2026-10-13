@@ -34,8 +34,6 @@ describe('CreateBoardDialogComponent', () => {
       name: 'Sprint Retro',
       description: 'End of sprint reflection',
       backgroundType: BoardBackgroundType.GridDots,
-      backgroundColor: '#f5f5f5',
-      backgroundOpacity: 0.8,
     });
 
     expect(component['form'].valid).toBe(true);
@@ -45,8 +43,8 @@ describe('CreateBoardDialogComponent', () => {
       name: 'Sprint Retro',
       description: 'End of sprint reflection',
       backgroundType: BoardBackgroundType.GridDots,
-      backgroundColor: '#f5f5f5',
-      backgroundOpacity: 0.8,
+      backgroundColor: null,
+      backgroundOpacity: 1.0,
     });
   });
 

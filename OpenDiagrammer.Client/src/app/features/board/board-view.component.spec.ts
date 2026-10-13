@@ -12,7 +12,9 @@ import {
 import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeService } from '../../core/services/theme/theme.service';
+import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
 import { BoardViewComponent } from './board-view.component';
+import { CanvasDiagramData } from './canvas/canvas.models';
 
 describe('BoardViewComponent', () => {
   let component: BoardViewComponent;
@@ -30,6 +32,7 @@ describe('BoardViewComponent', () => {
     backgroundOpacity: 0.9,
     mode: BoardMode.Normal,
     thinkModeConfigJson: null,
+    canvasDataJson: null,
     createdAt: '2026-10-10T00:00:00Z',
     modifiedAt: '2026-10-10T00:00:00Z',
     members: [
@@ -47,9 +50,11 @@ describe('BoardViewComponent', () => {
 
   let mockBoardService: {
     getBoardById: ReturnType<typeof vi.fn>;
+    updateCanvasData: ReturnType<typeof vi.fn>;
   };
   let mockAuthService: {
     currentUser: ReturnType<typeof vi.fn>;
+    token: ReturnType<typeof vi.fn>;
   };
   let mockRouter: {
     navigate: ReturnType<typeof vi.fn>;
@@ -64,6 +69,7 @@ describe('BoardViewComponent', () => {
   beforeEach(async () => {
     mockBoardService = {
       getBoardById: vi.fn().mockReturnValue(of(mockBoardDetail)),
+      updateCanvasData: vi.fn().mockReturnValue(of({ ...mockBoardDetail })),
     };
     mockAuthService = {
       currentUser: vi.fn().mockReturnValue({
@@ -71,6 +77,7 @@ describe('BoardViewComponent', () => {
         email: 'architect@example.com',
         username: 'architect',
       }),
+      token: vi.fn().mockReturnValue('mock-jwt-token'),
     };
     mockRouter = {
       navigate: vi.fn(),
@@ -101,6 +108,7 @@ describe('BoardViewComponent', () => {
           },
         },
         ThemeService,
+        FullscreenService,
       ],
     }).compileComponents();
 
@@ -125,5 +133,181 @@ describe('BoardViewComponent', () => {
 
     component.loadBoard('non-existent');
     expect(component['errorMessage']()).toBe('Board not found.');
+  });
+
+  it('should toggle fullscreen using FullscreenService', async () => {
+    const fullscreenService = TestBed.inject(FullscreenService);
+    const toggleSpy = vi.spyOn(fullscreenService, 'toggleFullscreen').mockResolvedValue(undefined);
+
+    const fullscreenBtn: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+      'button[aria-label="Fullscreen"]',
+    );
+    expect(fullscreenBtn).toBeTruthy();
+
+    fullscreenBtn?.click();
+    expect(toggleSpy).toHaveBeenCalled();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('should initialize isBoardEmpty based on canvasDataJson', () => {
+    // When board has shapes
+    mockBoardService.getBoardById.mockReturnValue(
+      of({
+        ...mockBoardDetail,
+        canvasDataJson: JSON.stringify({
+          shapes: [
+            {
+              id: 's1',
+              type: 'rectangle',
+              x: 0,
+              y: 0,
+              width: 100,
+              height: 100,
+              strokeColor: '#000',
+              fillColor: '#fff',
+              strokeWidth: 2,
+              zIndex: 1,
+            },
+          ],
+          connections: [],
+        }),
+      }),
+    );
+    component.loadBoard('test-board-id');
+    expect(component['isBoardEmpty']()).toBe(false);
+
+    // When board has empty shapes
+    mockBoardService.getBoardById.mockReturnValue(
+      of({
+        ...mockBoardDetail,
+        canvasDataJson: JSON.stringify({ shapes: [], connections: [] }),
+      }),
+    );
+    component.loadBoard('test-board-id');
+    expect(component['isBoardEmpty']()).toBe(true);
+  });
+
+  it('should debounce and persist diagram changes via boardService.updateCanvasData', () => {
+    vi.useFakeTimers();
+    const diagramData: CanvasDiagramData = {
+      shapes: [
+        {
+          id: 's1',
+          type: 'rectangle',
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 100,
+          strokeColor: '#000',
+          fillColor: '#fff',
+          strokeWidth: 2,
+          zIndex: 1,
+        },
+      ],
+      connections: [],
+      zoom: 1.5,
+      panX: 50,
+      panY: 60,
+    };
+
+    component.handleDiagramChange(diagramData);
+    expect(component['saveStatus']()).toBe('saving');
+    expect(component['isBoardEmpty']()).toBe(false);
+    expect(mockBoardService.updateCanvasData).not.toHaveBeenCalled();
+
+    // Advance by debounce time
+    vi.advanceTimersByTime(500);
+
+    expect(mockBoardService.updateCanvasData).toHaveBeenCalledWith('test-board-id', {
+      canvasDataJson: JSON.stringify(diagramData),
+    });
+    expect(component['saveStatus']()).toBe('saved');
+    expect(component['board']()?.canvasDataJson).toBe(JSON.stringify(diagramData));
+  });
+
+  it('should not persist diagram changes if user role is Viewer', () => {
+    vi.useFakeTimers();
+    component['board'].set({
+      ...mockBoardDetail,
+      userRole: BoardRole.Viewer,
+    });
+
+    const diagramData: CanvasDiagramData = {
+      shapes: [],
+      connections: [],
+    };
+
+    component.handleDiagramChange(diagramData);
+    vi.advanceTimersByTime(500);
+
+    expect(mockBoardService.updateCanvasData).not.toHaveBeenCalled();
+  });
+
+  it('should set saveStatus to error and show snackbar when updateCanvasData fails', () => {
+    vi.useFakeTimers();
+    mockBoardService.updateCanvasData.mockReturnValue(throwError(() => new Error('Save error')));
+
+    const diagramData: CanvasDiagramData = {
+      shapes: [
+        {
+          id: 's1',
+          type: 'rectangle',
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 100,
+          strokeColor: '#000',
+          fillColor: '#fff',
+          strokeWidth: 2,
+          zIndex: 1,
+        },
+      ],
+      connections: [],
+    };
+
+    component.handleDiagramChange(diagramData);
+    vi.advanceTimersByTime(500);
+
+    expect(component['saveStatus']()).toBe('error');
+    expect(mockSnackBar.open).toHaveBeenCalledWith(
+      'Failed to save diagram changes.',
+      'Dismiss',
+      expect.objectContaining({ duration: 4000 }),
+    );
+  });
+
+  it('should flush pending diagram changes immediately using fetch with keepalive', () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response());
+    const diagramData: CanvasDiagramData = {
+      shapes: [
+        {
+          id: 's1',
+          type: 'rectangle',
+          x: 10,
+          y: 20,
+          width: 100,
+          height: 100,
+          strokeColor: '#000',
+          fillColor: '#fff',
+          strokeWidth: 2,
+          zIndex: 1,
+        },
+      ],
+      connections: [],
+    };
+
+    component.handleDiagramChange(diagramData);
+    component.flushPendingSave();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      '/api/boards/test-board-id/canvas',
+      expect.objectContaining({
+        method: 'PUT',
+        keepalive: true,
+      }),
+    );
   });
 });

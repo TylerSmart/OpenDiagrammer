@@ -1,0 +1,95 @@
+:host {
+  display: contents;
+}
+
+.shape-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  cursor: move;
+  pointer-events: auto;
+  user-select: none;
+  box-sizing: border-box;
+
+  &.is-selected {
+    // Subtle shadow when selected
+    filter: drop-shadow(0 0 2px var(--mat-sys-primary));
+  }
+
+  // Expanded hit area around the shape so connector handles and outer margin maintain hover state
+  &::before {
+    content: '';
+    position: absolute;
+    inset: -22px;
+    pointer-events: auto;
+    z-index: 0;
+  }
+}
+
+.shape-svg {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  display: block;
+  z-index: 1;
+}
+
+.shape-text-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  text-align: center;
+  pointer-events: none;
+  font-size: 0.875rem;
+  color: var(--mat-sys-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  z-index: 2;
+}
+
+// Connection Anchors (offset from shape border by 14px so resize borders and handles coexist cleanly)
+.shape-anchor {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: var(--mat-sys-surface);
+  border: 2px solid var(--mat-sys-primary);
+  pointer-events: auto;
+  cursor: crosshair;
+  z-index: 30;
+  transition:
+    transform 0.1s ease,
+    background-color 0.1s ease;
+  box-sizing: border-box;
+
+  &:hover {
+    transform: scale(1.35);
+    background-color: var(--mat-sys-primary);
+  }
+
+  &.anchor-top {
+    top: -15px;
+    left: calc(50% - 6px);
+  }
+
+  &.anchor-right {
+    top: calc(50% - 6px);
+    right: -15px;
+  }
+
+  &.anchor-bottom {
+    bottom: -15px;
+    left: calc(50% - 6px);
+  }
+
+  &.anchor-left {
+    top: calc(50% - 6px);
+    left: -15px;
+  }
+}

@@ -1,0 +1,82 @@
+<div
+  class="shape-container"
+  [class.is-selected]="isSelected()"
+  [style.transform]="shapeStyles().transform"
+  [style.width]="shapeStyles().width"
+  [style.height]="shapeStyles().height"
+  [style.z-index]="shapeStyles().zIndex"
+  (pointerenter)="isHovered.set(true)"
+  (pointerleave)="isHovered.set(false)"
+>
+  <svg class="shape-svg" [attr.viewBox]="'0 0 ' + shape().width + ' ' + shape().height">
+    @switch (shape().type) {
+      @case ('rectangle') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('rounded-rectangle') {
+        <rect
+          x="1"
+          y="1"
+          rx="12"
+          ry="12"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('ellipse') {
+        <ellipse
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="shape().height / 2"
+          [attr.rx]="(shape().width - 2) / 2"
+          [attr.ry]="(shape().height - 2) / 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('diamond') {
+        <polygon
+          [attr.points]="diamondPoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+    }
+  </svg>
+
+  @if (shape().text) {
+    <div
+      class="shape-text-overlay"
+      [style.color]="
+        shape().fillColor.includes('inverse') ? 'var(--canvas-color-inverse-text)' : null
+      "
+    >
+      <span>{{ shape().text }}</span>
+    </div>
+  }
+
+  <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->
+  @if (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected()) {
+    @for (anchor of anchors; track anchor) {
+      <div
+        class="shape-anchor anchor-{{ anchor }}"
+        (pointerdown)="handleAnchorDown($event, anchor)"
+        (pointerenter)="handleAnchorEnter(anchor)"
+        (pointerleave)="handleAnchorLeave()"
+        [attr.aria-label]="anchor + ' connection anchor'"
+      ></div>
+    }
+  }
+</div>

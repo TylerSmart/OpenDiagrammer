@@ -24,6 +24,8 @@ public sealed class BoardConfiguration : IEntityTypeConfiguration<Board>
 
         builder.Property(b => b.ThinkModeConfigJson).HasMaxLength(4000);
 
+        builder.Property(b => b.CanvasDataJson);
+
         builder.Property(b => b.CreatedBy).IsRequired().HasMaxLength(256);
 
         builder.Property(b => b.ModifiedBy).IsRequired().HasMaxLength(256);

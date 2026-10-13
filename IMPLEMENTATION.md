@@ -31,15 +31,27 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 
 ## Phase 4: Core Canvas & Diagramming (Frontend)
 *Implement the drawing canvas and basic diagramming tools.*
-- [ ] Implement infinite canvas with zoom/pan controls and grid/dot backgrounds
-- [ ] Implement shape rendering, selection, and resizing
-- [ ] Implement connections (lines, arrows, anchors, routing)
-- [ ] Implement node snapping, alignment, and fine adjustment (arrow keys)
-- [ ] Implement basic grouping and layer management (bring forward/backward)
-- [ ] Implement Copy/Paste within the board
+- [x] Implement infinite canvas with zoom/pan controls and grid/dot backgrounds
+- [x] Implement shape rendering, selection, and resizing
+- [x] Implement connections foundation (anchors, snapping, arrows, basic orthogonal routing)
+- [x] Implement connection customization floating toolbar / popover:
+  - Line stroke color and stroke width
+  - Line pattern (solid, dashed, dotted)
+  - End markers (none, arrow, reverse arrow, bidirectional)
+  - Routing type selection (straight, orthogonal/cornered, curved)
+  - Connection text label (centered text badge, double-click inline editor)
+- [x] Implement interactive Miro-style connection adjustment handles & waypoints:
+  - Waypoints / inflection points data structure on connections
+  - Segment midpoint drag handles to create and divert lines (straight & curved)
+  - Orthogonal corner drag handles to shift corner positions and add steps
+  - Waypoint deletion (double click handle or drag back in-line)
+- [x] Implement node snapping, alignment, and fine adjustment (arrow keys)
+- [x] Implement basic grouping and layer management (bring forward/backward)
+- [x] Implement Copy/Paste within the board
 
 ## Phase 5: Real-Time Collaboration & CRDTs
 *Enable multi-user collaboration and offline resiliency.*
+> **Architectural Note:** Phase 5 establishes the CRDT data foundation and transactional state synchronization. This must precede Phase 6 (collaborative Rich Text, Think Mode) and Phase 7 (Undo/Redo, Revision History) because multi-user undo managers (`Y.UndoManager`), synchronized timers/visibility, and concurrent text editing (`Y.Text`) rely directly on CRDT primitives to avoid architectural rewrites and concurrency issues.
 - [ ] Integrate CRDT library (e.g., Yjs or Automerge) on Frontend and Backend
 - [ ] Setup SignalR / WebSockets for real-time state synchronization
 - [ ] Implement live cursor tracking and presence indicators
@@ -48,6 +60,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 
 ## Phase 6: Advanced Node Types & Think Mode
 *Add specific node behaviors and structured collaborative modes.*
+*Note: Rich text editing and Think Mode build directly on Phase 5's CRDT primitives and real-time synchronization.*
 - [ ] Implement rich text editing within nodes
 - [ ] Build specific node catalogs (UML, Flowcharts, etc.)
 - [ ] Implement Sticky Notes (colors, author names)
@@ -56,6 +69,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 
 ## Phase 7: Polish, Export, & Revision History
 *Finalize features and prepare for production.*
+*Note: Undo/Redo and Revision History integrate with Phase 5's CRDT undo manager and document snapshot/update stream.*
 - [ ] Implement cross-board Copy/Paste
 - [ ] Implement Undo/Redo and backend Revision History snapshots
 - [ ] Implement Canvas Exporting (PDF, SVG, PNG, JPEG)
