@@ -1,5 +1,6 @@
 import { Service, inject, signal } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
+import { apiUrl } from '../../api/api-url';
 import { BoardSyncInitDto, CanvasCursorDto, UserPresenceDto } from '../../models/board.models';
 import { AuthService } from '../auth/auth.service';
 import { CrdtService, uint8ArrayToBase64, base64ToUint8Array } from '../crdt/crdt.service';
@@ -28,11 +29,16 @@ export class BoardRealtimeService {
     this.currentBoardId = boardId;
     this.connectionState.set('connecting');
 
-    const rawOrigin =
-      typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null'
-        ? window.location.origin
-        : 'http://localhost';
-    const hubUrl = `${rawOrigin}/hubs/board`;
+    let hubUrl = apiUrl('/hubs/board');
+    if (!hubUrl.startsWith('http://') && !hubUrl.startsWith('https://')) {
+      const rawOrigin =
+        typeof window !== 'undefined' &&
+        window.location?.origin &&
+        window.location.origin !== 'null'
+          ? window.location.origin
+          : 'http://localhost';
+      hubUrl = `${rawOrigin}${hubUrl.startsWith('/') ? '' : '/'}${hubUrl}`;
+    }
 
     try {
       this.hubConnection = new signalR.HubConnectionBuilder()
