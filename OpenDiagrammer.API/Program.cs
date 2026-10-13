@@ -26,6 +26,8 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddControllers();
 
+builder.Services.AddSignalR();
+
 builder.Services.AddOpenApi(
     "v1",
     options =>
@@ -238,6 +240,8 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGroup("/api").MapControllers();
+
+app.MapHub<OpenDiagrammer.API.Hubs.BoardHub>("/hubs/board");
 
 if (serveSpa)
 {

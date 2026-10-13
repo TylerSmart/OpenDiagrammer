@@ -653,4 +653,60 @@ public sealed class BoardIntegrationTests
         );
         Assert.AreEqual(HttpStatusCode.NotFound, updateRes.StatusCode);
     }
+
+    [TestMethod]
+    public async Task UpdateCrdtState_Owner_UpdatesSuccessfully()
+    {
+        var user = await RegisterUserAsync("crdt_owner", "crdt_owner@example.com");
+        SetAuthToken(user.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("CRDT Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var dummyBytes = new byte[] { 1, 2, 3, 4, 5 };
+        var updateRes = await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/crdt",
+            new UpdateCrdtStateRequest(dummyBytes)
+        );
+        Assert.AreEqual(HttpStatusCode.OK, updateRes.StatusCode);
+
+        var updatedBoard = await updateRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(updatedBoard);
+        Assert.IsNotNull(updatedBoard.CrdtState);
+        CollectionAssert.AreEqual(dummyBytes, updatedBoard.CrdtState);
+
+        var getRes = await _client.GetAsync($"/api/boards/{board.Id}/crdt");
+        Assert.AreEqual(HttpStatusCode.OK, getRes.StatusCode);
+    }
+
+    [TestMethod]
+    public async Task UpdateCrdtState_Viewer_ReturnsForbidden()
+    {
+        var owner = await RegisterUserAsync("crdt_owner_2", "crdt_owner_2@example.com");
+        var viewer = await RegisterUserAsync("crdt_viewer", "crdt_viewer@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("CRDT Viewer Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(viewer.Email, BoardRole.Viewer)
+        );
+
+        SetAuthToken(viewer.Token);
+        var updateRes = await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/crdt",
+            new UpdateCrdtStateRequest(new byte[] { 9, 8, 7 })
+        );
+        Assert.AreEqual(HttpStatusCode.Forbidden, updateRes.StatusCode);
+    }
 }

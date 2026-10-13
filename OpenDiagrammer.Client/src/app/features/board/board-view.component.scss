@@ -98,6 +98,80 @@
   }
 }
 
+.network-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 12px;
+  user-select: none;
+  white-space: nowrap;
+
+  .status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+
+    &.online {
+      background-color: #2e7d32;
+    }
+  }
+
+  .status-icon {
+    font-size: 0.875rem;
+    width: 0.875rem;
+    height: 0.875rem;
+  }
+
+  &.status-online {
+    color: var(--mat-sys-on-surface-variant);
+    background-color: var(--mat-sys-surface-container-high);
+  }
+
+  &.status-reconnecting {
+    color: #e65100;
+    background-color: #ffe0b2;
+  }
+
+  &.status-offline {
+    color: var(--mat-sys-error);
+    background-color: var(--mat-sys-error-container);
+  }
+}
+
+.presence-avatars-group {
+  display: flex;
+  align-items: center;
+  margin-right: 0.25rem;
+
+  .presence-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+    font-weight: 600;
+    border: 2px solid var(--mat-sys-surface-container);
+    margin-left: -8px;
+    box-shadow: var(--mat-sys-level1);
+    cursor: default;
+    user-select: none;
+
+    &:first-child {
+      margin-left: 0;
+    }
+  }
+}
+
+.active-toggle {
+  color: var(--mat-sys-primary);
+}
+
 .canvas-viewport {
   flex: 1;
   position: relative;

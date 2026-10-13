@@ -52,11 +52,11 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 ## Phase 5: Real-Time Collaboration & CRDTs
 *Enable multi-user collaboration and offline resiliency.*
 > **Architectural Note:** Phase 5 establishes the CRDT data foundation and transactional state synchronization. This must precede Phase 6 (collaborative Rich Text, Think Mode) and Phase 7 (Undo/Redo, Revision History) because multi-user undo managers (`Y.UndoManager`), synchronized timers/visibility, and concurrent text editing (`Y.Text`) rely directly on CRDT primitives to avoid architectural rewrites and concurrency issues.
-- [ ] Integrate CRDT library (e.g., Yjs or Automerge) on Frontend and Backend
-- [ ] Setup SignalR / WebSockets for real-time state synchronization
-- [ ] Implement live cursor tracking and presence indicators
-- [ ] Configure offline fallback using IndexedDB (tied into PWA/CRDT logic)
-- [ ] Add online/offline status indicator and snackbars
+- [x] Integrate CRDT library (e.g., Yjs or Automerge) on Frontend and Backend
+- [x] Setup SignalR / WebSockets for real-time state synchronization
+- [x] Implement live cursor tracking and presence indicators
+- [x] Configure offline fallback using IndexedDB (tied into PWA/CRDT logic)
+- [x] Add online/offline status indicator and snackbars
 
 ## Phase 6: Advanced Node Types & Think Mode
 *Add specific node behaviors and structured collaborative modes.*

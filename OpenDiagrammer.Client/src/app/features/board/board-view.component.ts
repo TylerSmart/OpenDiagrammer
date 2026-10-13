@@ -1,4 +1,13 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -23,8 +32,11 @@ import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeMode, ThemeService } from '../../core/services/theme/theme.service';
 import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
+import { CrdtService, base64ToUint8Array } from '../../core/services/crdt/crdt.service';
+import { BoardRealtimeService } from '../../core/services/realtime/board-realtime.service';
+import { NetworkStatusService } from '../../core/services/network/network-status.service';
 import { CanvasComponent } from './canvas/canvas.component';
-import { CanvasDiagramData } from './canvas/canvas.models';
+import { CanvasDiagramData, CanvasPoint } from './canvas/canvas.models';
 import {
   BoardMembersDialogComponent,
   BoardMembersDialogData,
@@ -71,6 +83,10 @@ export class BoardViewComponent implements OnInit {
   protected readonly authService = inject(AuthService);
   protected readonly themeService = inject(ThemeService);
   protected readonly fullscreenService = inject(FullscreenService);
+  protected readonly crdtService = inject(CrdtService);
+  protected readonly realtimeService = inject(BoardRealtimeService);
+  protected readonly networkStatusService = inject(NetworkStatusService);
+  protected readonly canvasComponent = viewChild(CanvasComponent);
   private readonly dialog = inject(MatDialog);
   private readonly snackBar = inject(MatSnackBar);
   private readonly destroyRef = inject(DestroyRef);
@@ -83,6 +99,13 @@ export class BoardViewComponent implements OnInit {
   protected readonly isBoardEmpty = signal<boolean>(true);
   protected readonly saveStatus = signal<'saved' | 'saving' | 'error'>('saved');
 
+  protected readonly showLiveCursors = signal<boolean>(true);
+  protected readonly activePresences = computed(() => this.realtimeService.presences());
+  protected readonly liveCursorsList = computed(() =>
+    Object.values(this.realtimeService.otherUsersCursors()),
+  );
+  protected readonly networkStatus = computed(() => this.networkStatusService.status());
+
   protected readonly BoardBackgroundType = BoardBackgroundType;
   protected readonly BoardMode = BoardMode;
   protected readonly BoardRole = BoardRole;
@@ -93,6 +116,18 @@ export class BoardViewComponent implements OnInit {
   protected readonly themeLabel = computed(() => THEME_LABELS[this.themeService.mode()]);
 
   constructor() {
+    this.crdtService.localUpdate$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((update) => {
+      void this.realtimeService.sendCrdtUpdate(update);
+    });
+
+    effect(() => {
+      const data = this.crdtService.diagramData();
+      const canvas = this.canvasComponent();
+      if (canvas) {
+        canvas.applyExternalDiagramData(data);
+      }
+    });
+
     this.saveTrigger$
       .pipe(
         debounceTime(500),
@@ -125,7 +160,11 @@ export class BoardViewComponent implements OnInit {
       )
       .subscribe();
 
-    this.destroyRef.onDestroy(() => this.flushPendingSave());
+    this.destroyRef.onDestroy(() => {
+      this.flushPendingSave();
+      void this.realtimeService.stopConnection();
+      this.crdtService.destroy();
+    });
   }
 
   ngOnInit(): void {
@@ -137,26 +176,67 @@ export class BoardViewComponent implements OnInit {
     }
   }
 
+  toggleLiveCursors(): void {
+    this.showLiveCursors.update((v) => !v);
+  }
+
+  handleCursorMove(point: CanvasPoint): void {
+    void this.realtimeService.sendCursor(point.x, point.y);
+  }
+
+  private async initCollaboration(
+    boardId: string,
+    initialData?: CanvasDiagramData | null,
+    crdtState?: string | null,
+  ): Promise<void> {
+    await this.crdtService.initBoard(boardId, initialData, crdtState);
+    const syncInit = await this.realtimeService.startConnection(boardId);
+    if (syncInit?.crdtState) {
+      this.crdtService.applyRemoteUpdate(base64ToUint8Array(syncInit.crdtState));
+    }
+  }
+
   loadBoard(id: string): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
 
     this.boardService.getBoardById(id).subscribe({
       next: (b) => {
+        try {
+          localStorage.setItem(`board_cache_${id}`, JSON.stringify(b));
+        } catch {
+          // Ignore localStorage errors
+        }
         this.board.set(b);
+        let parsed: CanvasDiagramData | null = null;
         if (b.canvasDataJson) {
           try {
-            const parsed = JSON.parse(b.canvasDataJson);
-            this.isBoardEmpty.set(!parsed.shapes || parsed.shapes.length === 0);
+            parsed = JSON.parse(b.canvasDataJson);
+            this.isBoardEmpty.set(!parsed?.shapes || parsed.shapes.length === 0);
           } catch {
             this.isBoardEmpty.set(true);
           }
         } else {
           this.isBoardEmpty.set(true);
         }
+        void this.initCollaboration(id, parsed, b.crdtState);
         this.isLoading.set(false);
       },
       error: (err) => {
+        // Offline fallback: Check local storage cache if network fails
+        const cached = localStorage.getItem(`board_cache_${id}`);
+        if (cached) {
+          try {
+            const cachedBoard: BoardDetailDto = JSON.parse(cached);
+            this.board.set(cachedBoard);
+            void this.initCollaboration(id, null, cachedBoard.crdtState);
+            this.isLoading.set(false);
+            return;
+          } catch {
+            // Ignore parse errors
+          }
+        }
+
         this.isLoading.set(false);
         this.errorMessage.set(
           err?.status === 403
@@ -174,6 +254,7 @@ export class BoardViewComponent implements OnInit {
     if (!current || current.userRole === BoardRole.Viewer) {
       return;
     }
+    this.crdtService.applyLocalDiagramChange(data);
     this.pendingDiagramData = data;
     this.isBoardEmpty.set(data.shapes.length === 0);
     this.saveStatus.set('saving');

@@ -18,6 +18,8 @@
     <PackageReference Include="Scalar.AspNetCore" Version="2.17.2" />
     <PackageReference Include="Serilog.AspNetCore" Version="10.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
+    <PackageReference Include="YDotNet.Native.Linux" Version="0.6.0" />
+    <PackageReference Include="YDotNet.Native.Win32" Version="0.6.0" />
   </ItemGroup>
 
   <ItemGroup>

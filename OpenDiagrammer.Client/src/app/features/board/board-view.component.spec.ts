@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ActivatedRoute, Router } from '@angular/router';
@@ -13,6 +14,9 @@ import { AuthService } from '../../core/services/auth/auth.service';
 import { BoardService } from '../../core/services/board/board.service';
 import { ThemeService } from '../../core/services/theme/theme.service';
 import { FullscreenService } from '../../core/services/fullscreen/fullscreen.service';
+import { CrdtService } from '../../core/services/crdt/crdt.service';
+import { BoardRealtimeService } from '../../core/services/realtime/board-realtime.service';
+import { NetworkStatusService } from '../../core/services/network/network-status.service';
 import { BoardViewComponent } from './board-view.component';
 import { CanvasDiagramData } from './canvas/canvas.models';
 
@@ -89,6 +93,28 @@ describe('BoardViewComponent', () => {
       open: vi.fn(),
     };
 
+    const mockCrdtService = {
+      initBoard: vi.fn().mockResolvedValue(undefined),
+      applyLocalDiagramChange: vi.fn(),
+      applyRemoteUpdate: vi.fn(),
+      localUpdate$: of(),
+      diagramData: signal({ shapes: [], connections: [] }),
+      destroy: vi.fn(),
+    };
+    const mockRealtimeService = {
+      startConnection: vi.fn().mockResolvedValue({ presences: [], crdtState: null }),
+      stopConnection: vi.fn().mockResolvedValue(undefined),
+      sendCrdtUpdate: vi.fn().mockResolvedValue(undefined),
+      sendCursor: vi.fn().mockResolvedValue(undefined),
+      presences: signal([]),
+      otherUsersCursors: signal({}),
+      connectionState: signal('connected'),
+    };
+    const mockNetworkStatusService = {
+      isOnline: signal(true),
+      status: signal('online'),
+    };
+
     await TestBed.configureTestingModule({
       imports: [BoardViewComponent],
       providers: [
@@ -97,6 +123,9 @@ describe('BoardViewComponent', () => {
         { provide: Router, useValue: mockRouter },
         { provide: MatDialog, useValue: mockDialog },
         { provide: MatSnackBar, useValue: mockSnackBar },
+        { provide: CrdtService, useValue: mockCrdtService },
+        { provide: BoardRealtimeService, useValue: mockRealtimeService },
+        { provide: NetworkStatusService, useValue: mockNetworkStatusService },
         {
           provide: ActivatedRoute,
           useValue: {
@@ -309,5 +338,40 @@ describe('BoardViewComponent', () => {
         keepalive: true,
       }),
     );
+  });
+
+  it('should toggle showLiveCursors when toggleLiveCursors is called', () => {
+    expect(component['showLiveCursors']()).toBe(true);
+    component.toggleLiveCursors();
+    expect(component['showLiveCursors']()).toBe(false);
+    component.toggleLiveCursors();
+    expect(component['showLiveCursors']()).toBe(true);
+  });
+
+  it('should forward cursor position to realtimeService on handleCursorMove', () => {
+    const realtimeService = TestBed.inject(BoardRealtimeService) as unknown as {
+      sendCursor: ReturnType<typeof vi.fn>;
+    };
+    component.handleCursorMove({ x: 150, y: 250 });
+    expect(realtimeService.sendCursor).toHaveBeenCalledWith(150, 250);
+  });
+
+  it('should load board from localStorage cache when backend fails', () => {
+    mockBoardService.getBoardById.mockReturnValue(throwError(() => ({ status: 0 })));
+    localStorage.setItem(
+      'board_cache_offline-id',
+      JSON.stringify({
+        ...mockBoardDetail,
+        id: 'offline-id',
+        name: 'Offline Cached Board',
+      }),
+    );
+
+    component.loadBoard('offline-id');
+
+    expect(component['board']()?.name).toBe('Offline Cached Board');
+    expect(component['errorMessage']()).toBeNull();
+
+    localStorage.removeItem('board_cache_offline-id');
   });
 });

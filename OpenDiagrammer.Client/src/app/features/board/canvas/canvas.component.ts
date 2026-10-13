@@ -15,7 +15,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BoardBackgroundType } from '../../../core/models/board.models';
+import { BoardBackgroundType, CanvasCursorDto } from '../../../core/models/board.models';
 import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
 import {
   CANVAS_CONSTANTS,
@@ -96,10 +96,13 @@ export class CanvasComponent {
   readonly backgroundType = input<BoardBackgroundType>(BoardBackgroundType.GridLines);
   readonly initialCanvasData = input<string | null>(null);
   readonly readOnly = input<boolean>(false);
+  readonly liveCursors = input<CanvasCursorDto[]>([]);
+  readonly showLiveCursors = input<boolean>(true);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
   readonly diagramChange = output<CanvasDiagramData>();
+  readonly cursorMove = output<CanvasPoint>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -715,6 +718,24 @@ export class CanvasComponent {
         this.diagramChange.emit(diagramData);
       });
     });
+  }
+
+  public applyExternalDiagramData(diagramData: CanvasDiagramData): void {
+    const currentJson = JSON.stringify({
+      shapes: this.shapes(),
+      connections: this.connections(),
+    });
+    const incomingJson = JSON.stringify({
+      shapes: diagramData.shapes,
+      connections: diagramData.connections,
+    });
+    if (currentJson === incomingJson) {
+      return;
+    }
+    this.lastEmittedJson = incomingJson;
+    this.lastLoadedDataJson = JSON.stringify(diagramData);
+    this.shapes.set(diagramData.shapes);
+    this.connections.set(diagramData.connections);
   }
 
   loadCanvasData(dataJson: string | null): void {
@@ -1998,7 +2019,16 @@ export class CanvasComponent {
     }
   }
 
+  private lastCursorEmitTime = 0;
+
   handlePointerMove(event: PointerEvent): void {
+    const canvasPt = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    const now = performance.now();
+    if (now - this.lastCursorEmitTime > 40) {
+      this.lastCursorEmitTime = now;
+      this.cursorMove.emit(canvasPt);
+    }
+
     if (this.activePointers.has(event.pointerId)) {
       this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     }

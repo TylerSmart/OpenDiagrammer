@@ -8,4 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\OpenDiagrammer.Core\OpenDiagrammer.Core.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="YDotNet.Native.Win32" Version="0.6.0" />
+  </ItemGroup>
 </Project>

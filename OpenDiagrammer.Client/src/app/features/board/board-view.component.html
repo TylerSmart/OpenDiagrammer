@@ -43,6 +43,35 @@
             </span>
           }
 
+          <!-- Network Connection Status Badge -->
+          <span
+            class="network-status-badge"
+            [class]="'status-' + networkStatus()"
+            [attr.aria-label]="'Network status: ' + networkStatus()"
+            [matTooltip]="
+              networkStatus() === 'online'
+                ? 'Connected online'
+                : networkStatus() === 'reconnecting'
+                  ? 'Reconnecting to collaboration server...'
+                  : 'Working offline. Changes saved locally.'
+            "
+          >
+            @switch (networkStatus()) {
+              @case ('online') {
+                <span class="status-dot online"></span>
+                <span class="status-text">Online</span>
+              }
+              @case ('reconnecting') {
+                <mat-spinner diameter="10"></mat-spinner>
+                <span class="status-text">Reconnecting</span>
+              }
+              @case ('offline') {
+                <mat-icon class="status-icon">cloud_off</mat-icon>
+                <span class="status-text">Offline</span>
+              }
+            }
+          </span>
+
           @if (currentBoard.userRole !== BoardRole.Viewer) {
             <span
               class="save-status-indicator"
@@ -69,6 +98,33 @@
       </div>
 
       <div class="header-right">
+        <!-- Active Collaborators Presence Avatars -->
+        @if (activePresences().length > 0) {
+          <div class="presence-avatars-group" aria-label="Active collaborators">
+            @for (user of activePresences(); track user.userId) {
+              <div
+                class="presence-avatar"
+                [style.backgroundColor]="user.color"
+                [matTooltip]="user.username + ' (' + getRoleName(user.role) + ')'"
+                [attr.aria-label]="user.username"
+              >
+                {{ user.username.substring(0, 1).toUpperCase() }}
+              </div>
+            }
+          </div>
+        }
+
+        <!-- Toggle Live Cursors button -->
+        <button
+          mat-icon-button
+          (click)="toggleLiveCursors()"
+          [attr.aria-label]="showLiveCursors() ? 'Hide other cursors' : 'Show other cursors'"
+          [matTooltip]="showLiveCursors() ? 'Hide live cursors' : 'Show live cursors'"
+          [class.active-toggle]="showLiveCursors()"
+        >
+          <mat-icon>{{ showLiveCursors() ? 'near_me' : 'near_me_disabled' }}</mat-icon>
+        </button>
+
         <!-- Members button -->
         <button
           mat-button
@@ -133,9 +189,13 @@
     <!-- Canvas Viewport -->
     <main class="canvas-viewport">
       <app-canvas
+        #canvasComponent
         [backgroundType]="currentBoard.backgroundType"
         [initialCanvasData]="currentBoard.canvasDataJson"
         [readOnly]="currentBoard.userRole === BoardRole.Viewer"
+        [liveCursors]="liveCursorsList()"
+        [showLiveCursors]="showLiveCursors()"
+        (cursorMove)="handleCursorMove($event)"
         (diagramChange)="handleDiagramChange($event)"
       >
         <!-- Canvas Content (Nodes & Connections in future Phase 4 tasks) -->

@@ -43,7 +43,8 @@ public sealed record BoardDetailDto(
     string? CanvasDataJson,
     DateTimeOffset CreatedAt,
     DateTimeOffset ModifiedAt,
-    IReadOnlyList<BoardMemberDto> Members
+    IReadOnlyList<BoardMemberDto> Members,
+    byte[]? CrdtState = null
 );
 
 public sealed record CreateBoardRequest(
@@ -66,6 +67,25 @@ public sealed record UpdateBoardRequest(
 );
 
 public sealed record UpdateCanvasDataRequest(string? CanvasDataJson);
+
+public sealed record UpdateCrdtStateRequest(byte[] CrdtState);
+
+public sealed record UserPresenceDto(
+    Guid UserId,
+    string Username,
+    string Color,
+    BoardRole Role,
+    bool IsTyping = false,
+    string? ActiveSelectionId = null
+);
+
+public sealed record CanvasCursorDto(
+    Guid UserId,
+    string Username,
+    string Color,
+    double X,
+    double Y
+);
 
 public sealed record TransferOwnershipRequest([Required] Guid NewOwnerId);
 

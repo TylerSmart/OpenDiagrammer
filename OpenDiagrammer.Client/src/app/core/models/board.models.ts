@@ -58,6 +58,31 @@ export interface BoardDetailDto {
   createdAt: string;
   modifiedAt: string;
   members: BoardMemberDto[];
+  crdtState?: string | null;
+}
+
+export interface UserPresenceDto {
+  userId: string;
+  username: string;
+  color: string;
+  role: BoardRole;
+  isTyping?: boolean;
+  activeSelectionId?: string | null;
+}
+
+export interface CanvasCursorDto {
+  userId: string;
+  username: string;
+  color: string;
+  x: number;
+  y: number;
+}
+
+export interface BoardSyncInitDto {
+  boardId: string;
+  userRole: BoardRole;
+  crdtState?: string | null;
+  presences: UserPresenceDto[];
 }
 
 export interface CreateBoardRequest {
