@@ -100,7 +100,8 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
-            Members: memberDtos
+            Members: memberDtos,
+            CrdtState: board.CrdtState
         );
     }
 
@@ -162,7 +163,8 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
-            Members: [memberDto]
+            Members: [memberDto],
+            CrdtState: board.CrdtState
         );
     }
 
@@ -247,7 +249,8 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
-            Members: memberDtos
+            Members: memberDtos,
+            CrdtState: board.CrdtState
         );
     }
 
@@ -313,8 +316,101 @@ public sealed class BoardService(OpenDiagrammerDbContext dbContext) : IBoardServ
             CanvasDataJson: board.CanvasDataJson,
             CreatedAt: board.CreatedAt,
             ModifiedAt: board.ModifiedAt,
-            Members: memberDtos
+            Members: memberDtos,
+            CrdtState: board.CrdtState
         );
+    }
+
+    public async Task<BoardDetailDto?> UpdateCrdtStateAsync(
+        Guid userId,
+        Guid boardId,
+        UpdateCrdtStateRequest request,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.Include(b => b.Owner)
+            .Include(b => b.Members)
+                .ThenInclude(m => m.User)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException("You are not a member of this board.");
+        }
+
+        var userRole = board.OwnerId == userId ? BoardRole.Owner : member!.Role;
+
+        if (!userRole.CanEditBoard())
+        {
+            throw new ForbiddenException("You do not have permission to edit this board.");
+        }
+
+        board.CrdtState = request.CrdtState;
+
+        await dbContext.SaveChangesAsync(cancellationToken);
+
+        var memberDtos = board
+            .Members.Select(m => new BoardMemberDto(
+                Id: m.Id,
+                BoardId: m.BoardId,
+                UserId: m.UserId,
+                Username: m.User.Username,
+                Email: m.User.Email,
+                Role: m.Role,
+                CreatedAt: m.CreatedAt
+            ))
+            .ToList();
+
+        return new BoardDetailDto(
+            Id: board.Id,
+            Name: board.Name,
+            Description: board.Description,
+            OwnerId: board.OwnerId,
+            OwnerUsername: board.Owner.Username,
+            UserRole: userRole,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: board.Mode,
+            ThinkModeConfigJson: board.ThinkModeConfigJson,
+            CanvasDataJson: board.CanvasDataJson,
+            CreatedAt: board.CreatedAt,
+            ModifiedAt: board.ModifiedAt,
+            Members: memberDtos,
+            CrdtState: board.CrdtState
+        );
+    }
+
+    public async Task<byte[]?> GetCrdtStateAsync(
+        Guid userId,
+        Guid boardId,
+        CancellationToken cancellationToken = default
+    )
+    {
+        var board = await dbContext
+            .Boards.AsNoTracking()
+            .Include(b => b.Members)
+            .FirstOrDefaultAsync(b => b.Id == boardId, cancellationToken);
+
+        if (board is null)
+        {
+            return null;
+        }
+
+        var member = board.Members.FirstOrDefault(m => m.UserId == userId);
+        if (board.OwnerId != userId && member is null)
+        {
+            throw new ForbiddenException("You do not have permission to view this board.");
+        }
+
+        return board.CrdtState;
     }
 
     public async Task<bool> DeleteBoardAsync(

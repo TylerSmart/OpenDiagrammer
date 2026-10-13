@@ -10,6 +10,7 @@ public static class CoreServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         services.AddSingleton<IPasswordHasher, PasswordHasher>();
+        services.AddSingleton<Boards.ICrdtMergeService, Boards.YDotNetCrdtMergeService>();
 
         return services;
     }

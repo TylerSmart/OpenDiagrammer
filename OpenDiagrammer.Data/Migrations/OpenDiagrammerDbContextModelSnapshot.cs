@@ -43,6 +43,9 @@ namespace OpenDiagrammer.Data.Migrations
                     b.Property<string>("CanvasDataJson")
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<byte[]>("CrdtState")
+                        .HasColumnType("varbinary(max)");
+
                     b.Property<DateTimeOffset>("CreatedAt")
                         .HasColumnType("datetimeoffset");
 

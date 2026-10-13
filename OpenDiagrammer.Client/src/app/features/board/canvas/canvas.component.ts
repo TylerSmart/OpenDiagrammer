@@ -15,7 +15,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BoardBackgroundType } from '../../../core/models/board.models';
+import { BoardBackgroundType, CanvasCursorDto } from '../../../core/models/board.models';
 import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
 import {
   CANVAS_CONSTANTS,
@@ -96,10 +96,13 @@ export class CanvasComponent {
   readonly backgroundType = input<BoardBackgroundType>(BoardBackgroundType.GridLines);
   readonly initialCanvasData = input<string | null>(null);
   readonly readOnly = input<boolean>(false);
+  readonly liveCursors = input<CanvasCursorDto[]>([]);
+  readonly showLiveCursors = input<boolean>(true);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
   readonly diagramChange = output<CanvasDiagramData>();
+  readonly cursorMove = output<CanvasPoint>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -672,6 +675,65 @@ export class CanvasComponent {
   private lastLoadedDataJson: string | null | undefined = undefined;
   private lastEmittedJson: string | null = null;
   private hasLoadedInitialData = false;
+  private isApplyingExternalData = false;
+  private lastDragEmitTime = 0;
+  private dragEmitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private isActivelyDragging(): boolean {
+    return (
+      this.isMovingShapes ||
+      this.isResizing ||
+      this.isDraggingSegment ||
+      this.isDraggingWaypoint ||
+      this.draggingEndpoint() !== null
+    );
+  }
+
+  private emitDiagramChange(): void {
+    if (!this.hasLoadedInitialData || this.readOnly()) {
+      return;
+    }
+    const shapes = this.shapes();
+    const connections = this.connections();
+    const diagramData: CanvasDiagramData = {
+      shapes,
+      connections,
+      zoom: this.zoom(),
+      panX: this.panX(),
+      panY: this.panY(),
+    };
+    this.lastEmittedJson = JSON.stringify({ shapes, connections });
+    this.lastLoadedDataJson = JSON.stringify(diagramData);
+    this.diagramChange.emit(diagramData);
+  }
+
+  private emitThrottledDragDiagramChange(): void {
+    const now = performance.now();
+    if (this.dragEmitTimer) {
+      clearTimeout(this.dragEmitTimer);
+      this.dragEmitTimer = null;
+    }
+
+    if (now - this.lastDragEmitTime > 35) {
+      this.lastDragEmitTime = now;
+      this.emitDiagramChange();
+    } else {
+      this.dragEmitTimer = setTimeout(() => {
+        this.dragEmitTimer = null;
+        this.lastDragEmitTime = performance.now();
+        this.emitDiagramChange();
+      }, 40);
+    }
+  }
+
+  private flushDragDiagramChange(): void {
+    if (this.dragEmitTimer) {
+      clearTimeout(this.dragEmitTimer);
+      this.dragEmitTimer = null;
+    }
+    this.lastDragEmitTime = performance.now();
+    this.emitDiagramChange();
+  }
 
   constructor() {
     effect(() => {
@@ -699,6 +761,13 @@ export class CanvasComponent {
         return;
       }
       untracked(() => {
+        if (this.isApplyingExternalData) {
+          this.isApplyingExternalData = false;
+          return;
+        }
+        if (this.isActivelyDragging()) {
+          return;
+        }
         const currentJson = JSON.stringify({ shapes, connections });
         if (currentJson === this.lastEmittedJson) {
           return;
@@ -715,6 +784,12 @@ export class CanvasComponent {
         this.diagramChange.emit(diagramData);
       });
     });
+  }
+
+  public applyExternalDiagramData(diagramData: CanvasDiagramData): void {
+    this.isApplyingExternalData = true;
+    this.shapes.set(diagramData.shapes);
+    this.connections.set(diagramData.connections);
   }
 
   loadCanvasData(dataJson: string | null): void {
@@ -965,6 +1040,11 @@ export class CanvasComponent {
     return this.selectedShapeIds().has(id);
   }
 
+  // Tool dragging from dock state
+  readonly draggingTool = signal<ShapeType | null>(null);
+  private toolDragStartPos: CanvasPoint | null = null;
+  private hasToolDragStarted = false;
+
   setActiveTool(tool: ActiveTool): void {
     if (this.readOnly() && tool !== 'select') {
       return;
@@ -973,7 +1053,84 @@ export class CanvasComponent {
       this.inProgressConnection.set(null);
       this.connectionStartScreenPos = null;
     }
+    // If user clicks an already-active shape creation tool, directly insert one into center of viewport
+    if (tool !== 'select' && tool !== 'connection' && this.activeTool() === tool) {
+      this.createShapeAtCenter(tool as ShapeType);
+      return;
+    }
     this.activeTool.set(tool);
+  }
+
+  createShapeAtCenter(type: ShapeType = 'rectangle'): CanvasShape {
+    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+    const centerX = rect.width > 0 ? rect.left + rect.width / 2 : 400;
+    const centerY = rect.height > 0 ? rect.top + rect.height / 2 : 300;
+    const centerWorld = this.screenToWorld({ x: centerX, y: centerY });
+    return this.createShape(type, centerWorld);
+  }
+
+  handleToolPointerDown(event: PointerEvent, tool: ShapeType): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.toolDragStartPos = { x: event.clientX, y: event.clientY };
+    this.hasToolDragStarted = false;
+    this.draggingTool.set(tool);
+    try {
+      (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  handleToolPointerMove(event: PointerEvent): void {
+    const tool = this.draggingTool();
+    if (!tool || !this.toolDragStartPos) {
+      return;
+    }
+    const dist = Math.hypot(
+      event.clientX - this.toolDragStartPos.x,
+      event.clientY - this.toolDragStartPos.y,
+    );
+    if (dist > 6) {
+      this.hasToolDragStarted = true;
+    }
+  }
+
+  handleToolPointerUp(event: PointerEvent): void {
+    const tool = this.draggingTool();
+    if (tool && this.hasToolDragStarted) {
+      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      this.createShape(tool, worldPoint);
+      this.setActiveTool('select');
+    }
+    this.draggingTool.set(null);
+    this.toolDragStartPos = null;
+    this.hasToolDragStarted = false;
+  }
+
+  handleDoubleClick(event: MouseEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (
+      !target ||
+      target.closest('.canvas-tools-dock') ||
+      target.closest('.canvas-controls-dock') ||
+      target.closest('app-canvas-shape') ||
+      target.closest('.canvas-connections-layer') ||
+      target.closest('.canvas-connection-handles-layer') ||
+      target.closest('.connection-group') ||
+      target.closest('.connection-text-editor') ||
+      target.closest('.selection-toolbar-dock') ||
+      target.closest('.connection-toolbar-dock') ||
+      target.closest('.welcome-card')
+    ) {
+      return;
+    }
+    const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    this.createShape('rectangle', worldPoint);
   }
 
   clearSelection(): void {
@@ -1998,7 +2155,16 @@ export class CanvasComponent {
     }
   }
 
+  private lastCursorEmitTime = 0;
+
   handlePointerMove(event: PointerEvent): void {
+    const canvasPt = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    const now = performance.now();
+    if (now - this.lastCursorEmitTime > 40) {
+      this.lastCursorEmitTime = now;
+      this.cursorMove.emit(canvasPt);
+    }
+
     if (this.activePointers.has(event.pointerId)) {
       this.activePointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
     }
@@ -2174,6 +2340,7 @@ export class CanvasComponent {
           // Extract inner points as waypoints (exclude start and end endpoints)
           const newWaypoints = pts.slice(1, -1);
           this.updateConnection(conn.id, { waypoints: newWaypoints });
+          this.emitThrottledDragDiagramChange();
         }
       }
       return;
@@ -2189,6 +2356,7 @@ export class CanvasComponent {
           y: Math.round(currentWorld.y),
         };
         this.updateConnection(conn.id, { waypoints: updatedWaypoints });
+        this.emitThrottledDragDiagramChange();
       }
       return;
     }
@@ -2437,6 +2605,7 @@ export class CanvasComponent {
           }),
         );
       }
+      this.emitThrottledDragDiagramChange();
       return;
     }
 
@@ -2450,6 +2619,7 @@ export class CanvasComponent {
       const keep1to1 = event.ctrlKey || event.metaKey;
       const shouldSnap = !event.altKey;
       this.applyResize(currentWorld, event.shiftKey, keep1to1, shouldSnap);
+      this.emitThrottledDragDiagramChange();
       return;
     }
 
@@ -2472,6 +2642,9 @@ export class CanvasComponent {
   }
 
   handlePointerUp(event: PointerEvent): void {
+    const wasDraggingInteraction =
+      this.isMovingShapes || this.isResizing || this.isDraggingSegment || this.isDraggingWaypoint;
+
     this.activePointers.delete(event.pointerId);
 
     if (this.activePointers.size < 2) {
@@ -2614,6 +2787,10 @@ export class CanvasComponent {
       this.resizeStartPoint = null;
       this.resizeInitialShape = null;
       this.alignmentGuides.set([]);
+    }
+
+    if (wasDraggingInteraction) {
+      this.flushDragDiagramChange();
     }
 
     if (this.marqueeStart) {

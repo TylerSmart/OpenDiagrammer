@@ -26,6 +26,27 @@ builder.Services.AddProblemDetails();
 
 builder.Services.AddControllers();
 
+builder.Services.AddSignalR();
+
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+    {
+        policy
+            .SetIsOriginAllowed(origin =>
+            {
+                if (Uri.TryCreate(origin, UriKind.Absolute, out var uri))
+                {
+                    return uri.IsLoopback;
+                }
+                return false;
+            })
+            .AllowAnyHeader()
+            .AllowAnyMethod()
+            .AllowCredentials();
+    });
+});
+
 builder.Services.AddOpenApi(
     "v1",
     options =>
@@ -234,10 +255,14 @@ app.MapScalarApiReference(
     )
     .AllowAnonymous();
 
+app.UseCors();
 app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGroup("/api").MapControllers();
+
+app.MapHub<OpenDiagrammer.API.Hubs.BoardHub>("/hubs/board");
+app.MapHub<OpenDiagrammer.API.Hubs.BoardHub>("/api/hubs/board");
 
 if (serveSpa)
 {

@@ -33,6 +33,19 @@ public interface IBoardService
         CancellationToken cancellationToken = default
     );
 
+    Task<BoardDetailDto?> UpdateCrdtStateAsync(
+        Guid userId,
+        Guid boardId,
+        UpdateCrdtStateRequest request,
+        CancellationToken cancellationToken = default
+    );
+
+    Task<byte[]?> GetCrdtStateAsync(
+        Guid userId,
+        Guid boardId,
+        CancellationToken cancellationToken = default
+    );
+
     Task<bool> DeleteBoardAsync(
         Guid userId,
         Guid boardId,

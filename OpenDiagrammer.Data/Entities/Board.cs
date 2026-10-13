@@ -26,6 +26,8 @@ public sealed class Board : IAuditable
 
     public string? CanvasDataJson { get; set; }
 
+    public byte[]? CrdtState { get; set; }
+
     public ICollection<BoardMember> Members { get; set; } = new List<BoardMember>();
 
     public DateTimeOffset CreatedAt { get; set; }

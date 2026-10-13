@@ -3,6 +3,14 @@
     "target": "http://localhost:5041",
     "secure": false,
     "changeOrigin": true,
+    "ws": true,
+    "logLevel": "silent"
+  },
+  "/hubs": {
+    "target": "http://localhost:5041",
+    "secure": false,
+    "changeOrigin": true,
+    "ws": true,
     "logLevel": "silent"
   },
   "/HealthCheck.svc": {

@@ -3,6 +3,7 @@
   [class.is-panning]="isPanning()"
   [class.is-space-pressed]="isSpacePressed"
   [class.is-creation-tool]="activeTool() !== 'select'"
+  (dblclick)="handleDoubleClick($event)"
 >
   <!-- Infinite Grid/Dot background layer -->
   <div
@@ -758,6 +759,29 @@
         </div>
       }
     }
+    <!-- Real-Time Collaborative Cursors Layer -->
+    @if (showLiveCursors() && liveCursors().length > 0) {
+      <div class="live-cursors-layer" aria-hidden="true">
+        @for (cursor of liveCursors(); track cursor.userId) {
+          <div
+            class="live-cursor"
+            [style.transform]="'translate(' + cursor.x + 'px, ' + cursor.y + 'px)'"
+          >
+            <svg class="cursor-pointer-icon" viewBox="0 0 16 16" width="16" height="16">
+              <path
+                d="M 0 0 L 0 14 L 4 10 L 8 14 L 10 12 L 6 8 L 12 8 Z"
+                [attr.fill]="cursor.color"
+                stroke="#ffffff"
+                stroke-width="1"
+              />
+            </svg>
+            <span class="cursor-label" [style.backgroundColor]="cursor.color">
+              {{ cursor.username }}
+            </span>
+          </div>
+        }
+      </div>
+    }
   </div>
 
   <!-- Top Shape Creation Tool Palette Dock -->
@@ -799,8 +823,11 @@
         class="tool-btn"
         [class.active]="activeTool() === 'rectangle'"
         (click)="setActiveTool('rectangle')"
+        (pointerdown)="handleToolPointerDown($event, 'rectangle')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
         aria-label="Add Rectangle"
-        matTooltip="Rectangle (R)"
+        matTooltip="Rectangle (R) - Click to stamp, or drag onto canvas"
       >
         <mat-icon>crop_square</mat-icon>
       </button>
@@ -810,8 +837,11 @@
         class="tool-btn"
         [class.active]="activeTool() === 'rounded-rectangle'"
         (click)="setActiveTool('rounded-rectangle')"
+        (pointerdown)="handleToolPointerDown($event, 'rounded-rectangle')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
         aria-label="Add Rounded Rectangle"
-        matTooltip="Rounded Rectangle"
+        matTooltip="Rounded Rectangle - Click to stamp, or drag onto canvas"
       >
         <mat-icon>square</mat-icon>
       </button>
@@ -821,8 +851,11 @@
         class="tool-btn"
         [class.active]="activeTool() === 'ellipse'"
         (click)="setActiveTool('ellipse')"
+        (pointerdown)="handleToolPointerDown($event, 'ellipse')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
         aria-label="Add Ellipse/Circle"
-        matTooltip="Circle / Ellipse (O)"
+        matTooltip="Circle / Ellipse (O) - Click to stamp, or drag onto canvas"
       >
         <mat-icon>panorama_fish_eye</mat-icon>
       </button>
@@ -832,8 +865,11 @@
         class="tool-btn"
         [class.active]="activeTool() === 'diamond'"
         (click)="setActiveTool('diamond')"
+        (pointerdown)="handleToolPointerDown($event, 'diamond')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
         aria-label="Add Diamond"
-        matTooltip="Diamond / Decision (D)"
+        matTooltip="Diamond / Decision (D) - Click to stamp, or drag onto canvas"
       >
         <mat-icon>change_history</mat-icon>
       </button>

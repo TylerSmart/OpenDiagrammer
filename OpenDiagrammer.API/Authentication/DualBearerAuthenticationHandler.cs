@@ -26,18 +26,23 @@ public sealed class DualBearerAuthenticationHandler(
 
     protected override async Task<AuthenticateResult> HandleAuthenticateAsync()
     {
+        string? token = null;
         string? authorizationHeader = Request.Headers[HeaderNames.Authorization];
-        if (string.IsNullOrWhiteSpace(authorizationHeader))
+        if (
+            !string.IsNullOrWhiteSpace(authorizationHeader)
+            && authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+        )
         {
-            return AuthenticateResult.NoResult();
+            token = authorizationHeader["Bearer ".Length..].Trim();
+        }
+        else if (
+            Request.Query.TryGetValue("access_token", out var accessTokenFromQuery)
+            && !string.IsNullOrWhiteSpace(accessTokenFromQuery)
+        )
+        {
+            token = accessTokenFromQuery.ToString().Trim();
         }
 
-        if (!authorizationHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-        {
-            return AuthenticateResult.NoResult();
-        }
-
-        var token = authorizationHeader["Bearer ".Length..].Trim();
         if (string.IsNullOrWhiteSpace(token))
         {
             return AuthenticateResult.NoResult();
