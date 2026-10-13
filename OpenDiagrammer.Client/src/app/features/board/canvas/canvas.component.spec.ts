@@ -405,6 +405,17 @@ describe('CanvasComponent', () => {
     expect(component.shapes().length).toBe(countBefore + 1);
     const lastShape = component.shapes()[component.shapes().length - 1];
     expect(lastShape.type).toBe('diamond');
+    expect(component.activeTool()).toBe('select');
+
+    // Emulating the browser's subsequent synthetic click event on the dragged tool button
+    component.handleToolButtonClick('diamond');
+    expect(component.activeTool()).toBe('select');
+  });
+
+  it('should switch active tool when tool button is clicked without dragging', () => {
+    component.setActiveTool('select');
+    component.handleToolButtonClick('rectangle');
+    expect(component.activeTool()).toBe('rectangle');
   });
 
   it('should select multiple shapes and clear selection', () => {
@@ -2950,6 +2961,26 @@ describe('CanvasComponent', () => {
       expect(shape.fillColor).toBe('transparent');
       expect(shape.strokeColor).toBe('transparent');
       expect(shape.strokeWidth).toBe(0);
+    });
+
+    it('should indicate catalog tool is active and highlight catalog trigger when a catalog shape is selected', () => {
+      expect(component.isCatalogToolActive()).toBe(false);
+      expect(component.activeCatalogItem()).toBeUndefined();
+
+      component.setActiveTool('uml-class');
+      fixture.detectChanges();
+      expect(component.isCatalogToolActive()).toBe(true);
+      expect(component.activeCatalogItem()?.type).toBe('uml-class');
+
+      const catalogBtn: HTMLButtonElement | null = fixture.nativeElement.querySelector(
+        '.canvas-tools-dock button[aria-label="Shapes Catalog"]',
+      );
+      expect(catalogBtn?.classList.contains('active')).toBe(true);
+
+      component.setActiveTool('select');
+      fixture.detectChanges();
+      expect(component.isCatalogToolActive()).toBe(false);
+      expect(catalogBtn?.classList.contains('active')).toBe(false);
     });
   });
 

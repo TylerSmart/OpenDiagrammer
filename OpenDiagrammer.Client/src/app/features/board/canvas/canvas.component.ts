@@ -47,6 +47,7 @@ import {
   CanvasColorPreset,
   CanvasShape,
   CANVAS_COLOR_PRESETS,
+  CatalogShapeItem,
   ResizeHandlePosition,
   SHAPE_CONSTANTS,
   ShapeType,
@@ -1690,8 +1691,41 @@ export class CanvasComponent {
   readonly draggingTool = signal<ShapeType | null>(null);
   private toolDragStartPos: CanvasPoint | null = null;
   private hasToolDragStarted = false;
+  private suppressNextToolClick = false;
+
+  readonly isCatalogToolActive = computed<boolean>(() => {
+    const tool = this.activeTool();
+    const mainDockTools: ActiveTool[] = [
+      'select',
+      'connection',
+      'rectangle',
+      'rounded-rectangle',
+      'ellipse',
+      'diamond',
+      'sticky-note',
+      'frame',
+    ];
+    return !mainDockTools.includes(tool);
+  });
+
+  readonly activeCatalogItem = computed<CatalogShapeItem | undefined>(() => {
+    const tool = this.activeTool();
+    return this.shapeCatalog.find((item) => item.type === tool);
+  });
+
+  handleToolButtonClick(tool: ActiveTool): void {
+    if (this.suppressNextToolClick) {
+      this.suppressNextToolClick = false;
+      return;
+    }
+    this.setActiveTool(tool);
+  }
 
   setActiveTool(tool: ActiveTool): void {
+    if (this.suppressNextToolClick) {
+      this.suppressNextToolClick = false;
+      return;
+    }
     if (this.readOnly() && tool !== 'select') {
       if (!this.thinkMode() || !this.canViewerParticipate() || tool !== 'sticky-note') {
         return;
@@ -1723,6 +1757,7 @@ export class CanvasComponent {
     if (this.readOnly()) {
       return;
     }
+    this.suppressNextToolClick = false;
     this.toolDragStartPos = { x: event.clientX, y: event.clientY };
     this.hasToolDragStarted = false;
     this.draggingTool.set(tool);
@@ -1750,10 +1785,14 @@ export class CanvasComponent {
   handleToolPointerUp(event: PointerEvent): void {
     const tool = this.draggingTool();
     if (tool && this.hasToolDragStarted) {
+      this.suppressNextToolClick = true;
       const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
       this.createShape(tool, worldPoint);
-      this.setActiveTool('select');
+      this.activeTool.set('select');
       this.emitDiagramChange();
+      setTimeout(() => {
+        this.suppressNextToolClick = false;
+      }, 100);
     }
     this.draggingTool.set(null);
     this.toolDragStartPos = null;

@@ -1167,7 +1167,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'rectangle'"
-        (click)="setActiveTool('rectangle')"
+        (click)="handleToolButtonClick('rectangle')"
         (pointerdown)="handleToolPointerDown($event, 'rectangle')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1181,7 +1181,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'rounded-rectangle'"
-        (click)="setActiveTool('rounded-rectangle')"
+        (click)="handleToolButtonClick('rounded-rectangle')"
         (pointerdown)="handleToolPointerDown($event, 'rounded-rectangle')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1195,7 +1195,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'ellipse'"
-        (click)="setActiveTool('ellipse')"
+        (click)="handleToolButtonClick('ellipse')"
         (pointerdown)="handleToolPointerDown($event, 'ellipse')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1209,7 +1209,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'diamond'"
-        (click)="setActiveTool('diamond')"
+        (click)="handleToolButtonClick('diamond')"
         (pointerdown)="handleToolPointerDown($event, 'diamond')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1223,7 +1223,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'sticky-note'"
-        (click)="setActiveTool('sticky-note')"
+        (click)="handleToolButtonClick('sticky-note')"
         (pointerdown)="handleToolPointerDown($event, 'sticky-note')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1237,7 +1237,7 @@
         mat-icon-button
         class="tool-btn"
         [class.active]="activeTool() === 'frame'"
-        (click)="setActiveTool('frame')"
+        (click)="handleToolButtonClick('frame')"
         (pointerdown)="handleToolPointerDown($event, 'frame')"
         (pointermove)="handleToolPointerMove($event)"
         (pointerup)="handleToolPointerUp($event)"
@@ -1253,9 +1253,14 @@
       <button
         mat-icon-button
         class="tool-btn"
+        [class.active]="isCatalogToolActive()"
         [matMenuTriggerFor]="shapesCatalogMenu"
         aria-label="Shapes Catalog"
-        matTooltip="Shapes Catalog (UML, Flowcharts, Shapes)"
+        [matTooltip]="
+          activeCatalogItem()
+            ? 'Catalog: ' + activeCatalogItem()!.label + ' active'
+            : 'Shapes Catalog (UML, Flowcharts, Shapes)'
+        "
       >
         <mat-icon>category</mat-icon>
       </button>
