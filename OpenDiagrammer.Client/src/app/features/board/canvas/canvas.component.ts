@@ -108,11 +108,13 @@ export interface ReconnectingPreview {
     '(pointercancel)': 'handlePointerUp($event)',
     '(dblclick)': 'handleDoubleClick($event)',
     '(contextmenu)': 'handleContextMenu($event)',
+    '(paste)': 'handlePaste($event)',
     '(blur)': 'handleBlur()',
   },
 })
 export class CanvasComponent {
   // Inputs for board settings and canvas persistence
+  readonly boardId = input<string | null>(null);
   readonly backgroundType = input<BoardBackgroundType>(BoardBackgroundType.GridLines);
   readonly initialCanvasData = input<string | null>(null);
   readonly readOnly = input<boolean>(false);
@@ -2282,15 +2284,27 @@ export class CanvasComponent {
     );
   }
 
-  // Copy, Cut, Paste, and Duplicate API (Within the Board)
+  // Copy, Cut, Paste, and Duplicate API (Within and Across Boards)
   private clipboard: CanvasClipboardData | null = null;
   private pasteOffsetCount = 0;
 
   hasClipboard(): boolean {
-    return (
+    if (
       this.clipboard !== null &&
       (this.clipboard.shapes.length > 0 || this.clipboard.connections.length > 0)
-    );
+    ) {
+      return true;
+    }
+    try {
+      const stored = localStorage.getItem('opendiagrammer_clipboard');
+      if (stored) {
+        const parsed = JSON.parse(stored) as CanvasClipboardData;
+        return Boolean(parsed && (parsed.shapes?.length > 0 || parsed.connections?.length > 0));
+      }
+    } catch {
+      // Ignore storage errors
+    }
+    return false;
   }
 
   copy(): boolean {
@@ -2318,15 +2332,51 @@ export class CanvasComponent {
       return false;
     });
 
-    this.clipboard = {
+    const clipboardData: CanvasClipboardData = {
+      sourceBoardId: this.boardId() ?? undefined,
+      copiedAt: Date.now(),
       shapes: shapesToCopy.map((s) => ({ ...s })),
       connections: connsToCopy.map((c) => ({
         ...c,
         waypoints: c.waypoints ? c.waypoints.map((p) => ({ ...p })) : undefined,
       })),
     };
+
+    this.clipboard = clipboardData;
     this.pasteOffsetCount = 0;
+
+    // Persist to cross-board storage (localStorage)
+    try {
+      localStorage.setItem('opendiagrammer_clipboard', JSON.stringify(clipboardData));
+    } catch {
+      // Ignore quota errors
+    }
+
+    // System clipboard integration
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+        navigator.clipboard
+          .writeText(
+            JSON.stringify({
+              type: 'opendiagrammer/clipboard',
+              version: 1,
+              data: clipboardData,
+            }),
+          )
+          .catch(() => {
+            // Clipboard permission rejected or unavailable
+            return;
+          });
+      }
+    } catch {
+      // Ignore clipboard permission errors
+    }
+
     return true;
+  }
+
+  clearClipboard(): void {
+    this.clipboard = null;
   }
 
   cut(): boolean {
@@ -2335,6 +2385,43 @@ export class CanvasComponent {
       this.deleteSelectedShapes();
     }
     return copied;
+  }
+
+  handlePaste(event: ClipboardEvent): void {
+    const activeEl = document.activeElement;
+    if (
+      activeEl &&
+      (activeEl.tagName === 'INPUT' ||
+        activeEl.tagName === 'TEXTAREA' ||
+        activeEl.getAttribute('contenteditable') === 'true')
+    ) {
+      return;
+    }
+
+    const text = event.clipboardData?.getData('text/plain');
+    if (text) {
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed && parsed.type === 'opendiagrammer/clipboard' && parsed.data) {
+          this.clipboard = parsed.data;
+          try {
+            localStorage.setItem('opendiagrammer_clipboard', JSON.stringify(parsed.data));
+          } catch {
+            // Ignore
+          }
+          event.preventDefault();
+          this.paste();
+          return;
+        }
+      } catch {
+        // Not serialized diagram data
+      }
+    }
+
+    if (this.hasClipboard()) {
+      event.preventDefault();
+      this.paste();
+    }
   }
 
   duplicateShapesAndConnections(
@@ -2400,21 +2487,66 @@ export class CanvasComponent {
   }
 
   paste(): boolean {
+    let clipboardToUse = this.clipboard;
+
+    try {
+      const stored = localStorage.getItem('opendiagrammer_clipboard');
+      if (stored) {
+        const parsed = JSON.parse(stored) as CanvasClipboardData;
+        if (parsed && (parsed.shapes?.length > 0 || parsed.connections?.length > 0)) {
+          if (
+            !clipboardToUse ||
+            (parsed.copiedAt &&
+              (!clipboardToUse.copiedAt || parsed.copiedAt > clipboardToUse.copiedAt))
+          ) {
+            clipboardToUse = parsed;
+            this.clipboard = parsed;
+          }
+        }
+      }
+    } catch {
+      // Ignore storage errors
+    }
+
     if (
-      !this.clipboard ||
-      (this.clipboard.shapes.length === 0 && this.clipboard.connections.length === 0)
+      !clipboardToUse ||
+      (clipboardToUse.shapes.length === 0 && clipboardToUse.connections.length === 0)
     ) {
       return false;
     }
 
     this.pasteOffsetCount++;
     const OFFSET_STEP = 24;
-    const deltaX = OFFSET_STEP * this.pasteOffsetCount;
-    const deltaY = OFFSET_STEP * this.pasteOffsetCount;
+
+    const isCrossBoard =
+      Boolean(clipboardToUse.sourceBoardId) &&
+      clipboardToUse.sourceBoardId !== (this.boardId() ?? undefined);
+
+    let deltaX = OFFSET_STEP * this.pasteOffsetCount;
+    let deltaY = OFFSET_STEP * this.pasteOffsetCount;
+
+    if (isCrossBoard && this.pasteOffsetCount === 1 && clipboardToUse.shapes.length > 0) {
+      // When pasting into a different board for the first time, center the pasted items in the current canvas viewport
+      const minX = Math.min(...clipboardToUse.shapes.map((s) => s.x));
+      const minY = Math.min(...clipboardToUse.shapes.map((s) => s.y));
+      const maxX = Math.max(...clipboardToUse.shapes.map((s) => s.x + s.width));
+      const maxY = Math.max(...clipboardToUse.shapes.map((s) => s.y + s.height));
+      const groupCenterX = (minX + maxX) / 2;
+      const groupCenterY = (minY + maxY) / 2;
+
+      const viewportWidth = this.elementRef.nativeElement?.clientWidth || 1000;
+      const viewportHeight = this.elementRef.nativeElement?.clientHeight || 700;
+      const currentZoom = this.zoom();
+      const viewportCenterX = (viewportWidth / 2 - this.panX()) / currentZoom;
+      const viewportCenterY = (viewportHeight / 2 - this.panY()) / currentZoom;
+
+      deltaX = Math.round(viewportCenterX - groupCenterX);
+      deltaY = Math.round(viewportCenterY - groupCenterY);
+    }
 
     const { newShapes, newConnections } = this.duplicateShapesAndConnections(
-      this.clipboard.shapes,
-      this.clipboard.connections,
+      clipboardToUse.shapes,
+      clipboardToUse.connections,
       deltaX,
       deltaY,
     );

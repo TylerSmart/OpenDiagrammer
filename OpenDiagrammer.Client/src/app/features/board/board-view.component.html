@@ -316,6 +316,7 @@
     <main class="canvas-viewport">
       <app-canvas
         #canvasComponent
+        [boardId]="currentBoard.id"
         [backgroundType]="currentBoard.backgroundType"
         [initialCanvasData]="currentBoard.canvasDataJson"
         [readOnly]="currentBoard.userRole === BoardRole.Viewer"

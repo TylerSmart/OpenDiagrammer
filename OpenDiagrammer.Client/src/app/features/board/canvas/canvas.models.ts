@@ -20,6 +20,8 @@ export interface CanvasViewportBounds {
 export interface CanvasClipboardData {
   shapes: CanvasShape[];
   connections: CanvasConnection[];
+  sourceBoardId?: string;
+  copiedAt?: number;
 }
 
 export interface CanvasDiagramData {

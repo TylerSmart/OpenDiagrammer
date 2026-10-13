@@ -2065,6 +2065,81 @@ describe('CanvasComponent', () => {
       component.handleKeyDown(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true }));
       expect(component.shapes().length).toBe(1);
     });
+
+    it('should persist copied data to localStorage for cross-board copy and paste', () => {
+      localStorage.clear();
+      const s1 = component.createShape('rectangle', { x: 150, y: 150 });
+      component.clearSelection();
+      component.selectShape(s1.id);
+
+      expect(component.copy()).toBe(true);
+      const stored = localStorage.getItem('opendiagrammer_clipboard');
+      expect(stored).toBeTruthy();
+      const parsed = JSON.parse(stored!);
+      expect(parsed.shapes.length).toBe(1);
+      expect(parsed.shapes[0].id).toBe(s1.id);
+
+      // Clear in-memory clipboard and simulate fresh component on another board
+      component.clearClipboard();
+      expect(component.hasClipboard()).toBe(true);
+      expect(component.paste()).toBe(true);
+      expect(component.shapes().length).toBe(2);
+    });
+
+    it('should center elements in viewport when pasted from a different board', () => {
+      localStorage.clear();
+      // Simulate clipboard saved from a different board
+      const externalClipboard = {
+        sourceBoardId: 'different-board-id',
+        copiedAt: Date.now(),
+        shapes: [
+          {
+            id: 'remote-1',
+            type: 'rectangle',
+            x: 2000,
+            y: 3000,
+            width: 100,
+            height: 80,
+            zIndex: 1,
+          },
+        ],
+        connections: [],
+      };
+      localStorage.setItem('opendiagrammer_clipboard', JSON.stringify(externalClipboard));
+      component.clearClipboard();
+
+      expect(component.hasClipboard()).toBe(true);
+      expect(component.paste()).toBe(true);
+
+      const pasted = component.shapes().find((s) => s.id !== 'remote-1');
+      expect(pasted).toBeDefined();
+      // Should not be placed at 2000 + 24, but centered in viewport
+      expect(pasted!.x).not.toBe(2024);
+    });
+
+    it('should handle native clipboard paste event with serialized opendiagrammer data', () => {
+      const s1 = component.createShape('rectangle', { x: 50, y: 50 });
+      const clipboardJson = JSON.stringify({
+        type: 'opendiagrammer/clipboard',
+        version: 1,
+        data: {
+          shapes: [s1],
+          connections: [],
+        },
+      });
+
+      const fakeClipboardData = {
+        getData: (format: string) => (format === 'text/plain' ? clipboardJson : ''),
+      };
+      const fakePasteEvent = {
+        clipboardData: fakeClipboardData,
+        preventDefault: vi.fn(),
+      } as unknown as ClipboardEvent;
+
+      component.handlePaste(fakePasteEvent);
+      expect(fakePasteEvent.preventDefault).toHaveBeenCalled();
+      expect(component.shapes().length).toBe(2);
+    });
   });
 
   describe('Alt+Click+Drag to duplicate (Miro-style)', () => {
