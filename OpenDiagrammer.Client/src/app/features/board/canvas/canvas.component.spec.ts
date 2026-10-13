@@ -358,6 +358,54 @@ describe('CanvasComponent', () => {
     expect(component.activeTool()).toBe('select');
   });
 
+  it('should insert shape at viewport center when clicking an already-active shape tool', () => {
+    component.setActiveTool('rectangle');
+    expect(component.activeTool()).toBe('rectangle');
+    const countBefore = component.shapes().length;
+
+    // Clicking again should insert shape at center
+    component.setActiveTool('rectangle');
+    expect(component.shapes().length).toBe(countBefore + 1);
+    expect(component.shapes()[component.shapes().length - 1].type).toBe('rectangle');
+  });
+
+  it('should create a rectangle when double-clicking on empty canvas area', () => {
+    const countBefore = component.shapes().length;
+    const canvasViewport = fixture.nativeElement.querySelector('.canvas-viewport-area');
+    canvasViewport?.dispatchEvent(
+      new MouseEvent('dblclick', { bubbles: true, clientX: 300, clientY: 250 }),
+    );
+    fixture.detectChanges();
+
+    expect(component.shapes().length).toBe(countBefore + 1);
+    expect(component.shapes()[component.shapes().length - 1].type).toBe('rectangle');
+  });
+
+  it('should create a shape when dragging from the shape dock and dropping onto canvas', () => {
+    const countBefore = component.shapes().length;
+    const button = fixture.nativeElement.querySelector(
+      '.canvas-tools-dock button[aria-label="Add Diamond"]',
+    );
+    expect(button).not.toBeNull();
+
+    // Start drag on diamond button
+    component.handleToolPointerDown(
+      new PointerEvent('pointerdown', { clientX: 500, clientY: 20 }),
+      'diamond',
+    );
+    // Drag down to canvas (> 6px)
+    component.handleToolPointerMove(
+      new PointerEvent('pointermove', { clientX: 500, clientY: 200 }),
+    );
+    // Drop onto canvas
+    component.handleToolPointerUp(new PointerEvent('pointerup', { clientX: 500, clientY: 200 }));
+    fixture.detectChanges();
+
+    expect(component.shapes().length).toBe(countBefore + 1);
+    const lastShape = component.shapes()[component.shapes().length - 1];
+    expect(lastShape.type).toBe('diamond');
+  });
+
   it('should select multiple shapes and clear selection', () => {
     const s1 = component.createShape('rectangle', { x: 100, y: 100 });
     const s2 = component.createShape('ellipse', { x: 300, y: 200 });

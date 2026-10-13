@@ -986,6 +986,11 @@ export class CanvasComponent {
     return this.selectedShapeIds().has(id);
   }
 
+  // Tool dragging from dock state
+  readonly draggingTool = signal<ShapeType | null>(null);
+  private toolDragStartPos: CanvasPoint | null = null;
+  private hasToolDragStarted = false;
+
   setActiveTool(tool: ActiveTool): void {
     if (this.readOnly() && tool !== 'select') {
       return;
@@ -994,7 +999,84 @@ export class CanvasComponent {
       this.inProgressConnection.set(null);
       this.connectionStartScreenPos = null;
     }
+    // If user clicks an already-active shape creation tool, directly insert one into center of viewport
+    if (tool !== 'select' && tool !== 'connection' && this.activeTool() === tool) {
+      this.createShapeAtCenter(tool as ShapeType);
+      return;
+    }
     this.activeTool.set(tool);
+  }
+
+  createShapeAtCenter(type: ShapeType = 'rectangle'): CanvasShape {
+    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+    const centerX = rect.width > 0 ? rect.left + rect.width / 2 : 400;
+    const centerY = rect.height > 0 ? rect.top + rect.height / 2 : 300;
+    const centerWorld = this.screenToWorld({ x: centerX, y: centerY });
+    return this.createShape(type, centerWorld);
+  }
+
+  handleToolPointerDown(event: PointerEvent, tool: ShapeType): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.toolDragStartPos = { x: event.clientX, y: event.clientY };
+    this.hasToolDragStarted = false;
+    this.draggingTool.set(tool);
+    try {
+      (event.currentTarget as HTMLElement)?.setPointerCapture(event.pointerId);
+    } catch {
+      // Ignored
+    }
+  }
+
+  handleToolPointerMove(event: PointerEvent): void {
+    const tool = this.draggingTool();
+    if (!tool || !this.toolDragStartPos) {
+      return;
+    }
+    const dist = Math.hypot(
+      event.clientX - this.toolDragStartPos.x,
+      event.clientY - this.toolDragStartPos.y,
+    );
+    if (dist > 6) {
+      this.hasToolDragStarted = true;
+    }
+  }
+
+  handleToolPointerUp(event: PointerEvent): void {
+    const tool = this.draggingTool();
+    if (tool && this.hasToolDragStarted) {
+      const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+      this.createShape(tool, worldPoint);
+      this.setActiveTool('select');
+    }
+    this.draggingTool.set(null);
+    this.toolDragStartPos = null;
+    this.hasToolDragStarted = false;
+  }
+
+  handleDoubleClick(event: MouseEvent): void {
+    if (this.readOnly()) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (
+      !target ||
+      target.closest('.canvas-tools-dock') ||
+      target.closest('.canvas-controls-dock') ||
+      target.closest('app-canvas-shape') ||
+      target.closest('.canvas-connections-layer') ||
+      target.closest('.canvas-connection-handles-layer') ||
+      target.closest('.connection-group') ||
+      target.closest('.connection-text-editor') ||
+      target.closest('.selection-toolbar-dock') ||
+      target.closest('.connection-toolbar-dock') ||
+      target.closest('.welcome-card')
+    ) {
+      return;
+    }
+    const worldPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
+    this.createShape('rectangle', worldPoint);
   }
 
   clearSelection(): void {

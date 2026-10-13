@@ -198,13 +198,50 @@
         (cursorMove)="handleCursorMove($event)"
         (diagramChange)="handleDiagramChange($event)"
       >
-        <!-- Canvas Content (Nodes & Connections in future Phase 4 tasks) -->
+        <!-- Canvas Content -->
         @if (isBoardEmpty()) {
-          <div class="canvas-center-welcome" aria-hidden="true">
+          <div class="canvas-center-welcome">
             <div class="welcome-card">
               <mat-icon>draw</mat-icon>
               <h2>{{ currentBoard.name }}</h2>
               <p>{{ currentBoard.description || 'Welcome to your diagramming board!' }}</p>
+              @if (currentBoard.userRole !== BoardRole.Viewer) {
+                <div class="welcome-actions">
+                  <span class="welcome-actions-hint"
+                    >Click a shape to place it, or use the toolbar above:</span
+                  >
+                  <div class="welcome-buttons-grid">
+                    <button
+                      mat-stroked-button
+                      (click)="canvasComponent.createShapeAtCenter('rectangle')"
+                    >
+                      <mat-icon>crop_square</mat-icon>
+                      <span>Rectangle</span>
+                    </button>
+                    <button
+                      mat-stroked-button
+                      (click)="canvasComponent.createShapeAtCenter('rounded-rectangle')"
+                    >
+                      <mat-icon>square</mat-icon>
+                      <span>Rounded</span>
+                    </button>
+                    <button
+                      mat-stroked-button
+                      (click)="canvasComponent.createShapeAtCenter('ellipse')"
+                    >
+                      <mat-icon>panorama_fish_eye</mat-icon>
+                      <span>Circle</span>
+                    </button>
+                    <button
+                      mat-stroked-button
+                      (click)="canvasComponent.createShapeAtCenter('diamond')"
+                    >
+                      <mat-icon>change_history</mat-icon>
+                      <span>Diamond</span>
+                    </button>
+                  </div>
+                </div>
+              }
             </div>
           </div>
         }
