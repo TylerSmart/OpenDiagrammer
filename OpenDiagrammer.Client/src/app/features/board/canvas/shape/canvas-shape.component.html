@@ -54,6 +54,218 @@
           [attr.stroke-width]="shape().strokeWidth"
         />
       }
+      @case ('triangle') {
+        <polygon
+          [attr.points]="trianglePoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('text-block') {
+        <rect
+          x="0"
+          y="0"
+          [attr.width]="shape().width"
+          [attr.height]="shape().height"
+          fill="transparent"
+          stroke="none"
+        />
+      }
+      @case ('flowchart-process') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-decision') {
+        <polygon
+          [attr.points]="diamondPoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-terminal') {
+        <rect
+          x="1"
+          y="1"
+          [attr.rx]="shape().height / 2"
+          [attr.ry]="shape().height / 2"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-io') {
+        <polygon
+          [attr.points]="flowchartIoPoints()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-document') {
+        <path
+          [attr.d]="flowchartDocumentPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('flowchart-database') {
+        <path
+          [attr.d]="flowchartDatabaseBodyPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <ellipse
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="flowchartDatabaseRy()"
+          [attr.rx]="(shape().width - 2) / 2"
+          [attr.ry]="flowchartDatabaseRy()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-class') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          x1="1"
+          [attr.y1]="umlClassDivider1()"
+          [attr.x2]="shape().width - 1"
+          [attr.y2]="umlClassDivider1()"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          x1="1"
+          [attr.y1]="umlClassDivider2()"
+          [attr.x2]="shape().width - 1"
+          [attr.y2]="umlClassDivider2()"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-interface') {
+        <rect
+          x="1"
+          y="1"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          x1="1"
+          [attr.y1]="umlInterfaceDivider()"
+          [attr.x2]="shape().width - 1"
+          [attr.y2]="umlInterfaceDivider()"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-actor') {
+        <circle
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="shape().height * 0.2"
+          [attr.r]="shape().height * 0.15"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.35"
+          [attr.x2]="shape().width / 2"
+          [attr.y2]="shape().height * 0.7"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width * 0.15"
+          [attr.y1]="shape().height * 0.45"
+          [attr.x2]="shape().width * 0.85"
+          [attr.y2]="shape().height * 0.45"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.7"
+          [attr.x2]="shape().width * 0.2"
+          [attr.y2]="shape().height - 2"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <line
+          [attr.x1]="shape().width / 2"
+          [attr.y1]="shape().height * 0.7"
+          [attr.x2]="shape().width * 0.8"
+          [attr.y2]="shape().height - 2"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-usecase') {
+        <ellipse
+          [attr.cx]="shape().width / 2"
+          [attr.cy]="shape().height / 2"
+          [attr.rx]="(shape().width - 2) / 2"
+          [attr.ry]="(shape().height - 2) / 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('uml-package') {
+        <path
+          [attr.d]="umlPackageTabPath()"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <rect
+          x="1"
+          [attr.y]="umlPackageTabHeight()"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - umlPackageTabHeight() - 1"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
+      @case ('sticky-note') {
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor"
+          [attr.stroke]="shape().strokeColor"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+      }
     }
   </svg>
 

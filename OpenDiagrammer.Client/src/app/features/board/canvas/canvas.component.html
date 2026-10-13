@@ -984,6 +984,93 @@
       >
         <mat-icon>change_history</mat-icon>
       </button>
+
+      <div class="dock-divider"></div>
+
+      <!-- Shapes Catalog Trigger -->
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [matMenuTriggerFor]="shapesCatalogMenu"
+        aria-label="Shapes Catalog"
+        matTooltip="Shapes Catalog (UML, Flowcharts, Shapes)"
+      >
+        <mat-icon>category</mat-icon>
+      </button>
+
+      <mat-menu #shapesCatalogMenu="matMenu" class="shapes-catalog-menu" xPosition="after">
+        <div class="shapes-catalog-panel" (pointerdown)="$event.stopPropagation()">
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>shapes</mat-icon>
+              <span>Basic Shapes</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of basicCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="catalog-divider"></div>
+
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>account_tree</mat-icon>
+              <span>Flowchart</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of flowchartCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+
+          <div class="catalog-divider"></div>
+
+          <div class="catalog-section">
+            <div class="catalog-section-title">
+              <mat-icon>schema</mat-icon>
+              <span>UML</span>
+            </div>
+            <div class="catalog-grid">
+              @for (item of umlCatalogItems; track item.type) {
+                <button
+                  type="button"
+                  class="catalog-item-btn"
+                  [class.active]="activeTool() === item.type"
+                  (click)="setActiveTool(item.type)"
+                  [matTooltip]="item.label"
+                  [attr.aria-label]="item.label"
+                >
+                  <mat-icon>{{ item.icon }}</mat-icon>
+                  <span class="catalog-item-label">{{ item.label }}</span>
+                </button>
+              }
+            </div>
+          </div>
+        </div>
+      </mat-menu>
     </div>
   }
 

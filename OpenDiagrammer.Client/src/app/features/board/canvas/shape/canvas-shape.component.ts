@@ -50,6 +50,51 @@ export class CanvasShapeComponent {
     return `${w / 2},0 ${w},${h / 2} ${w / 2},${h} 0,${h / 2}`;
   });
 
+  readonly trianglePoints = computed(() => {
+    const w = this.shape().width;
+    const h = this.shape().height;
+    return `${w / 2},1 ${w - 1},${h - 1} 1,${h - 1}`;
+  });
+
+  readonly flowchartIoPoints = computed(() => {
+    const w = this.shape().width;
+    const h = this.shape().height;
+    const slant = Math.min(24, Math.round(w * 0.2));
+    return `${slant},1 ${w - 1},1 ${w - slant},${h - 1} 1,${h - 1}`;
+  });
+
+  readonly flowchartDocumentPath = computed(() => {
+    const w = this.shape().width;
+    const h = this.shape().height;
+    return `M 1 1 L ${w - 1} 1 L ${w - 1} ${h - 14} Q ${w * 0.75} ${h - 24} ${w * 0.5} ${h - 14} Q ${w * 0.25} ${h - 4} 1 ${h - 14} Z`;
+  });
+
+  readonly flowchartDatabaseBodyPath = computed(() => {
+    const w = this.shape().width;
+    const h = this.shape().height;
+    const ry = Math.min(14, Math.round(h * 0.2));
+    return `M 1 ${ry} A ${(w - 2) / 2} ${ry} 0 0 0 ${w - 1} ${ry} L ${w - 1} ${h - ry} A ${(w - 2) / 2} ${ry} 0 0 1 1 ${h - ry} Z`;
+  });
+
+  readonly flowchartDatabaseRy = computed(() =>
+    Math.min(14, Math.round(this.shape().height * 0.2)),
+  );
+
+  readonly umlClassDivider1 = computed(() => Math.round(this.shape().height * 0.28));
+  readonly umlClassDivider2 = computed(() => Math.round(this.shape().height * 0.62));
+  readonly umlInterfaceDivider = computed(() => Math.round(this.shape().height * 0.38));
+
+  readonly umlPackageTabPath = computed(() => {
+    const s = this.shape();
+    const tabW = Math.min(60, Math.round(s.width * 0.45));
+    const tabH = Math.min(20, Math.round(s.height * 0.2));
+    return `M 1 ${tabH} L 1 1 L ${tabW} 1 L ${tabW} ${tabH}`;
+  });
+
+  readonly umlPackageTabHeight = computed(() =>
+    Math.min(20, Math.round(this.shape().height * 0.2)),
+  );
+
   readonly textColor = computed(() => {
     const fill = this.shape().fillColor;
     if (fill.includes('inverse')) {

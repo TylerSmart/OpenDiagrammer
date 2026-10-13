@@ -50,6 +50,7 @@ import {
   computeShapeResizeSnapping,
   computeFittingFontSize,
   sanitizeRichText,
+  SHAPE_CATALOG,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -375,6 +376,11 @@ export class CanvasComponent {
 
   readonly canvasColorPresets = CANVAS_COLOR_PRESETS;
   readonly connectionColors = CANVAS_COLOR_PRESETS.map((p) => p.stroke);
+
+  readonly shapeCatalog = SHAPE_CATALOG;
+  readonly basicCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'basic');
+  readonly flowchartCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'flowchart');
+  readonly umlCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'uml');
 
   readonly connectionToolbarPos = computed<{
     x: number;
@@ -1304,16 +1310,33 @@ export class CanvasComponent {
   }
 
   createShape(type: ShapeType, worldPoint: CanvasPoint): CanvasShape {
+    const catalogItem = SHAPE_CATALOG.find((i) => i.type === type);
+    const width = catalogItem?.defaultWidth ?? SHAPE_CONSTANTS.DEFAULT_WIDTH;
+    const height = catalogItem?.defaultHeight ?? SHAPE_CONSTANTS.DEFAULT_HEIGHT;
+    const defaultText = catalogItem?.defaultText;
+
+    const isTextBlock = type === 'text-block';
+    const isSticky = type === 'sticky-note';
+
     const newShape: CanvasShape = {
       id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
       type,
-      x: Math.round(worldPoint.x - SHAPE_CONSTANTS.DEFAULT_WIDTH / 2),
-      y: Math.round(worldPoint.y - SHAPE_CONSTANTS.DEFAULT_HEIGHT / 2),
-      width: SHAPE_CONSTANTS.DEFAULT_WIDTH,
-      height: SHAPE_CONSTANTS.DEFAULT_HEIGHT,
-      fillColor: SHAPE_CONSTANTS.DEFAULT_FILL,
-      strokeColor: SHAPE_CONSTANTS.DEFAULT_STROKE,
-      strokeWidth: SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
+      x: Math.round(worldPoint.x - width / 2),
+      y: Math.round(worldPoint.y - height / 2),
+      width,
+      height,
+      fillColor: isTextBlock
+        ? 'transparent'
+        : isSticky
+          ? 'var(--canvas-color-amber-fill)'
+          : SHAPE_CONSTANTS.DEFAULT_FILL,
+      strokeColor: isTextBlock
+        ? 'transparent'
+        : isSticky
+          ? 'var(--canvas-color-amber-stroke)'
+          : SHAPE_CONSTANTS.DEFAULT_STROKE,
+      strokeWidth: isTextBlock ? 0 : SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
+      text: defaultText,
       zIndex: this.shapes().length + 1,
     };
 
@@ -3107,6 +3130,10 @@ export class CanvasComponent {
       }
       if (event.key === 'd' || event.key === 'D') {
         this.setActiveTool('diamond');
+        return;
+      }
+      if (event.key === 't' || event.key === 'T') {
+        this.setActiveTool('text-block');
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {

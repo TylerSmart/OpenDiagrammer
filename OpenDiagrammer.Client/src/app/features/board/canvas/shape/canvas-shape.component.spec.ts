@@ -100,4 +100,48 @@ describe('CanvasShapeComponent', () => {
     container.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
     expect(emittedShape).toEqual(mockShape);
   });
+
+  it('should render flowchart shapes correctly', () => {
+    // Flowchart terminal
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'flowchart-terminal',
+    });
+    fixture.detectChanges();
+    const terminalRect = fixture.nativeElement.querySelector('rect[rx]');
+    expect(terminalRect).toBeTruthy();
+
+    // Flowchart database
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'flowchart-database',
+    });
+    fixture.detectChanges();
+    const dbPath = fixture.nativeElement.querySelector('path');
+    const dbEllipse = fixture.nativeElement.querySelector('ellipse');
+    expect(dbPath).toBeTruthy();
+    expect(dbEllipse).toBeTruthy();
+  });
+
+  it('should render UML shapes correctly', () => {
+    // UML class
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-class',
+    });
+    fixture.detectChanges();
+    const lines = fixture.nativeElement.querySelectorAll('line');
+    expect(lines.length).toBe(2);
+
+    // UML actor
+    fixture.componentRef.setInput('shape', {
+      ...mockShape,
+      type: 'uml-actor',
+    });
+    fixture.detectChanges();
+    const actorCircle = fixture.nativeElement.querySelector('circle');
+    const actorLines = fixture.nativeElement.querySelectorAll('line');
+    expect(actorCircle).toBeTruthy();
+    expect(actorLines.length).toBe(4);
+  });
 });

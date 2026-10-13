@@ -1,4 +1,194 @@
-export type ShapeType = 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond';
+export type ShapeCategory = 'basic' | 'flowchart' | 'uml';
+
+export type ShapeType =
+  // Basic Shapes
+  | 'rectangle'
+  | 'rounded-rectangle'
+  | 'ellipse'
+  | 'diamond'
+  | 'triangle'
+  | 'text-block'
+  // Flowchart
+  | 'flowchart-process'
+  | 'flowchart-decision'
+  | 'flowchart-terminal'
+  | 'flowchart-io'
+  | 'flowchart-document'
+  | 'flowchart-database'
+  // UML
+  | 'uml-class'
+  | 'uml-interface'
+  | 'uml-actor'
+  | 'uml-usecase'
+  | 'uml-package'
+  // Sticky note
+  | 'sticky-note';
+
+export interface CatalogShapeItem {
+  type: ShapeType;
+  category: ShapeCategory;
+  label: string;
+  icon: string;
+  defaultWidth: number;
+  defaultHeight: number;
+  defaultText?: string;
+}
+
+export const SHAPE_CATALOG: CatalogShapeItem[] = [
+  // Basic
+  {
+    type: 'rectangle',
+    category: 'basic',
+    label: 'Rectangle',
+    icon: 'crop_square',
+    defaultWidth: 120,
+    defaultHeight: 80,
+  },
+  {
+    type: 'rounded-rectangle',
+    category: 'basic',
+    label: 'Rounded Rectangle',
+    icon: 'square',
+    defaultWidth: 120,
+    defaultHeight: 80,
+  },
+  {
+    type: 'ellipse',
+    category: 'basic',
+    label: 'Circle / Ellipse',
+    icon: 'panorama_fish_eye',
+    defaultWidth: 100,
+    defaultHeight: 100,
+  },
+  {
+    type: 'diamond',
+    category: 'basic',
+    label: 'Diamond',
+    icon: 'change_history',
+    defaultWidth: 110,
+    defaultHeight: 110,
+  },
+  {
+    type: 'triangle',
+    category: 'basic',
+    label: 'Triangle',
+    icon: 'play_arrow',
+    defaultWidth: 100,
+    defaultHeight: 90,
+  },
+  {
+    type: 'text-block',
+    category: 'basic',
+    label: 'Text Block',
+    icon: 'title',
+    defaultWidth: 120,
+    defaultHeight: 40,
+    defaultText: 'Text Note',
+  },
+
+  // Flowchart
+  {
+    type: 'flowchart-process',
+    category: 'flowchart',
+    label: 'Process',
+    icon: 'check_box_outline_blank',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Process',
+  },
+  {
+    type: 'flowchart-decision',
+    category: 'flowchart',
+    label: 'Decision',
+    icon: 'diamond',
+    defaultWidth: 120,
+    defaultHeight: 90,
+    defaultText: 'Decision',
+  },
+  {
+    type: 'flowchart-terminal',
+    category: 'flowchart',
+    label: 'Start / End',
+    icon: 'stadium',
+    defaultWidth: 130,
+    defaultHeight: 60,
+    defaultText: 'Start',
+  },
+  {
+    type: 'flowchart-io',
+    category: 'flowchart',
+    label: 'Input / Output',
+    icon: 'input',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Input / Output',
+  },
+  {
+    type: 'flowchart-document',
+    category: 'flowchart',
+    label: 'Document',
+    icon: 'description',
+    defaultWidth: 120,
+    defaultHeight: 80,
+    defaultText: 'Document',
+  },
+  {
+    type: 'flowchart-database',
+    category: 'flowchart',
+    label: 'Database',
+    icon: 'storage',
+    defaultWidth: 100,
+    defaultHeight: 90,
+    defaultText: 'Database',
+  },
+
+  // UML
+  {
+    type: 'uml-class',
+    category: 'uml',
+    label: 'UML Class',
+    icon: 'view_agenda',
+    defaultWidth: 160,
+    defaultHeight: 120,
+    defaultText: 'ClassName\n---\n+ attribute: type\n---\n+ method(): void',
+  },
+  {
+    type: 'uml-interface',
+    category: 'uml',
+    label: 'UML Interface',
+    icon: 'integration_instructions',
+    defaultWidth: 150,
+    defaultHeight: 100,
+    defaultText: '«interface»\nInterfaceName\n---\n+ operation()',
+  },
+  {
+    type: 'uml-actor',
+    category: 'uml',
+    label: 'UML Actor',
+    icon: 'person',
+    defaultWidth: 60,
+    defaultHeight: 90,
+    defaultText: 'Actor',
+  },
+  {
+    type: 'uml-usecase',
+    category: 'uml',
+    label: 'UML Use Case',
+    icon: 'radio_button_unchecked',
+    defaultWidth: 130,
+    defaultHeight: 70,
+    defaultText: 'Use Case',
+  },
+  {
+    type: 'uml-package',
+    category: 'uml',
+    label: 'UML Package',
+    icon: 'folder',
+    defaultWidth: 150,
+    defaultHeight: 100,
+    defaultText: 'Package',
+  },
+];
 
 export interface CanvasShape {
   id: string;
@@ -39,8 +229,7 @@ export interface MarqueeBox {
   currentY: number;
 }
 
-export type ActiveTool =
-  'select' | 'rectangle' | 'rounded-rectangle' | 'ellipse' | 'diamond' | 'connection';
+export type ActiveTool = 'select' | 'connection' | ShapeType;
 
 export interface CanvasColorPreset {
   id: string;

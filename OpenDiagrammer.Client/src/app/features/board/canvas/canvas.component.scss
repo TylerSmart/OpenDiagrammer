@@ -635,3 +635,97 @@
     user-select: none;
   }
 }
+
+// Shapes Catalog Dropdown Panel
+.shapes-catalog-panel {
+  padding: 0.5rem 0.75rem;
+  max-height: 480px;
+  max-width: 380px;
+  overflow-y: auto;
+  box-sizing: border-box;
+
+  .catalog-section {
+    margin-bottom: 0.5rem;
+
+    .catalog-section-title {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: var(--mat-sys-on-surface-variant);
+      margin-bottom: 0.35rem;
+
+      mat-icon {
+        font-size: 14px;
+        width: 14px;
+        height: 14px;
+      }
+    }
+  }
+
+  .catalog-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.35rem;
+  }
+
+  .catalog-item-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.25rem;
+    padding: 0.45rem 0.25rem;
+    background: var(--mat-sys-surface-container);
+    border: 1px solid var(--mat-sys-outline-variant);
+    border-radius: 6px;
+    cursor: pointer;
+    color: var(--mat-sys-on-surface);
+    transition:
+      background-color 0.15s ease,
+      border-color 0.15s ease,
+      transform 0.1s ease;
+
+    mat-icon {
+      font-size: 20px;
+      width: 20px;
+      height: 20px;
+      color: var(--mat-sys-primary);
+    }
+
+    .catalog-item-label {
+      font-size: 0.6875rem;
+      font-weight: 500;
+      text-align: center;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 100%;
+    }
+
+    &:hover {
+      background-color: var(--mat-sys-surface-container-high);
+      border-color: var(--mat-sys-primary);
+      transform: translateY(-1px);
+    }
+
+    &.active {
+      background-color: var(--mat-sys-primary-container);
+      border-color: var(--mat-sys-primary);
+      color: var(--mat-sys-on-primary-container);
+
+      mat-icon {
+        color: var(--mat-sys-on-primary-container);
+      }
+    }
+  }
+
+  .catalog-divider {
+    height: 1px;
+    background-color: var(--mat-sys-outline-variant);
+    margin: 0.5rem 0;
+  }
+}

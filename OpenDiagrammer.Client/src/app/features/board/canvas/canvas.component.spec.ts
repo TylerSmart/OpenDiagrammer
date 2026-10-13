@@ -2774,4 +2774,41 @@ describe('CanvasComponent', () => {
       expect(component.editingShapeId()).toBeNull();
     });
   });
+
+  describe('Node Catalogs (UML, Flowcharts, Basic Shapes)', () => {
+    it('should expose categorized shape catalog items', () => {
+      expect(component.basicCatalogItems.length).toBeGreaterThan(0);
+      expect(component.flowchartCatalogItems.length).toBeGreaterThan(0);
+      expect(component.umlCatalogItems.length).toBeGreaterThan(0);
+      expect(component.basicCatalogItems.some((i) => i.type === 'rectangle')).toBe(true);
+      expect(component.flowchartCatalogItems.some((i) => i.type === 'flowchart-decision')).toBe(
+        true,
+      );
+      expect(component.umlCatalogItems.some((i) => i.type === 'uml-class')).toBe(true);
+    });
+
+    it('should create UML class shape with catalog dimensions and default text', () => {
+      const shape = component.createShape('uml-class', { x: 200, y: 150 });
+      expect(shape.type).toBe('uml-class');
+      expect(shape.width).toBe(160);
+      expect(shape.height).toBe(120);
+      expect(shape.text).toContain('ClassName');
+    });
+
+    it('should create Flowchart terminal shape with catalog dimensions and default text', () => {
+      const shape = component.createShape('flowchart-terminal', { x: 300, y: 200 });
+      expect(shape.type).toBe('flowchart-terminal');
+      expect(shape.width).toBe(130);
+      expect(shape.height).toBe(60);
+      expect(shape.text).toBe('Start');
+    });
+
+    it('should create Text Block with transparent stroke and fill', () => {
+      const shape = component.createShape('text-block', { x: 100, y: 100 });
+      expect(shape.type).toBe('text-block');
+      expect(shape.fillColor).toBe('transparent');
+      expect(shape.strokeColor).toBe('transparent');
+      expect(shape.strokeWidth).toBe(0);
+    });
+  });
 });
