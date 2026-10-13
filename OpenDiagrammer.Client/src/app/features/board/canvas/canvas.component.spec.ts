@@ -2626,5 +2626,60 @@ describe('CanvasComponent', () => {
       fixture.detectChanges();
       expect(emitSpy).not.toHaveBeenCalled();
     });
+
+    it('should not echo diagramChange when applyExternalDiagramData is called', () => {
+      component.loadCanvasData(null);
+      fixture.detectChanges();
+
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+      component.applyExternalDiagramData({
+        shapes: [
+          {
+            id: 'remote_s1',
+            type: 'rectangle',
+            x: 200,
+            y: 200,
+            width: 100,
+            height: 100,
+            strokeColor: '#000',
+            fillColor: '#fff',
+            strokeWidth: 2,
+            zIndex: 1,
+          },
+        ],
+        connections: [],
+      });
+      fixture.detectChanges();
+
+      expect(component.shapes().length).toBe(1);
+      expect(component.shapes()[0].id).toBe('remote_s1');
+      expect(emitSpy).not.toHaveBeenCalled();
+    });
+
+    it('should flush diagramChange on pointerup after dragging shapes', () => {
+      component.loadCanvasData(null);
+      fixture.detectChanges();
+
+      const shape = component.createShape('rectangle', { x: 50, y: 50 });
+      fixture.detectChanges();
+
+      const emitSpy = vi.spyOn(component.diagramChange, 'emit');
+
+      // Simulate pointer down on shape
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', { button: 0, clientX: 60, clientY: 60 }),
+        shape,
+      );
+
+      // Simulate pointer move
+      component.handlePointerMove(new PointerEvent('pointermove', { clientX: 100, clientY: 100 }));
+
+      // Simulate pointer up
+      component.handlePointerUp(new PointerEvent('pointerup', { clientX: 100, clientY: 100 }));
+
+      expect(emitSpy).toHaveBeenCalled();
+      const lastCall = emitSpy.mock.calls[emitSpy.mock.calls.length - 1][0];
+      expect(lastCall.shapes.find((s) => s.id === shape.id)?.x).not.toBe(50);
+    });
   });
 });

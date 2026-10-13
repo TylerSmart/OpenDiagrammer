@@ -67,4 +67,19 @@ describe('BoardRealtimeService', () => {
     expect(service.presences()).toEqual([]);
     expect(service.otherUsersCursors()).toEqual({});
   });
+
+  it('should invoke hubConnection.send for sendCrdtUpdate and sendCursor when connected', async () => {
+    const mockSend = vi.fn().mockResolvedValue(undefined);
+    (service as unknown as { hubConnection: unknown }).hubConnection = {
+      send: mockSend,
+    };
+    (service as unknown as { currentBoardId: string }).currentBoardId = 'board-123';
+    service.connectionState.set('connected');
+
+    await service.sendCrdtUpdate(new Uint8Array([1, 2, 3]));
+    expect(mockSend).toHaveBeenCalledWith('SendCrdtUpdate', 'board-123', expect.any(String));
+
+    await service.sendCursor(42, 99);
+    expect(mockSend).toHaveBeenCalledWith('SendCursor', 'board-123', 42, 99);
+  });
 });

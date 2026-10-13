@@ -142,7 +142,7 @@ export class CrdtService {
 
       for (const shape of data.shapes) {
         const existing = this.shapesMap.get(shape.id);
-        if (!existing || JSON.stringify(existing) !== JSON.stringify(shape)) {
+        if (!existing || !this.isShapeEqual(existing, shape)) {
           this.shapesMap.set(shape.id, shape);
         }
       }
@@ -156,11 +156,65 @@ export class CrdtService {
 
       for (const conn of data.connections) {
         const existing = this.connectionsMap.get(conn.id);
-        if (!existing || JSON.stringify(existing) !== JSON.stringify(conn)) {
+        if (!existing || !this.isConnectionEqual(existing, conn)) {
           this.connectionsMap.set(conn.id, conn);
         }
       }
     }, 'local');
+  }
+
+  private isShapeEqual(a: CanvasShape, b: CanvasShape): boolean {
+    return (
+      a.id === b.id &&
+      a.x === b.x &&
+      a.y === b.y &&
+      a.width === b.width &&
+      a.height === b.height &&
+      a.zIndex === b.zIndex &&
+      a.type === b.type &&
+      a.strokeColor === b.strokeColor &&
+      a.fillColor === b.fillColor &&
+      a.strokeWidth === b.strokeWidth &&
+      a.text === b.text &&
+      a.locked === b.locked &&
+      a.groupId === b.groupId
+    );
+  }
+
+  private isConnectionEqual(a: CanvasConnection, b: CanvasConnection): boolean {
+    if (
+      a.id !== b.id ||
+      a.sourceShapeId !== b.sourceShapeId ||
+      a.sourceAnchor !== b.sourceAnchor ||
+      a.targetShapeId !== b.targetShapeId ||
+      a.targetAnchor !== b.targetAnchor ||
+      a.routing !== b.routing ||
+      a.strokeColor !== b.strokeColor ||
+      a.strokeWidth !== b.strokeWidth ||
+      a.pattern !== b.pattern ||
+      a.endMarker !== b.endMarker ||
+      a.startMarker !== b.startMarker ||
+      a.text !== b.text
+    ) {
+      return false;
+    }
+    if (a.targetPoint?.x !== b.targetPoint?.x || a.targetPoint?.y !== b.targetPoint?.y) {
+      return false;
+    }
+    const aWps = a.waypoints;
+    const bWps = b.waypoints;
+    if (!aWps && !bWps) {
+      return true;
+    }
+    if (!aWps || !bWps || aWps.length !== bWps.length) {
+      return false;
+    }
+    for (let i = 0; i < aWps.length; i++) {
+      if (aWps[i].x !== bWps[i].x || aWps[i].y !== bWps[i].y) {
+        return false;
+      }
+    }
+    return true;
   }
 
   public updateShape(shape: CanvasShape): void {

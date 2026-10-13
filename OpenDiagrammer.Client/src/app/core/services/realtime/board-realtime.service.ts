@@ -151,7 +151,7 @@ export class BoardRealtimeService {
     try {
       // In SignalR .NET, byte[] is represented as a Base64 string in JSON protocol
       const base64 = uint8ArrayToBase64(update);
-      await this.hubConnection.invoke('SendCrdtUpdate', this.currentBoardId, base64);
+      await this.hubConnection.send('SendCrdtUpdate', this.currentBoardId, base64);
     } catch {
       // Silently handle send failure while offline
     }
@@ -163,7 +163,7 @@ export class BoardRealtimeService {
     }
 
     try {
-      await this.hubConnection.invoke('SendCursor', this.currentBoardId, x, y);
+      await this.hubConnection.send('SendCursor', this.currentBoardId, x, y);
     } catch {
       // Ignore cursor throttle failures
     }

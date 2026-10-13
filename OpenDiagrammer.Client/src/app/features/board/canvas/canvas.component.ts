@@ -675,6 +675,65 @@ export class CanvasComponent {
   private lastLoadedDataJson: string | null | undefined = undefined;
   private lastEmittedJson: string | null = null;
   private hasLoadedInitialData = false;
+  private isApplyingExternalData = false;
+  private lastDragEmitTime = 0;
+  private dragEmitTimer: ReturnType<typeof setTimeout> | null = null;
+
+  private isActivelyDragging(): boolean {
+    return (
+      this.isMovingShapes ||
+      this.isResizing ||
+      this.isDraggingSegment ||
+      this.isDraggingWaypoint ||
+      this.draggingEndpoint() !== null
+    );
+  }
+
+  private emitDiagramChange(): void {
+    if (!this.hasLoadedInitialData || this.readOnly()) {
+      return;
+    }
+    const shapes = this.shapes();
+    const connections = this.connections();
+    const diagramData: CanvasDiagramData = {
+      shapes,
+      connections,
+      zoom: this.zoom(),
+      panX: this.panX(),
+      panY: this.panY(),
+    };
+    this.lastEmittedJson = JSON.stringify({ shapes, connections });
+    this.lastLoadedDataJson = JSON.stringify(diagramData);
+    this.diagramChange.emit(diagramData);
+  }
+
+  private emitThrottledDragDiagramChange(): void {
+    const now = performance.now();
+    if (this.dragEmitTimer) {
+      clearTimeout(this.dragEmitTimer);
+      this.dragEmitTimer = null;
+    }
+
+    if (now - this.lastDragEmitTime > 35) {
+      this.lastDragEmitTime = now;
+      this.emitDiagramChange();
+    } else {
+      this.dragEmitTimer = setTimeout(() => {
+        this.dragEmitTimer = null;
+        this.lastDragEmitTime = performance.now();
+        this.emitDiagramChange();
+      }, 40);
+    }
+  }
+
+  private flushDragDiagramChange(): void {
+    if (this.dragEmitTimer) {
+      clearTimeout(this.dragEmitTimer);
+      this.dragEmitTimer = null;
+    }
+    this.lastDragEmitTime = performance.now();
+    this.emitDiagramChange();
+  }
 
   constructor() {
     effect(() => {
@@ -702,6 +761,13 @@ export class CanvasComponent {
         return;
       }
       untracked(() => {
+        if (this.isApplyingExternalData) {
+          this.isApplyingExternalData = false;
+          return;
+        }
+        if (this.isActivelyDragging()) {
+          return;
+        }
         const currentJson = JSON.stringify({ shapes, connections });
         if (currentJson === this.lastEmittedJson) {
           return;
@@ -721,19 +787,7 @@ export class CanvasComponent {
   }
 
   public applyExternalDiagramData(diagramData: CanvasDiagramData): void {
-    const currentJson = JSON.stringify({
-      shapes: this.shapes(),
-      connections: this.connections(),
-    });
-    const incomingJson = JSON.stringify({
-      shapes: diagramData.shapes,
-      connections: diagramData.connections,
-    });
-    if (currentJson === incomingJson) {
-      return;
-    }
-    this.lastEmittedJson = incomingJson;
-    this.lastLoadedDataJson = JSON.stringify(diagramData);
+    this.isApplyingExternalData = true;
     this.shapes.set(diagramData.shapes);
     this.connections.set(diagramData.connections);
   }
@@ -2286,6 +2340,7 @@ export class CanvasComponent {
           // Extract inner points as waypoints (exclude start and end endpoints)
           const newWaypoints = pts.slice(1, -1);
           this.updateConnection(conn.id, { waypoints: newWaypoints });
+          this.emitThrottledDragDiagramChange();
         }
       }
       return;
@@ -2301,6 +2356,7 @@ export class CanvasComponent {
           y: Math.round(currentWorld.y),
         };
         this.updateConnection(conn.id, { waypoints: updatedWaypoints });
+        this.emitThrottledDragDiagramChange();
       }
       return;
     }
@@ -2549,6 +2605,7 @@ export class CanvasComponent {
           }),
         );
       }
+      this.emitThrottledDragDiagramChange();
       return;
     }
 
@@ -2562,6 +2619,7 @@ export class CanvasComponent {
       const keep1to1 = event.ctrlKey || event.metaKey;
       const shouldSnap = !event.altKey;
       this.applyResize(currentWorld, event.shiftKey, keep1to1, shouldSnap);
+      this.emitThrottledDragDiagramChange();
       return;
     }
 
@@ -2584,6 +2642,9 @@ export class CanvasComponent {
   }
 
   handlePointerUp(event: PointerEvent): void {
+    const wasDraggingInteraction =
+      this.isMovingShapes || this.isResizing || this.isDraggingSegment || this.isDraggingWaypoint;
+
     this.activePointers.delete(event.pointerId);
 
     if (this.activePointers.size < 2) {
@@ -2726,6 +2787,10 @@ export class CanvasComponent {
       this.resizeStartPoint = null;
       this.resizeInitialShape = null;
       this.alignmentGuides.set([]);
+    }
+
+    if (wasDraggingInteraction) {
+      this.flushDragDiagramChange();
     }
 
     if (this.marqueeStart) {
