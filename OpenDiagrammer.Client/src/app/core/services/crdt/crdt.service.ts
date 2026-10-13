@@ -38,6 +38,10 @@ export class CrdtService {
   private readonly localUpdateSubject$ = new Subject<Uint8Array>();
   public readonly localUpdate$: Observable<Uint8Array> = this.localUpdateSubject$.asObservable();
 
+  private readonly remoteDiagramDataSubject$ = new Subject<CanvasDiagramData>();
+  public readonly remoteDiagramData$: Observable<CanvasDiagramData> =
+    this.remoteDiagramDataSubject$.asObservable();
+
   public readonly diagramData = signal<CanvasDiagramData>({
     shapes: [],
     connections: [],
@@ -54,6 +58,8 @@ export class CrdtService {
       this.syncDiagramDataFromDoc();
       if (origin !== 'remote' && origin !== 'indexeddb') {
         this.localUpdateSubject$.next(update);
+      } else {
+        this.remoteDiagramDataSubject$.next(this.diagramData());
       }
     });
   }

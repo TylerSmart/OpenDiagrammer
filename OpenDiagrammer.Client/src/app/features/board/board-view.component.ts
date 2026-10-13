@@ -1,13 +1,4 @@
-import {
-  Component,
-  DestroyRef,
-  OnInit,
-  computed,
-  effect,
-  inject,
-  signal,
-  viewChild,
-} from '@angular/core';
+import { Component, DestroyRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -120,13 +111,14 @@ export class BoardViewComponent implements OnInit {
       void this.realtimeService.sendCrdtUpdate(update);
     });
 
-    effect(() => {
-      const data = this.crdtService.diagramData();
-      const canvas = this.canvasComponent();
-      if (canvas) {
-        canvas.applyExternalDiagramData(data);
-      }
-    });
+    this.crdtService.remoteDiagramData$
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe((data) => {
+        const canvas = this.canvasComponent();
+        if (canvas) {
+          canvas.applyExternalDiagramData(data);
+        }
+      });
 
     this.saveTrigger$
       .pipe(

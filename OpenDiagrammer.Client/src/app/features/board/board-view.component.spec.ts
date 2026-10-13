@@ -98,6 +98,7 @@ describe('BoardViewComponent', () => {
       applyLocalDiagramChange: vi.fn(),
       applyRemoteUpdate: vi.fn(),
       localUpdate$: of(),
+      remoteDiagramData$: of(),
       diagramData: signal({ shapes: [], connections: [] }),
       destroy: vi.fn(),
     };
@@ -373,5 +374,33 @@ describe('BoardViewComponent', () => {
     expect(component['errorMessage']()).toBeNull();
 
     localStorage.removeItem('board_cache_offline-id');
+  });
+
+  it('should place a shape on canvas when tool is selected and canvas is clicked', async () => {
+    fixture.detectChanges();
+    await fixture.whenStable();
+
+    const canvas = component['canvasComponent']();
+    expect(canvas).toBeTruthy();
+
+    // Select rectangle tool
+    canvas!.setActiveTool('rectangle');
+    expect(canvas!.activeTool()).toBe('rectangle');
+
+    // Click canvas
+    const canvasViewport = fixture.nativeElement.querySelector('.canvas-viewport-area');
+    expect(canvasViewport).toBeTruthy();
+
+    canvasViewport.dispatchEvent(
+      new PointerEvent('pointerdown', {
+        bubbles: true,
+        clientX: 400,
+        clientY: 300,
+        button: 0,
+      }),
+    );
+    fixture.detectChanges();
+
+    expect(canvas!.shapes().length).toBe(1);
   });
 });
