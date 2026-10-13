@@ -63,7 +63,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 *Note: Rich text editing and Think Mode build directly on Phase 5's CRDT primitives and real-time synchronization.*
 - [x] Implement rich text editing within nodes
 - [x] Build specific node catalogs (UML, Flowcharts, etc.)
-- [ ] Implement Sticky Notes (colors, author names)
+- [x] Implement Sticky Notes (colors, author names)
 - [ ] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)
 - [ ] Implement Frames and Pages
 

@@ -51,6 +51,7 @@ import {
   computeFittingFontSize,
   sanitizeRichText,
   SHAPE_CATALOG,
+  STICKY_NOTE_COLORS,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -101,6 +102,7 @@ export class CanvasComponent {
   readonly readOnly = input<boolean>(false);
   readonly liveCursors = input<CanvasCursorDto[]>([]);
   readonly showLiveCursors = input<boolean>(true);
+  readonly currentUsername = input<string | null | undefined>(null);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
@@ -381,6 +383,7 @@ export class CanvasComponent {
   readonly basicCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'basic');
   readonly flowchartCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'flowchart');
   readonly umlCatalogItems = SHAPE_CATALOG.filter((i) => i.category === 'uml');
+  readonly stickyNoteColors = STICKY_NOTE_COLORS;
 
   readonly connectionToolbarPos = computed<{
     x: number;
@@ -742,6 +745,18 @@ export class CanvasComponent {
     }
     this.shapes.update((list) =>
       list.map((s) => (s.id === shapeId ? { ...s, textAlign: align } : s)),
+    );
+    this.emitDiagramChange();
+  }
+
+  toggleStickyAuthorVisibility(shapeId: string): void {
+    if (this.readOnly()) {
+      return;
+    }
+    this.shapes.update((list) =>
+      list.map((s) =>
+        s.id === shapeId ? { ...s, showAuthor: s.showAuthor === false ? true : false } : s,
+      ),
     );
     this.emitDiagramChange();
   }
@@ -1337,6 +1352,8 @@ export class CanvasComponent {
           : SHAPE_CONSTANTS.DEFAULT_STROKE,
       strokeWidth: isTextBlock ? 0 : SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
       text: defaultText,
+      authorName: isSticky ? this.currentUsername() || 'Author' : undefined,
+      showAuthor: isSticky ? true : undefined,
       zIndex: this.shapes().length + 1,
     };
 
@@ -3134,6 +3151,10 @@ export class CanvasComponent {
       }
       if (event.key === 't' || event.key === 'T') {
         this.setActiveTool('text-block');
+        return;
+      }
+      if (event.key === 'n' || event.key === 'N') {
+        this.setActiveTool('sticky-note');
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {

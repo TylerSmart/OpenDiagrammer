@@ -181,6 +181,8 @@ export class CrdtService {
       a.isBold === b.isBold &&
       a.isItalic === b.isItalic &&
       a.isUnderline === b.isUnderline &&
+      a.authorName === b.authorName &&
+      a.showAuthor === b.showAuthor &&
       a.locked === b.locked &&
       a.groupId === b.groupId
     );

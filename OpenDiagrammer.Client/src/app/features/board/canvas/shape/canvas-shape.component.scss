@@ -104,3 +104,33 @@
     left: -15px;
   }
 }
+
+.sticky-author-badge {
+  position: absolute;
+  bottom: 6px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background-color: rgba(0, 0, 0, 0.08);
+  font-size: 0.625rem;
+  font-weight: 600;
+  color: var(--mat-sys-on-surface);
+  pointer-events: none;
+  z-index: 3;
+  user-select: none;
+  opacity: 0.85;
+
+  .author-icon {
+    font-size: 0.625rem;
+  }
+
+  .author-name {
+    max-width: 90px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

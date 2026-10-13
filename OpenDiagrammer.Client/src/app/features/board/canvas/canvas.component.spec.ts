@@ -2811,4 +2811,37 @@ describe('CanvasComponent', () => {
       expect(shape.strokeWidth).toBe(0);
     });
   });
+
+  describe('Sticky Notes', () => {
+    it('should create sticky note with default author when currentUsername is set', () => {
+      fixture.componentRef.setInput('currentUsername', 'TestUser');
+      fixture.detectChanges();
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      expect(shape.type).toBe('sticky-note');
+      expect(shape.authorName).toBe('TestUser');
+      expect(shape.fillColor).toBe('var(--canvas-color-amber-fill)');
+      expect(shape.showAuthor).toBe(true);
+    });
+
+    it('should toggle sticky note author visibility', () => {
+      fixture.componentRef.setInput('currentUsername', 'TestUser');
+      fixture.detectChanges();
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      component.selectedShapeIds.set(new Set([shape.id]));
+      expect(shape.showAuthor).toBe(true);
+
+      component.toggleStickyAuthorVisibility(shape.id);
+      const updatedShape = component.shapes().find((s) => s.id === shape.id);
+      expect(updatedShape?.showAuthor).toBe(false);
+
+      component.toggleStickyAuthorVisibility(shape.id);
+      const reUpdatedShape = component.shapes().find((s) => s.id === shape.id);
+      expect(reUpdatedShape?.showAuthor).toBe(true);
+    });
+
+    it('should support switching tool to sticky-note via key shortcut N', () => {
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'n' }));
+      expect(component.activeTool()).toBe('sticky-note');
+    });
+  });
 });

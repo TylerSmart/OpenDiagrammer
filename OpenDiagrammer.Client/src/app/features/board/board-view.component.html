@@ -195,6 +195,7 @@
         [readOnly]="currentBoard.userRole === BoardRole.Viewer"
         [liveCursors]="liveCursorsList()"
         [showLiveCursors]="showLiveCursors()"
+        [currentUsername]="authService.currentUser()?.username ?? null"
         (cursorMove)="handleCursorMove($event)"
         (diagramChange)="handleDiagramChange($event)"
       ></app-canvas>

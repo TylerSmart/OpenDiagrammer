@@ -188,6 +188,15 @@ export const SHAPE_CATALOG: CatalogShapeItem[] = [
     defaultHeight: 100,
     defaultText: 'Package',
   },
+  {
+    type: 'sticky-note',
+    category: 'basic',
+    label: 'Sticky Note',
+    icon: 'sticky_note_2',
+    defaultWidth: 120,
+    defaultHeight: 120,
+    defaultText: 'Note',
+  },
 ];
 
 export interface CanvasShape {
@@ -206,6 +215,8 @@ export interface CanvasShape {
   isBold?: boolean;
   isItalic?: boolean;
   isUnderline?: boolean;
+  authorName?: string;
+  showAuthor?: boolean;
   zIndex: number;
   locked?: boolean;
   groupId?: string;
@@ -238,6 +249,58 @@ export interface CanvasColorPreset {
   stroke: string;
   swatch: string;
 }
+
+export const STICKY_NOTE_COLORS: CanvasColorPreset[] = [
+  {
+    id: 'yellow',
+    label: 'Yellow',
+    fill: 'var(--canvas-color-amber-fill)',
+    stroke: 'var(--canvas-color-amber-stroke)',
+    swatch: 'var(--canvas-color-amber-stroke)',
+  },
+  {
+    id: 'green',
+    label: 'Green',
+    fill: 'var(--canvas-color-green-fill)',
+    stroke: 'var(--canvas-color-green-stroke)',
+    swatch: 'var(--canvas-color-green-stroke)',
+  },
+  {
+    id: 'pink',
+    label: 'Pink',
+    fill: 'var(--canvas-color-pink-fill)',
+    stroke: 'var(--canvas-color-pink-stroke)',
+    swatch: 'var(--canvas-color-pink-stroke)',
+  },
+  {
+    id: 'blue',
+    label: 'Blue',
+    fill: 'var(--canvas-color-blue-fill)',
+    stroke: 'var(--canvas-color-blue-stroke)',
+    swatch: 'var(--canvas-color-blue-stroke)',
+  },
+  {
+    id: 'purple',
+    label: 'Purple',
+    fill: 'var(--canvas-color-purple-fill)',
+    stroke: 'var(--canvas-color-purple-stroke)',
+    swatch: 'var(--canvas-color-purple-stroke)',
+  },
+  {
+    id: 'orange',
+    label: 'Orange',
+    fill: 'var(--canvas-color-orange-fill)',
+    stroke: 'var(--canvas-color-orange-stroke)',
+    swatch: 'var(--canvas-color-orange-stroke)',
+  },
+  {
+    id: 'teal',
+    label: 'Teal',
+    fill: 'var(--canvas-color-teal-fill)',
+    stroke: 'var(--canvas-color-teal-stroke)',
+    swatch: 'var(--canvas-color-teal-stroke)',
+  },
+];
 
 export const CANVAS_COLOR_PRESETS: CanvasColorPreset[] = [
   {

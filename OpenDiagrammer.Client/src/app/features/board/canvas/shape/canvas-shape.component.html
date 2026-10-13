@@ -282,6 +282,13 @@
     ></div>
   }
 
+  @if (shape().type === 'sticky-note' && shape().showAuthor !== false && shape().authorName) {
+    <div class="sticky-author-badge" [attr.aria-label]="'Author: ' + shape().authorName">
+      <span class="author-icon">✍</span>
+      <span class="author-name">{{ shape().authorName }}</span>
+    </div>
+  }
+
   <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->
   @if (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected()) {
     @for (anchor of anchors; track anchor) {

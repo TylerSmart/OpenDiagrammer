@@ -144,4 +144,40 @@ describe('CanvasShapeComponent', () => {
     expect(actorCircle).toBeTruthy();
     expect(actorLines.length).toBe(4);
   });
+
+  describe('Sticky Notes', () => {
+    it('should render sticky note rect', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+      });
+      fixture.detectChanges();
+      const stickyRect = fixture.nativeElement.querySelector('rect[rx="4"]');
+      expect(stickyRect).toBeTruthy();
+    });
+
+    it('should display author badge when authorName is provided and showAuthor is not false', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        authorName: 'Alice',
+      });
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(badge).toBeTruthy();
+      expect(badge.textContent).toContain('Alice');
+    });
+
+    it('should hide author badge when showAuthor is false', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        authorName: 'Alice',
+        showAuthor: false,
+      });
+      fixture.detectChanges();
+      const badge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(badge).toBeFalsy();
+    });
+  });
 });

@@ -448,6 +448,21 @@
             <mat-icon>format_align_right</mat-icon>
           </button>
 
+          @if (selShape.type === 'sticky-note') {
+            <div class="dock-divider"></div>
+
+            <button
+              mat-icon-button
+              class="tool-btn small"
+              [class.active]="selShape.showAuthor !== false"
+              (click)="toggleStickyAuthorVisibility(selShape.id)"
+              matTooltip="Toggle author name visibility"
+              aria-label="Toggle author name"
+            >
+              <mat-icon>{{ selShape.showAuthor === false ? 'visibility_off' : 'badge' }}</mat-icon>
+            </button>
+          }
+
           <div class="dock-divider"></div>
         }
 
@@ -983,6 +998,20 @@
         matTooltip="Diamond / Decision (D) - Click to stamp, or drag onto canvas"
       >
         <mat-icon>change_history</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'sticky-note'"
+        (click)="setActiveTool('sticky-note')"
+        (pointerdown)="handleToolPointerDown($event, 'sticky-note')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Sticky Note"
+        matTooltip="Sticky Note (N) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>sticky_note_2</mat-icon>
       </button>
 
       <div class="dock-divider"></div>
