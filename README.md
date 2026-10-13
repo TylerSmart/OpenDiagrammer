@@ -13,25 +13,36 @@ OpenDiagrammer is an open-source diagramming tool similar to Miro and Lucidchart
 
 ## Versioning
 
-*(To be implemented - Semantic Versioning tags will appear here)*
+_(To be implemented - Semantic Versioning tags will appear here)_
 
 ## Test Statuses & Coverage
 
-*(To be implemented - CI/CD badges for Build Status and Test Coverage will appear here)*
+_(To be implemented - CI/CD badges for Build Status and Test Coverage will appear here)_
 
 ## Installation / Deployment
 
-OpenDiagrammer is designed to be easily deployed anywhere using Docker, including environments like TRUENAS Scale.
+OpenDiagrammer is packaged as a lightweight, production-ready Docker container and can be deployed anywhere Docker runs, from a cloud VPS to a home server or NAS.
 
-### Quick Start (Docker)
+### Quick Start (Docker Compose)
 
-*(Deployment commands and `docker-compose` instructions will be provided here once the Docker image is finalized)*
+Deploy OpenDiagrammer in seconds using Docker Compose:
 
-### Authentication & Single Sign-On (OIDC / OAuth2)
+```bash
+# 1. Clone the repository
+git clone https://github.com/YourOrg/OpenDiagrammer.git
+cd OpenDiagrammer
 
-OpenDiagrammer supports external OpenID Connect (OIDC) and OAuth 2.0 authentication providers (such as **Google**, **Authentik**, **Keycloak**, and **Microsoft Entra ID**) alongside built-in local accounts.
+# 2. Build and start the services
+docker compose -f docker-compose.prod.yml up -d --build
+```
 
-For full step-by-step instructions on creating a Google Cloud OAuth client, configuring environment variables, and deploying with Docker Compose, see the **[OIDC & OAuth2 Authentication Guide](docs/deployment/oidc-authentication.md)**.
+The application will be live at `http://localhost:8080`.
+
+For detailed configuration (database persistence, environment variables, reverse proxies with SSL/TLS, and backups), see our dedicated deployment guides:
+
+- **[Production Docker Deployment Guide](docs/deployment/docker-deployment.md)** — Comprehensive guide for deploying on any Linux host with Nginx, Caddy, Traefik, or Cloudflare Tunnel.
+- **[TrueNAS Scale Deployment Guide](docs/deployment/truenas-scale.md)** — Step-by-step instructions for TrueNAS Scale (Electric Eel 24.10+ and Dragonfish 24.04), ZFS datasets, permissions, and automated snapshot backups.
+- **[OIDC & OAuth2 Authentication Guide](docs/deployment/oidc-authentication.md)** — Step-by-step setup for Single Sign-On with Google, Authentik, Keycloak, and Entra ID.
 
 ## Local development
 
@@ -64,8 +75,8 @@ Then run the API (`ASPNETCORE_ENVIRONMENT=Local`) and the Angular client as usua
 
 ### Local services
 
-| Service | Host endpoint | Notes |
-|---|---|---|
+| Service    | Host endpoint     | Notes                                                                                                                      |
+| ---------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
 | SQL Server | `localhost,14333` | Database `OpenDiagrammer`. User `sa`, password `OpenDiagrammer_Local_Dev_1`. Port 14333 avoids a local SQL Server on 1433. |
 
 SSMS / Azure Data Studio: server `localhost,14333`, SQL authentication, database `OpenDiagrammer`.
@@ -81,7 +92,7 @@ Do **not** point a Local debug session at Development AWS resources. Local and D
 
 ## Screenshots
 
-*(Screenshots of the UI, Light/Dark modes, and the collaborative canvas will be added here)*
+_(Screenshots of the UI, Light/Dark modes, and the collaborative canvas will be added here)_
 
 ## Licensing
 

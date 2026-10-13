@@ -1,0 +1,427 @@
+# Production Docker Deployment Guide
+
+This guide provides step-by-step instructions for deploying OpenDiagrammer in production using Docker and Docker Compose on any Linux host, VPS, homelab, or cloud VM (Ubuntu, Debian, Fedora, Arch, etc.).
+
+---
+
+## Table of Contents
+
+1. [Architecture Overview](#architecture-overview)
+2. [Prerequisites](#prerequisites)
+3. [Quick Start](#quick-start)
+4. [Environment Configuration Reference](#environment-configuration-reference)
+5. [Database Persistence & Automated Migrations](#database-persistence--automated-migrations)
+6. [Reverse Proxy & SSL / TLS Configuration](#reverse-proxy--ssl--tls-configuration)
+   - [Nginx](#nginx)
+   - [Caddy](#caddy)
+   - [Traefik](#traefik)
+   - [Cloudflare Tunnel](#cloudflare-tunnel)
+7. [Database Backup & Restore](#database-backup--restore)
+8. [Updating OpenDiagrammer](#updating-opendiagrammer)
+9. [Troubleshooting & Logs](#troubleshooting--logs)
+
+---
+
+## Architecture Overview
+
+OpenDiagrammer's production container architecture is designed to be streamlined, lightweight, and robust:
+
+- **`open-diagrammer-api` (Unified Application Container)**:
+  - Serves the compiled Angular 22 Single Page Application (SPA) from static files.
+  - Hosts the ASP.NET Core 10 Web API and Swagger / OpenAPI endpoints.
+  - Hosts the real-time SignalR CRDT collaboration hub (`/hubs/board`) over WebSockets.
+  - Listens on internal port `8080`.
+  - Automatically verifies and applies pending database schema migrations on container boot.
+- **`open-diagrammer-sqlserver` (Database Container)**:
+  - Microsoft SQL Server 2022 Linux container (`mcr.microsoft.com/mssql/server:2022-latest`).
+  - Persists all relational data, board snapshots, revision history, and user credentials in a persistent named volume or host bind-mount.
+
+```
+┌────────────────────────────────────────────────────────┐
+│                     Client Browser                     │
+└───────────────────────────┬────────────────────────────┘
+                            │ HTTPS & WSS (443)
+┌───────────────────────────▼────────────────────────────┐
+│          Reverse Proxy (Nginx / Caddy / Traefik)       │
+└───────────────────────────┬────────────────────────────┘
+                            │ HTTP & WS (8080)
+┌───────────────────────────▼────────────────────────────┐
+│      OpenDiagrammer Container (SPA + API + SignalR)    │
+└───────────────────────────┬────────────────────────────┘
+                            │ SQL TDS (1433)
+┌───────────────────────────▼────────────────────────────┐
+│             Microsoft SQL Server Container             │
+│                 (Persistent Storage)                   │
+└────────────────────────────────────────────────────────┘
+```
+
+---
+
+## Prerequisites
+
+- **Operating System**: Linux (Ubuntu 22.04+, Debian 12+, Rocky/RHEL 9+) with root or `sudo` access.
+- **Docker Engine**: Docker 24.0+ installed.
+- **Docker Compose**: Docker Compose v2.20+ (`docker compose` CLI plugin).
+- **Hardware Requirements**:
+  - Minimum: 2 CPU cores, 2 GB RAM (SQL Server requires at least 2 GB RAM).
+  - Recommended: 4 CPU cores, 4 GB+ RAM.
+- **A Domain Name**: pointing to your server's IP address (e.g., `diagrams.yourdomain.com`).
+
+---
+
+## Quick Start
+
+### 1. Clone or Copy the Repository
+
+```bash
+git clone https://github.com/YourOrg/OpenDiagrammer.git /opt/opendiagrammer
+cd /opt/opendiagrammer
+```
+
+### 2. Configure Environment Variables (`.env`)
+
+Create a `.env` file in the project root alongside `docker-compose.prod.yml`:
+
+```bash
+cp .env.example .env
+nano .env
+```
+
+Generate secure secrets for the SQL Server SA account and the JWT signing key:
+
+```bash
+# Generate a 32+ character random secret
+openssl rand -base64 32
+```
+
+Configure your `.env` file:
+
+```env
+# Database Settings
+SQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
+
+# OpenDiagrammer Security Settings
+JWT_SECRET=ReplaceWithYourGeneratedBase64SecretKeyAtLeast32CharsLong!
+
+# Application Port (Host port mapping)
+APP_PORT=8080
+
+# Optional: Hostname for CORS / Cookies
+APP_HOST=diagrams.yourdomain.com
+```
+
+### 3. Review `docker-compose.prod.yml`
+
+Verify `docker-compose.prod.yml`:
+
+```yaml
+name: open-diagrammer-prod
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: OpenDiagrammer.API/Dockerfile
+    image: opendiagrammer:latest
+    container_name: open-diagrammer-api
+    restart: unless-stopped
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;"
+      Authentication__Jwt__Secret: "${JWT_SECRET}"
+    ports:
+      - "${APP_PORT:-8080}:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: open-diagrammer-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD}"
+      MSSQL_PID: "Express" # Or "Developer" / "Standard"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SQL_SA_PASSWORD}" -C -Q "SELECT 1" -b -o /dev/null',
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+volumes:
+  sqlserver_data:
+    name: opendiagrammer_sqlserver_data
+```
+
+### 4. Build and Launch
+
+Start the services in detached mode:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+Monitor the startup logs to verify the database healthcheck and automatic EF Core migration execution:
+
+```bash
+docker compose -f docker-compose.prod.yml logs -f api
+```
+
+You should see log entries showing:
+
+```text
+Applying migration '20261013210602_AddBoardRevisions'...
+Database migration complete.
+Now listening on: http://[::]:8080
+Application started. Press Ctrl+C to shut down.
+```
+
+Visit `http://your-server-ip:8080` in your web browser. You should see the OpenDiagrammer sign-in page!
+
+---
+
+## Environment Configuration Reference
+
+The following environment variables can be customized in `.env` or passed directly to the `api` service container:
+
+| Variable                               | Default                 | Description                                                         |
+| -------------------------------------- | ----------------------- | ------------------------------------------------------------------- |
+| `ASPNETCORE_ENVIRONMENT`               | `Production`            | Controls ASP.NET Core environment mode. Always set to `Production`. |
+| `ASPNETCORE_HTTP_PORTS`                | `8080`                  | Internal listening port inside the container.                       |
+| `ConnectionStrings__DefaultConnection` | Required                | ADO.NET connection string pointing to SQL Server.                   |
+| `Authentication__Jwt__Secret`          | Required                | Secret signing key for JWT auth tokens. Must be >= 32 characters.   |
+| `Authentication__Jwt__Issuer`          | `OpenDiagrammer.API`    | Token issuer claim.                                                 |
+| `Authentication__Jwt__Audience`        | `OpenDiagrammer.Client` | Token audience claim.                                               |
+| `Authentication__Jwt__ExpiryMinutes`   | `10080` (7 days)        | Session token validity duration in minutes.                         |
+| `Authentication__Oidc__Enabled`        | `false`                 | Set to `true` to enable external Single Sign-On.                    |
+| `Authentication__Oidc__ProviderName`   | -                       | Display label on the login screen (e.g., `Google`, `Authentik`).    |
+| `Authentication__Oidc__Authority`      | -                       | OIDC Identity Provider discovery authority URL.                     |
+| `Authentication__Oidc__ClientId`       | -                       | OAuth2 Client ID from your provider.                                |
+| `Authentication__Oidc__ClientSecret`   | -                       | OAuth2 Client Secret from your provider.                            |
+| `Authentication__Oidc__Scope`          | `openid profile email`  | Requested OAuth2 scopes.                                            |
+
+> [!TIP]
+> For complete step-by-step instructions on setting up Google, Authentik, Keycloak, or Entra ID SSO, see the **[OIDC Authentication Guide](oidc-authentication.md)**.
+
+---
+
+## Database Persistence & Automated Migrations
+
+OpenDiagrammer uses Entity Framework Core with automatic startup migrations:
+
+1. When the `open-diagrammer-api` container boots, it checks the database specified in `ConnectionStrings__DefaultConnection`.
+2. If the `OpenDiagrammer` database does not exist, it creates it automatically.
+3. It evaluates pending migrations in `OpenDiagrammer.Data/Migrations` and executes any unapplied schema updates.
+4. Database tables, indexes, CRDT snapshots, revision history, and user accounts are fully managed without requiring manual SQL script execution.
+
+All database files (`.mdf`, `.ldf`, system catalogs) reside inside `/var/opt/mssql` inside the `sqlserver` container and are persisted in the `sqlserver_data` Docker volume.
+
+---
+
+## Reverse Proxy & SSL / TLS Configuration
+
+To securely serve OpenDiagrammer with HTTPS and support real-time WebSocket collaboration, place a reverse proxy in front of the container.
+
+### Nginx
+
+Create `/etc/nginx/sites-available/opendiagrammer.conf`:
+
+```nginx
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name diagrams.yourdomain.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name diagrams.yourdomain.com;
+
+    ssl_certificate /etc/letsencrypt/live/diagrams.yourdomain.com/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/diagrams.yourdomain.com/privkey.pem;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+        proxy_http_version 1.1;
+
+        # WebSocket support for SignalR real-time collaboration
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+
+        # Disable proxy buffering for low-latency collaboration updates
+        proxy_buffering off;
+        proxy_read_timeout 86400s;
+        proxy_send_timeout 86400s;
+    }
+}
+```
+
+Enable the site and reload Nginx:
+
+```bash
+sudo ln -s /etc/nginx/sites-available/opendiagrammer.conf /etc/nginx/sites-enabled/
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+---
+
+### Caddy
+
+Add the following block to your `/etc/caddy/Caddyfile`:
+
+```caddy
+diagrams.yourdomain.com {
+    reverse_proxy 127.0.0.1:8080 {
+        # Caddy automatically proxies WebSockets out of the box!
+        header_up X-Forwarded-Proto {scheme}
+    }
+}
+```
+
+Reload Caddy:
+
+```bash
+sudo systemctl reload caddy
+```
+
+---
+
+### Traefik
+
+If running Traefik as your Docker edge router, add labels to the `api` service in `docker-compose.prod.yml`:
+
+```yaml
+services:
+  api:
+    # ...
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.opendiagrammer.rule=Host(`diagrams.yourdomain.com`)"
+      - "traefik.http.routers.opendiagrammer.entrypoints=websecure"
+      - "traefik.http.routers.opendiagrammer.tls.certresolver=myresolver"
+      - "traefik.http.services.opendiagrammer.loadbalancer.server.port=8080"
+```
+
+---
+
+### Cloudflare Tunnel
+
+If using `cloudflared` (Zero Trust Tunnel):
+
+1. In Cloudflare Zero Trust Dashboard, navigate to **Networks** -> **Tunnels**.
+2. Add a Public Hostname:
+   - Subdomain: `diagrams`
+   - Domain: `yourdomain.com`
+   - Service Type: `HTTP`
+   - URL: `localhost:8080` (or `open-diagrammer-api:8080` if in same Docker network)
+3. Under **Additional application settings** -> **HTTP Settings**, enable **No TLS Verify** (if applicable) and ensure **WebSockets** are enabled on your Cloudflare zone.
+
+---
+
+## Database Backup & Restore
+
+### Backing Up the Database
+
+You can take a clean SQL Server backup using `sqlcmd` directly inside the container without stopping the service:
+
+```bash
+docker exec -t open-diagrammer-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+  -S localhost -U sa -P "YourStrongDatabasePassword123!" -C \
+  -Q "BACKUP DATABASE [OpenDiagrammer] TO DISK = N'/var/opt/mssql/data/OpenDiagrammer_backup.bak' WITH NOFORMAT, NOINIT, SKIP, NOREWIND, NOUNLOAD, STATS = 10"
+```
+
+Then copy the backup file to your host backup directory:
+
+```bash
+docker cp open-diagrammer-sqlserver:/var/opt/mssql/data/OpenDiagrammer_backup.bak /backups/opendiagrammer_$(date +%F).bak
+```
+
+### Restoring the Database
+
+1. Copy the backup file into the SQL Server container:
+   ```bash
+   docker cp /backups/opendiagrammer_2026-10-13.bak open-diagrammer-sqlserver:/var/opt/mssql/data/restore.bak
+   ```
+2. Execute the restore command:
+   ```bash
+   docker exec -t open-diagrammer-sqlserver /opt/mssql-tools18/bin/sqlcmd \
+     -S localhost -U sa -P "YourStrongDatabasePassword123!" -C \
+     -Q "RESTORE DATABASE [OpenDiagrammer] FROM DISK = N'/var/opt/mssql/data/restore.bak' WITH REPLACE"
+   ```
+3. Restart the `open-diagrammer-api` container to re-initialize connection pools:
+   ```bash
+   docker compose -f docker-compose.prod.yml restart api
+   ```
+
+---
+
+## Updating OpenDiagrammer
+
+To update to a new version:
+
+```bash
+cd /opt/opendiagrammer
+
+# 1. Pull latest code or release tag
+git pull origin main
+
+# 2. Rebuild and restart the container
+docker compose -f docker-compose.prod.yml up -d --build
+
+# 3. Verify logs
+docker compose -f docker-compose.prod.yml logs -f api
+```
+
+The database container remains untouched with all data preserved in `sqlserver_data`, and any new EF Core migrations are automatically applied on startup.
+
+---
+
+## Troubleshooting & Logs
+
+### Viewing Logs
+
+```bash
+# View combined logs
+docker compose -f docker-compose.prod.yml logs -f
+
+# View API logs only
+docker compose -f docker-compose.prod.yml logs -f api
+
+# View SQL Server logs only
+docker compose -f docker-compose.prod.yml logs -f sqlserver
+```
+
+### Common Issues
+
+1. **SQL Server container exiting with code 1**:
+   - Cause: The SA password does not meet Microsoft SQL Server complexity requirements (must contain uppercase, lowercase, numbers, and special symbols; minimum 8 characters).
+   - Fix: Update `SQL_SA_PASSWORD` in `.env` to a compliant password and restart.
+2. **Container running out of memory**:
+   - Cause: Host has less than 2 GB RAM available for SQL Server.
+   - Fix: Ensure the host has at least 2 GB free memory or allocate swap space.
+3. **WebSockets disconnecting frequently**:
+   - Cause: Reverse proxy timeout is too short for idle persistent connections.
+   - Fix: Increase `proxy_read_timeout` to `86400s` in Nginx, or enable keep-alive pings.
+4. **Port 8080 already in use**:
+   - Fix: Change `APP_PORT=8085` in `.env` and update your reverse proxy `proxy_pass` to match.
