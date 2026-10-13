@@ -231,4 +231,130 @@ public sealed class BoardsController(
             );
         }
     }
+
+    [HttpGet("{id:guid}/revisions")]
+    [ProducesResponseType(typeof(IReadOnlyList<BoardRevisionSummaryDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetBoardRevisions(Guid id, CancellationToken cancellationToken)
+    {
+        try
+        {
+            var revisions = await boardService.GetBoardRevisionsAsync(
+                CurrentUserId,
+                id,
+                cancellationToken
+            );
+            return Ok(revisions);
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpGet("{id:guid}/revisions/{revisionId:guid}")]
+    [ProducesResponseType(typeof(BoardRevisionDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> GetBoardRevisionById(
+        Guid id,
+        Guid revisionId,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var revision = await boardService.GetBoardRevisionByIdAsync(
+                CurrentUserId,
+                id,
+                revisionId,
+                cancellationToken
+            );
+            return revision is not null ? Ok(revision) : NotFound();
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+    }
+
+    [HttpPost("{id:guid}/revisions")]
+    [ProducesResponseType(typeof(BoardRevisionDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> CreateBoardRevision(
+        Guid id,
+        [FromBody] CreateBoardRevisionRequest request,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var revision = await boardService.CreateBoardRevisionAsync(
+                CurrentUserId,
+                id,
+                request,
+                cancellationToken
+            );
+            return CreatedAtAction(
+                nameof(GetBoardRevisionById),
+                new { id, revisionId = revision.Id },
+                revision
+            );
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
+
+    [HttpPost("{id:guid}/revisions/{revisionId:guid}/restore")]
+    [ProducesResponseType(typeof(BoardDetailDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status403Forbidden)]
+    public async Task<IActionResult> RestoreBoardRevision(
+        Guid id,
+        Guid revisionId,
+        CancellationToken cancellationToken
+    )
+    {
+        try
+        {
+            var board = await boardService.RestoreBoardRevisionAsync(
+                CurrentUserId,
+                id,
+                revisionId,
+                cancellationToken
+            );
+
+            if (board is null)
+            {
+                return NotFound();
+            }
+
+            if (board.CrdtState is not null)
+            {
+                await hubContext.Clients.Group($"board_{id}").ReceiveCrdtUpdate(board.CrdtState);
+            }
+
+            return Ok(board);
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
+        }
+        catch (KeyNotFoundException)
+        {
+            return NotFound();
+        }
+    }
 }

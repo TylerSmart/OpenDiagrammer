@@ -709,4 +709,145 @@ public sealed class BoardIntegrationTests
         );
         Assert.AreEqual(HttpStatusCode.Forbidden, updateRes.StatusCode);
     }
+
+    [TestMethod]
+    public async Task CreateBoardRevision_Owner_ReturnsCreated()
+    {
+        var owner = await RegisterUserAsync("rev_owner_1", "rev_owner_1@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Revision Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        // Update canvas data
+        await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/canvas",
+            new UpdateCanvasDataRequest("{\"shapes\":[{\"id\":\"s1\"}]}")
+        );
+
+        // Create revision snapshot
+        var revRes = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/revisions",
+            new CreateBoardRevisionRequest("Initial Design", "V1 snapshot")
+        );
+        Assert.AreEqual(HttpStatusCode.Created, revRes.StatusCode);
+
+        var rev = await revRes.Content.ReadFromJsonAsync<BoardRevisionDto>();
+        Assert.IsNotNull(rev);
+        Assert.AreEqual("Initial Design", rev.Title);
+        Assert.AreEqual("V1 snapshot", rev.Description);
+        Assert.AreEqual("{\"shapes\":[{\"id\":\"s1\"}]}", rev.CanvasDataJson);
+    }
+
+    [TestMethod]
+    public async Task GetBoardRevisions_ReturnsRevisionsList()
+    {
+        var owner = await RegisterUserAsync("rev_owner_2", "rev_owner_2@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Revision List Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/revisions",
+            new CreateBoardRevisionRequest("Rev 1")
+        );
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/revisions",
+            new CreateBoardRevisionRequest("Rev 2")
+        );
+
+        var listRes = await _client.GetAsync($"/api/boards/{board.Id}/revisions");
+        Assert.AreEqual(HttpStatusCode.OK, listRes.StatusCode);
+
+        var list = await listRes.Content.ReadFromJsonAsync<List<BoardRevisionSummaryDto>>();
+        Assert.IsNotNull(list);
+        Assert.HasCount(2, list);
+    }
+
+    [TestMethod]
+    public async Task RestoreBoardRevision_Owner_RestoresSuccessfully()
+    {
+        var owner = await RegisterUserAsync("rev_owner_3", "rev_owner_3@example.com");
+        SetAuthToken(owner.Token);
+
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Restore Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        // State 1
+        await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/canvas",
+            new UpdateCanvasDataRequest("{\"version\":1}")
+        );
+        var revRes = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/revisions",
+            new CreateBoardRevisionRequest("V1 Snapshot")
+        );
+        var rev1 = await revRes.Content.ReadFromJsonAsync<BoardRevisionDto>();
+        Assert.IsNotNull(rev1);
+
+        // State 2
+        await _client.PutAsJsonAsync(
+            $"/api/boards/{board.Id}/canvas",
+            new UpdateCanvasDataRequest("{\"version\":2}")
+        );
+
+        // Restore V1
+        var restoreRes = await _client.PostAsync(
+            $"/api/boards/{board.Id}/revisions/{rev1.Id}/restore",
+            null
+        );
+        Assert.AreEqual(HttpStatusCode.OK, restoreRes.StatusCode);
+
+        var restoredBoard = await restoreRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(restoredBoard);
+        Assert.AreEqual("{\"version\":1}", restoredBoard.CanvasDataJson);
+    }
+
+    [TestMethod]
+    public async Task RestoreBoardRevision_Editor_ReturnsForbidden()
+    {
+        var owner = await RegisterUserAsync("rev_owner_4", "rev_owner_4@example.com");
+        var editor = await RegisterUserAsync("rev_editor_4", "rev_editor_4@example.com");
+
+        SetAuthToken(owner.Token);
+        var createRes = await _client.PostAsJsonAsync(
+            "/api/boards",
+            new CreateBoardRequest("Editor Restore Board", null, null, null, null)
+        );
+        var board = await createRes.Content.ReadFromJsonAsync<BoardDetailDto>();
+        Assert.IsNotNull(board);
+
+        var revRes = await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/revisions",
+            new CreateBoardRevisionRequest("V1 Snapshot")
+        );
+        var rev1 = await revRes.Content.ReadFromJsonAsync<BoardRevisionDto>();
+        Assert.IsNotNull(rev1);
+
+        await _client.PostAsJsonAsync(
+            $"/api/boards/{board.Id}/members",
+            new AddBoardMemberRequest(editor.Email, BoardRole.Editor)
+        );
+
+        // Editor tries to restore
+        SetAuthToken(editor.Token);
+        var restoreRes = await _client.PostAsync(
+            $"/api/boards/{board.Id}/revisions/{rev1.Id}/restore",
+            null
+        );
+        Assert.AreEqual(HttpStatusCode.Forbidden, restoreRes.StatusCode);
+    }
 }

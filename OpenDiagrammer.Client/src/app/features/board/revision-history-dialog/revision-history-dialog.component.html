@@ -1,0 +1,114 @@
+<h2 mat-dialog-title class="dialog-title">
+  <mat-icon class="title-icon">history</mat-icon>
+  <span>Revision History</span>
+</h2>
+
+<mat-dialog-content class="dialog-content">
+  <p class="dialog-description">
+    View past snapshots of this board or capture a manual snapshot. Board owners and administrators
+    can restore past versions.
+  </p>
+
+  <!-- Create Snapshot Section -->
+  <section class="create-snapshot-card">
+    <h3 class="section-heading">Capture Snapshot</h3>
+    <form [formGroup]="form" (ngSubmit)="handleCreateSnapshot()" class="snapshot-form">
+      <div class="form-row">
+        <mat-form-field appearance="outline" class="title-field">
+          <mat-label>Snapshot Name</mat-label>
+          <input matInput formControlName="title" placeholder="e.g., Major Release v1.0" />
+        </mat-form-field>
+
+        <mat-form-field appearance="outline" class="desc-field">
+          <mat-label>Description (optional)</mat-label>
+          <input
+            matInput
+            formControlName="description"
+            placeholder="Brief notes about this version"
+          />
+        </mat-form-field>
+
+        <button
+          mat-flat-button
+          color="primary"
+          type="submit"
+          [disabled]="form.invalid || isCreating()"
+          class="create-btn"
+        >
+          @if (isCreating()) {
+            <mat-spinner diameter="18"></mat-spinner>
+          } @else {
+            <mat-icon>add</mat-icon>
+          }
+          <span>Take Snapshot</span>
+        </button>
+      </div>
+    </form>
+  </section>
+
+  <!-- Revision List -->
+  <section class="revisions-list-section">
+    <h3 class="section-heading">Previous Versions</h3>
+
+    @if (isLoading()) {
+      <div class="loading-state">
+        <mat-spinner diameter="32"></mat-spinner>
+        <span>Loading revisions...</span>
+      </div>
+    } @else if (revisions().length === 0) {
+      <div class="empty-state">
+        <mat-icon>history_toggle_off</mat-icon>
+        <p>
+          No revision snapshots recorded yet. Capture a snapshot above to preserve the board's
+          current state.
+        </p>
+      </div>
+    } @else {
+      <div class="revisions-timeline">
+        @for (rev of revisions(); track rev.id) {
+          <div class="revision-item">
+            <div class="timeline-indicator">
+              <mat-icon class="dot-icon">fiber_manual_record</mat-icon>
+            </div>
+            <div class="revision-details">
+              <div class="revision-header">
+                <span class="revision-title">{{ rev.title }}</span>
+                <span class="revision-date">{{ rev.createdAt | date: 'medium' }}</span>
+              </div>
+              @if (rev.description) {
+                <p class="revision-desc">{{ rev.description }}</p>
+              }
+              <div class="revision-meta">
+                <mat-icon class="author-icon">person</mat-icon>
+                <span>{{ rev.createdByUsername }}</span>
+              </div>
+            </div>
+
+            @if (canRestore) {
+              <div class="revision-actions">
+                <button
+                  mat-stroked-button
+                  color="accent"
+                  [disabled]="restoringId() !== null"
+                  (click)="handleRestore(rev)"
+                  matTooltip="Restore this snapshot to the canvas"
+                >
+                  @if (restoringId() === rev.id) {
+                    <mat-spinner diameter="16"></mat-spinner>
+                  } @else {
+                    <mat-icon>restore</mat-icon>
+                  }
+                  <span>Restore</span>
+                </button>
+              </div>
+            }
+          </div>
+        }
+      </div>
+    }
+  </section>
+</mat-dialog-content>
+
+<mat-dialog-actions align="end" class="dialog-actions">
+  <button mat-button (click)="handleClose()">Close</button>
+</mat-dialog-actions>

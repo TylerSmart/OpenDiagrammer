@@ -6,6 +6,7 @@ using YDotNet.Document.Cells;
 namespace OpenDiagrammer.Core.UnitTests;
 
 [TestClass]
+[DoNotParallelize]
 public class CrdtMergeServiceTests
 {
     private readonly ICrdtMergeService _mergeService = new YDotNetCrdtMergeService();

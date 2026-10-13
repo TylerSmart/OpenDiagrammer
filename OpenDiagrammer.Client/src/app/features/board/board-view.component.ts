@@ -55,6 +55,12 @@ import {
   ThinkModeDialogData,
   ThinkModeDialogResult,
 } from './think-mode-dialog/think-mode-dialog.component';
+import {
+  RevisionHistoryDialogComponent,
+  RevisionHistoryDialogData,
+  RevisionHistoryDialogResult,
+} from './revision-history-dialog/revision-history-dialog.component';
+import { ExportDialogComponent, ExportDialogData } from './export-dialog/export-dialog.component';
 import { FramesNavigatorComponent } from './frames-navigator/frames-navigator.component';
 import { CanvasShape, FramePreset } from './canvas/shape.models';
 
@@ -406,6 +412,76 @@ export class BoardViewComponent implements OnInit {
       } else if (result.action === 'updated') {
         this.board.set(result.board);
       }
+    });
+  }
+
+  handleUndo(): void {
+    this.canvasComponent()?.undo();
+  }
+
+  handleRedo(): void {
+    this.canvasComponent()?.redo();
+  }
+
+  openRevisionHistoryDialog(): void {
+    const current = this.board();
+    if (!current) {
+      return;
+    }
+
+    const dialogRef = this.dialog.open<
+      RevisionHistoryDialogComponent,
+      RevisionHistoryDialogData,
+      RevisionHistoryDialogResult
+    >(RevisionHistoryDialogComponent, {
+      width: '640px',
+      maxHeight: '90vh',
+      data: {
+        boardId: current.id,
+        userRole: current.userRole,
+      },
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (result?.restoredBoard) {
+        this.board.set(result.restoredBoard);
+        if (result.restoredBoard.canvasDataJson) {
+          try {
+            const parsed = JSON.parse(result.restoredBoard.canvasDataJson);
+            this.canvasComponent()?.applyExternalDiagramData(parsed);
+          } catch {
+            // Ignore parse errors
+          }
+        }
+        if (result.restoredBoard.crdtState) {
+          this.crdtService.applyRemoteUpdate(base64ToUint8Array(result.restoredBoard.crdtState));
+        }
+      }
+    });
+  }
+
+  openExportDialog(): void {
+    const current = this.board();
+    if (!current) {
+      return;
+    }
+
+    const canvas = this.canvasComponent();
+    const shapes = canvas?.shapes() ?? [];
+    const connections = canvas?.renderedConnections() ?? [];
+    const frames = canvas?.frames() ?? [];
+    const isDark = this.themeService.isDark();
+
+    this.dialog.open<ExportDialogComponent, ExportDialogData, boolean>(ExportDialogComponent, {
+      width: '560px',
+      maxHeight: '90vh',
+      data: {
+        boardName: current.name,
+        shapes,
+        connections,
+        frames,
+        isDark,
+      },
     });
   }
 

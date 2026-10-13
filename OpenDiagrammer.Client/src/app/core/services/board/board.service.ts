@@ -6,8 +6,11 @@ import {
   AddBoardMemberRequest,
   BoardDetailDto,
   BoardMemberDto,
+  BoardRevisionDto,
+  BoardRevisionSummaryDto,
   BoardSummaryDto,
   CreateBoardRequest,
+  CreateBoardRevisionRequest,
   TransferOwnershipRequest,
   UpdateBoardMemberRoleRequest,
   UpdateBoardRequest,
@@ -67,5 +70,27 @@ export class BoardService {
 
   removeMember(boardId: string, userId: string): Observable<void> {
     return this.http.delete<void>(apiUrl(`/boards/${boardId}/members/${userId}`));
+  }
+
+  getRevisions(boardId: string): Observable<BoardRevisionSummaryDto[]> {
+    return this.http.get<BoardRevisionSummaryDto[]>(apiUrl(`/boards/${boardId}/revisions`));
+  }
+
+  getRevision(boardId: string, revisionId: string): Observable<BoardRevisionDto> {
+    return this.http.get<BoardRevisionDto>(apiUrl(`/boards/${boardId}/revisions/${revisionId}`));
+  }
+
+  createRevision(
+    boardId: string,
+    request: CreateBoardRevisionRequest,
+  ): Observable<BoardRevisionDto> {
+    return this.http.post<BoardRevisionDto>(apiUrl(`/boards/${boardId}/revisions`), request);
+  }
+
+  restoreRevision(boardId: string, revisionId: string): Observable<BoardDetailDto> {
+    return this.http.post<BoardDetailDto>(
+      apiUrl(`/boards/${boardId}/revisions/${revisionId}/restore`),
+      {},
+    );
   }
 }

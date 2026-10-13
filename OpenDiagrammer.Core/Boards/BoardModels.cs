@@ -95,3 +95,30 @@ public sealed record AddBoardMemberRequest(
 );
 
 public sealed record UpdateBoardMemberRoleRequest([Required] BoardRole Role);
+
+public sealed record BoardRevisionSummaryDto(
+    Guid Id,
+    Guid BoardId,
+    string Title,
+    string? Description,
+    Guid CreatedById,
+    string CreatedByUsername,
+    DateTimeOffset CreatedAt
+);
+
+public sealed record BoardRevisionDto(
+    Guid Id,
+    Guid BoardId,
+    string Title,
+    string? Description,
+    Guid CreatedById,
+    string CreatedByUsername,
+    string? CanvasDataJson,
+    byte[]? CrdtState,
+    DateTimeOffset CreatedAt
+);
+
+public sealed record CreateBoardRevisionRequest(
+    [Required, MinLength(1), MaxLength(200)] string Title,
+    [MaxLength(2000)] string? Description = null
+);

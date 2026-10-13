@@ -36,4 +36,10 @@ public static class BoardPermissions
 
     public static bool CanViewBoard(this BoardRole role) =>
         role is BoardRole.Owner or BoardRole.Admin or BoardRole.Editor or BoardRole.Viewer;
+
+    public static bool CanManageRevisions(this BoardRole role) =>
+        role is BoardRole.Owner or BoardRole.Admin;
+
+    public static bool CanCreateRevision(this BoardRole role) =>
+        role is BoardRole.Owner or BoardRole.Admin or BoardRole.Editor;
 }
