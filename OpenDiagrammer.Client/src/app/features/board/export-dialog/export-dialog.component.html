@@ -1,0 +1,117 @@
+<div class="export-dialog-container">
+  <h2 mat-dialog-title class="dialog-title">
+    <mat-icon aria-hidden="true">file_download</mat-icon>
+    <span>Export Board</span>
+  </h2>
+
+  <mat-dialog-content class="dialog-content">
+    <!-- Format Selection -->
+    <div class="section-group">
+      <div class="section-label">File Format</div>
+      <div class="format-cards-grid" role="radiogroup" aria-label="Export file format">
+        @for (item of availableFormats; track item.format) {
+          <button
+            type="button"
+            class="format-card"
+            [class.is-selected]="selectedFormat() === item.format"
+            (click)="selectedFormat.set(item.format)"
+            role="radio"
+            [attr.aria-checked]="selectedFormat() === item.format"
+          >
+            <div class="format-card-header">
+              <mat-icon class="format-icon">{{ item.icon }}</mat-icon>
+              <span class="format-label">{{ item.label }}</span>
+            </div>
+            <div class="format-card-desc">{{ item.description }}</div>
+          </button>
+        }
+      </div>
+    </div>
+
+    <!-- Area / Scope Selection -->
+    <div class="section-group">
+      <div class="section-label">Export Area</div>
+      <mat-form-field appearance="outline" class="full-width-field">
+        <mat-label>Area to Export</mat-label>
+        <mat-select [value]="selectedArea()" (valueChange)="selectedArea.set($event)">
+          <mat-option value="full">
+            <div class="area-option">
+              <mat-icon class="option-icon">select_all</mat-icon>
+              <span>Entire Board (All content)</span>
+            </div>
+          </mat-option>
+          @for (frame of data.frames; track frame.id) {
+            <mat-option [value]="frame.id">
+              <div class="area-option">
+                <mat-icon class="option-icon">crop_free</mat-icon>
+                <span
+                  >Frame: {{ frame.text || 'Untitled Frame' }} ({{ frame.width }} ×
+                  {{ frame.height }})</span
+                >
+              </div>
+            </mat-option>
+          }
+        </mat-select>
+      </mat-form-field>
+    </div>
+
+    <!-- Background Options -->
+    <div class="section-group">
+      <div class="section-label">Background</div>
+      <mat-radio-group
+        class="background-radio-group"
+        [ngModel]="selectedBackground()"
+        (ngModelChange)="selectedBackground.set($event)"
+      >
+        <mat-radio-button value="theme">
+          <span class="radio-label-title">Match Theme Background</span>
+          <span class="radio-label-desc"
+            >Uses current canvas background color ({{ data.isDark ? 'Dark' : 'Light' }})</span
+          >
+        </mat-radio-button>
+        <mat-radio-button value="transparent">
+          <span class="radio-label-title">Transparent Background</span>
+          <span class="radio-label-desc">
+            @if (selectedFormat() === 'jpeg') {
+              (Note: JPEG format will use a solid background)
+            } @else {
+              Clean transparent background for embedding
+            }
+          </span>
+        </mat-radio-button>
+      </mat-radio-group>
+    </div>
+
+    <!-- Preview / Estimated Size Banner -->
+    <div class="preview-info-banner">
+      <mat-icon class="info-icon">info</mat-icon>
+      <div class="info-text">
+        <span>Estimated Export Dimensions: </span>
+        <strong>{{ estimatedBounds().width }} × {{ estimatedBounds().height }} px</strong>
+      </div>
+    </div>
+  </mat-dialog-content>
+
+  <mat-dialog-actions align="end" class="dialog-actions">
+    <button mat-button type="button" [disabled]="isExporting()" (click)="handleCancel()">
+      Cancel
+    </button>
+    <button
+      mat-flat-button
+      color="primary"
+      type="button"
+      [disabled]="isExporting()"
+      (click)="handleExport()"
+    >
+      @if (isExporting()) {
+        <mat-spinner diameter="18" class="button-spinner"></mat-spinner>
+        <span>Exporting...</span>
+      } @else {
+        <ng-container>
+          <mat-icon>download</mat-icon>
+          <span>Export {{ selectedFormat().toUpperCase() }}</span>
+        </ng-container>
+      }
+    </button>
+  </mat-dialog-actions>
+</div>

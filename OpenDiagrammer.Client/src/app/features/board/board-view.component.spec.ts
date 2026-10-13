@@ -542,5 +542,22 @@ describe('BoardViewComponent', () => {
       component.handlePresent();
       expect(toggleSpy).toHaveBeenCalled();
     });
+
+    it('should open export dialog when openExportDialog is called', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      component.openExportDialog();
+
+      expect(mockDialog.open).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.objectContaining({
+          width: '560px',
+          data: expect.objectContaining({
+            boardName: 'Architecture Plan',
+          }),
+        }),
+      );
+    });
   });
 });

@@ -60,6 +60,7 @@ import {
   RevisionHistoryDialogData,
   RevisionHistoryDialogResult,
 } from './revision-history-dialog/revision-history-dialog.component';
+import { ExportDialogComponent, ExportDialogData } from './export-dialog/export-dialog.component';
 import { FramesNavigatorComponent } from './frames-navigator/frames-navigator.component';
 import { CanvasShape, FramePreset } from './canvas/shape.models';
 
@@ -456,6 +457,31 @@ export class BoardViewComponent implements OnInit {
           this.crdtService.applyRemoteUpdate(base64ToUint8Array(result.restoredBoard.crdtState));
         }
       }
+    });
+  }
+
+  openExportDialog(): void {
+    const current = this.board();
+    if (!current) {
+      return;
+    }
+
+    const canvas = this.canvasComponent();
+    const shapes = canvas?.shapes() ?? [];
+    const connections = canvas?.renderedConnections() ?? [];
+    const frames = canvas?.frames() ?? [];
+    const isDark = this.themeService.isDark();
+
+    this.dialog.open<ExportDialogComponent, ExportDialogData, boolean>(ExportDialogComponent, {
+      width: '560px',
+      maxHeight: '90vh',
+      data: {
+        boardName: current.name,
+        shapes,
+        connections,
+        frames,
+        isDark,
+      },
     });
   }
 

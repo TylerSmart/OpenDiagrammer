@@ -196,6 +196,16 @@
           <mat-icon>history</mat-icon>
         </button>
 
+        <!-- Export button -->
+        <button
+          mat-icon-button
+          (click)="openExportDialog()"
+          aria-label="Export board"
+          matTooltip="Export board (PDF, SVG, PNG, JPEG)"
+        >
+          <mat-icon>file_download</mat-icon>
+        </button>
+
         <!-- Settings button -->
         @if (canManageSettings(currentBoard.userRole)) {
           <button
