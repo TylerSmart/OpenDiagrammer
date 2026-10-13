@@ -36,13 +36,15 @@ export class CanvasShapeComponent {
 
   readonly anchors: AnchorPosition[] = ['top', 'right', 'bottom', 'left'];
 
+  readonly isFrame = computed(() => this.shape().type === 'frame');
+
   readonly shapeStyles = computed(() => {
     const s = this.shape();
     return {
       transform: `translate(${s.x}px, ${s.y}px)`,
       width: `${s.width}px`,
       height: `${s.height}px`,
-      zIndex: 10 + s.zIndex,
+      zIndex: s.type === 'frame' ? Math.max(1, s.zIndex) : 10 + s.zIndex,
     };
   });
 

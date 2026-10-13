@@ -476,4 +476,71 @@ describe('BoardViewComponent', () => {
       expect(updated?.isTimerRunning).toBe(true);
     });
   });
+
+  describe('Frames and Pages', () => {
+    it('should toggle frames navigator panel open and closed', () => {
+      expect(component['isFramesNavigatorOpen']()).toBe(false);
+      component.toggleFramesNavigator();
+      expect(component['isFramesNavigatorOpen']()).toBe(true);
+      component.toggleFramesNavigator();
+      expect(component['isFramesNavigatorOpen']()).toBe(false);
+    });
+
+    it('should handle frame addition, selection, renaming, and deletion', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const canvas = component['canvasComponent']();
+      expect(canvas).toBeTruthy();
+
+      // Add a frame
+      component.handleFrameAdd({
+        id: 'presentation-16-9',
+        name: 'Presentation (16:9)',
+        width: 1920,
+        height: 1080,
+        icon: 'slideshow',
+      });
+
+      expect(component['framesList']().length).toBe(1);
+      const addedFrame = component['framesList']()[0];
+      expect(addedFrame.type).toBe('frame');
+      expect(component['activeFrameId']()).toBe(addedFrame.id);
+
+      // Rename frame
+      component.handleFrameRename({
+        id: addedFrame.id,
+        title: 'Renamed Frame Title',
+      });
+      const renamedFrame = component['framesList']()[0];
+      expect(renamedFrame.text).toBe('Renamed Frame Title');
+
+      // Select frame
+      component.handleFrameSelect(renamedFrame);
+      expect(component['activeFrameId']()).toBe(renamedFrame.id);
+
+      // Delete frame
+      component.handleFrameDelete(renamedFrame.id);
+      expect(component['framesList']().length).toBe(0);
+      expect(component['activeFrameId']()).toBeNull();
+    });
+
+    it('should trigger fullscreen presentation when handlePresent is called', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const toggleSpy = vi.spyOn(component['fullscreenService'], 'toggleFullscreen');
+
+      component.handleFrameAdd({
+        id: 'custom',
+        name: 'Custom Frame',
+        width: 800,
+        height: 600,
+        icon: 'crop_free',
+      });
+
+      component.handlePresent();
+      expect(toggleSpy).toHaveBeenCalled();
+    });
+  });
 });

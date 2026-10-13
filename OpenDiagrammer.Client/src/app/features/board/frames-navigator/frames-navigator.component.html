@@ -1,0 +1,212 @@
+<div class="frames-navigator-container" role="region" aria-label="Frames and Pages Navigator">
+  <!-- Header -->
+  <div class="navigator-header">
+    <div class="header-title-group">
+      <mat-icon class="header-icon">art_track</mat-icon>
+      <h2 class="header-title">Frames & Pages</h2>
+      @if (frames().length > 0) {
+        <span class="count-pill">{{ frames().length }}</span>
+      }
+    </div>
+    <button
+      mat-icon-button
+      class="close-btn"
+      (click)="closeNavigator.emit()"
+      aria-label="Close frames navigator"
+      matTooltip="Close"
+    >
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <!-- Action Bar -->
+  <div class="navigator-action-bar">
+    @if (!readOnly()) {
+      <button
+        mat-flat-button
+        color="primary"
+        class="add-frame-btn"
+        [matMenuTriggerFor]="presetsMenu"
+        aria-label="Add Frame"
+      >
+        <mat-icon>add</mat-icon>
+        <span>Add Frame</span>
+        <mat-icon class="dropdown-arrow">arrow_drop_down</mat-icon>
+      </button>
+
+      <mat-menu #presetsMenu="matMenu" class="frame-presets-menu">
+        <div class="presets-menu-header">Select Frame Preset</div>
+        @for (preset of framePresets; track preset.id) {
+          <button mat-menu-item (click)="handleAdd(preset)">
+            <mat-icon>{{ preset.icon }}</mat-icon>
+            <div class="preset-item-info">
+              <span class="preset-name">{{ preset.name }}</span>
+              <span class="preset-desc">{{ preset.description }}</span>
+            </div>
+          </button>
+        }
+      </mat-menu>
+    }
+
+    @if (frames().length > 0) {
+      <button
+        mat-stroked-button
+        class="present-btn"
+        (click)="handlePresent()"
+        matTooltip="Present fullscreen starting from current frame"
+        aria-label="Present frames"
+      >
+        <mat-icon>slideshow</mat-icon>
+        <span>Present</span>
+      </button>
+    }
+  </div>
+
+  <!-- Frames List -->
+  <div class="navigator-list" role="list">
+    @if (frames().length === 0) {
+      <div class="empty-state">
+        <div class="empty-icon-circle">
+          <mat-icon>crop_free</mat-icon>
+        </div>
+        <p class="empty-title">No Frames Yet</p>
+        <p class="empty-subtitle">
+          Frames partition your canvas into logical sections, presentation slides, or export areas.
+        </p>
+        @if (!readOnly()) {
+          <button
+            mat-stroked-button
+            color="primary"
+            class="empty-create-btn"
+            (click)="handleAdd(framePresets[0])"
+          >
+            <mat-icon>add</mat-icon>
+            <span>Create First Frame</span>
+          </button>
+        }
+      </div>
+    } @else {
+      @for (frame of frames(); track frame.id; let idx = $index) {
+        <div
+          class="frame-item-row"
+          [class.is-active]="activeFrameId() === frame.id"
+          tabindex="0"
+          (click)="handleSelect(frame)"
+          (keydown.enter)="handleSelect(frame)"
+          (keydown.space)="handleSelect(frame)"
+          role="button"
+          [attr.aria-label]="frame.text || 'Frame ' + (idx + 1)"
+        >
+          <span class="frame-index-badge">{{ idx + 1 }}</span>
+
+          <div class="frame-item-content">
+            @if (editingFrameId() === frame.id) {
+              <input
+                type="text"
+                class="frame-rename-input"
+                [ngModel]="editingTitle()"
+                (ngModelChange)="editingTitle.set($event)"
+                (keydown.enter)="commitRenaming(frame)"
+                (keydown.escape)="cancelRenaming()"
+                (blur)="commitRenaming(frame)"
+                (click)="$event.stopPropagation()"
+              />
+            } @else {
+              <span class="frame-item-name" (dblclick)="startRenaming(frame, $event)">
+                {{ frame.text || 'Frame ' + (idx + 1) }}
+              </span>
+              <span class="frame-item-size">{{ frame.width }} × {{ frame.height }}</span>
+            }
+          </div>
+
+          <div class="frame-item-actions">
+            <button
+              mat-icon-button
+              class="action-icon-btn"
+              (click)="handleSelect(frame, $event)"
+              matTooltip="Zoom to frame"
+              aria-label="Zoom to frame"
+            >
+              <mat-icon>filter_center_focus</mat-icon>
+            </button>
+
+            @if (!readOnly()) {
+              <button
+                mat-icon-button
+                class="action-icon-btn"
+                (click)="startRenaming(frame, $event)"
+                matTooltip="Rename frame"
+                aria-label="Rename frame"
+              >
+                <mat-icon>edit</mat-icon>
+              </button>
+
+              @if (idx > 0) {
+                <button
+                  mat-icon-button
+                  class="action-icon-btn"
+                  (click)="handleMove($event, frame.id, 'up')"
+                  matTooltip="Move up"
+                  aria-label="Move frame up"
+                >
+                  <mat-icon>arrow_upward</mat-icon>
+                </button>
+              }
+
+              @if (idx < frames().length - 1) {
+                <button
+                  mat-icon-button
+                  class="action-icon-btn"
+                  (click)="handleMove($event, frame.id, 'down')"
+                  matTooltip="Move down"
+                  aria-label="Move frame down"
+                >
+                  <mat-icon>arrow_downward</mat-icon>
+                </button>
+              }
+
+              <button
+                mat-icon-button
+                class="action-icon-btn delete-btn"
+                (click)="handleDelete($event, frame.id)"
+                matTooltip="Delete frame"
+                aria-label="Delete frame"
+              >
+                <mat-icon>delete_outline</mat-icon>
+              </button>
+            }
+          </div>
+        </div>
+      }
+    }
+  </div>
+
+  <!-- Presentation Stepper Footer -->
+  @if (frames().length > 0) {
+    <div class="navigator-footer" role="toolbar" aria-label="Presentation slide stepper">
+      <button
+        mat-icon-button
+        class="stepper-btn"
+        [disabled]="activeIndex() <= 0"
+        (click)="handlePrev()"
+        matTooltip="Previous frame"
+        aria-label="Previous frame"
+      >
+        <mat-icon>chevron_left</mat-icon>
+      </button>
+
+      <span class="stepper-text"> Frame {{ activeIndex() + 1 }} of {{ frames().length }} </span>
+
+      <button
+        mat-icon-button
+        class="stepper-btn"
+        [disabled]="activeIndex() >= frames().length - 1"
+        (click)="handleNext()"
+        matTooltip="Next frame"
+        aria-label="Next frame"
+      >
+        <mat-icon>chevron_right</mat-icon>
+      </button>
+    </div>
+  }
+</div>

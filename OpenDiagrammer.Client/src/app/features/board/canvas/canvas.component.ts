@@ -56,6 +56,8 @@ import {
   sanitizeRichText,
   SHAPE_CATALOG,
   STICKY_NOTE_COLORS,
+  FramePreset,
+  FRAME_PRESETS,
 } from './shape.models';
 import { CanvasShapeComponent } from './shape/canvas-shape.component';
 
@@ -111,11 +113,13 @@ export class CanvasComponent {
   readonly thinkModeConfig = input<ThinkModeConfig | null>(null);
   readonly canViewerParticipate = input<boolean>(false);
   readonly facilitatorReveal = input<boolean>(false);
+  readonly isFramesNavigatorOpen = input<boolean>(false);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
   readonly diagramChange = output<CanvasDiagramData>();
   readonly cursorMove = output<CanvasPoint>();
+  readonly openFramesNavigator = output<void>();
 
   // Internal reactive transform state
   readonly zoom = signal<number>(CANVAS_CONSTANTS.DEFAULT_ZOOM);
@@ -124,6 +128,7 @@ export class CanvasComponent {
 
   // Shapes & Diagramming State
   readonly shapes = signal<CanvasShape[]>([]);
+  readonly frames = computed(() => this.shapes().filter((s) => s.type === 'frame'));
   readonly selectedShapeIds = signal<Set<string>>(new Set<string>());
   readonly activeTool = signal<ActiveTool>('select');
 
@@ -1391,6 +1396,10 @@ export class CanvasComponent {
 
     const isTextBlock = type === 'text-block';
     const isSticky = type === 'sticky-note';
+    const isFrame = type === 'frame';
+
+    const frameCount = this.shapes().filter((s) => s.type === 'frame').length;
+    const frameText = isFrame ? `Frame ${frameCount + 1}` : defaultText;
 
     const newShape: CanvasShape = {
       id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
@@ -1399,26 +1408,163 @@ export class CanvasComponent {
       y: Math.round(worldPoint.y - height / 2),
       width,
       height,
-      fillColor: isTextBlock
-        ? 'transparent'
-        : isSticky
-          ? 'var(--canvas-color-amber-fill)'
-          : SHAPE_CONSTANTS.DEFAULT_FILL,
+      fillColor:
+        isTextBlock || isFrame
+          ? 'transparent'
+          : isSticky
+            ? 'var(--canvas-color-amber-fill)'
+            : SHAPE_CONSTANTS.DEFAULT_FILL,
       strokeColor: isTextBlock
         ? 'transparent'
-        : isSticky
-          ? 'var(--canvas-color-amber-stroke)'
-          : SHAPE_CONSTANTS.DEFAULT_STROKE,
+        : isFrame
+          ? 'var(--canvas-frame-stroke, rgba(140, 140, 160, 0.5))'
+          : isSticky
+            ? 'var(--canvas-color-amber-stroke)'
+            : SHAPE_CONSTANTS.DEFAULT_STROKE,
       strokeWidth: isTextBlock ? 0 : SHAPE_CONSTANTS.DEFAULT_STROKE_WIDTH,
-      text: defaultText,
+      text: frameText,
       authorName: isSticky ? this.currentUsername() || 'Author' : undefined,
       showAuthor: isSticky ? true : undefined,
-      zIndex: this.shapes().length + 1,
+      zIndex: isFrame ? 0 : this.shapes().length + 1,
     };
 
     this.shapes.update((list) => [...list, newShape]);
     this.selectShape(newShape.id);
     return newShape;
+  }
+
+  createFrame(preset?: FramePreset, worldPoint?: CanvasPoint): CanvasShape {
+    const p = preset ?? FRAME_PRESETS[0];
+    let point = worldPoint;
+    if (!point) {
+      const rect = this.elementRef.nativeElement.getBoundingClientRect();
+      const viewW = rect.width > 0 ? rect.width : 800;
+      const viewH = rect.height > 0 ? rect.height : 600;
+      point = this.screenToWorld({ x: viewW / 2, y: viewH / 2 });
+    }
+    const frameCount = this.shapes().filter((s) => s.type === 'frame').length;
+    const title = p.id === 'custom' ? `Frame ${frameCount + 1}` : `${p.name} ${frameCount + 1}`;
+
+    const newShape: CanvasShape = {
+      id: `shape_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      type: 'frame',
+      x: Math.round(point.x - p.width / 2),
+      y: Math.round(point.y - p.height / 2),
+      width: p.width,
+      height: p.height,
+      fillColor: 'transparent',
+      strokeColor: 'var(--canvas-frame-stroke, rgba(140, 140, 160, 0.5))',
+      strokeWidth: 2,
+      text: title,
+      zIndex: 0,
+    };
+
+    this.shapes.update((list) => [...list, newShape]);
+    this.selectShape(newShape.id);
+    return newShape;
+  }
+
+  isShapeInsideFrame(shape: CanvasShape, frame: CanvasShape): boolean {
+    if (shape.id === frame.id) {
+      return false;
+    }
+    const centerX = shape.x + shape.width / 2;
+    const centerY = shape.y + shape.height / 2;
+    return (
+      centerX >= frame.x &&
+      centerX <= frame.x + frame.width &&
+      centerY >= frame.y &&
+      centerY <= frame.y + frame.height
+    );
+  }
+
+  getShapesInFrame(frame: CanvasShape): CanvasShape[] {
+    return this.shapes().filter((s) => this.isShapeInsideFrame(s, frame));
+  }
+
+  zoomToFitBounds(
+    bounds: { x: number; y: number; width: number; height: number },
+    padding = 80,
+  ): void {
+    const rect = this.elementRef.nativeElement.getBoundingClientRect();
+    const viewWidth = rect.width > 0 ? rect.width : 800;
+    const viewHeight = rect.height > 0 ? rect.height : 600;
+
+    const availableWidth = Math.max(100, viewWidth - padding * 2);
+    const availableHeight = Math.max(100, viewHeight - padding * 2);
+
+    const scaleX = availableWidth / bounds.width;
+    const scaleY = availableHeight / bounds.height;
+    const targetZoom = Math.min(Math.max(Math.min(scaleX, scaleY), CANVAS_CONSTANTS.MIN_ZOOM), 1.5);
+
+    const frameCenterX = bounds.x + bounds.width / 2;
+    const frameCenterY = bounds.y + bounds.height / 2;
+
+    const newPanX = viewWidth / 2 - frameCenterX * targetZoom;
+    const newPanY = viewHeight / 2 - frameCenterY * targetZoom;
+
+    this.zoom.set(targetZoom);
+    this.panX.set(newPanX);
+    this.panY.set(newPanY);
+    this.emitTransformChange();
+  }
+
+  zoomToFrame(frameId: string): void {
+    const frame = this.shapes().find((s) => s.id === frameId && s.type === 'frame');
+    if (!frame) {
+      return;
+    }
+    this.zoomToFitBounds({ x: frame.x, y: frame.y, width: frame.width, height: frame.height });
+    this.selectShape(frame.id);
+  }
+
+  renameFrame(frameId: string, title: string): void {
+    this.updateShape(frameId, { text: title });
+  }
+
+  deleteFrame(frameId: string): void {
+    this.shapes.update((list) => list.filter((s) => s.id !== frameId));
+    if (this.selectedShapeIds().has(frameId)) {
+      this.selectedShapeIds.update((s) => {
+        const next = new Set(s);
+        next.delete(frameId);
+        return next;
+      });
+    }
+  }
+
+  reorderFrames(frameId: string, direction: 'up' | 'down'): void {
+    const currentShapes = this.shapes();
+    const frameIndices: number[] = [];
+    currentShapes.forEach((s, idx) => {
+      if (s.type === 'frame') {
+        frameIndices.push(idx);
+      }
+    });
+
+    const targetPos = frameIndices.findIndex((idx) => currentShapes[idx].id === frameId);
+    if (targetPos === -1) {
+      return;
+    }
+
+    const swapPos = direction === 'up' ? targetPos - 1 : targetPos + 1;
+    if (swapPos < 0 || swapPos >= frameIndices.length) {
+      return;
+    }
+
+    const fromIdx = frameIndices[targetPos];
+    const toIdx = frameIndices[swapPos];
+
+    const updated = [...currentShapes];
+    const temp = updated[fromIdx];
+    updated[fromIdx] = updated[toIdx];
+    updated[toIdx] = temp;
+
+    this.shapes.set(updated);
+  }
+
+  toggleFramesNavigator(): void {
+    this.openFramesNavigator.emit();
   }
 
   updateShape(id: string, partial: Partial<CanvasShape>): void {
@@ -2255,13 +2401,27 @@ export class CanvasComponent {
     this.hasClonedForAltDrag = false;
 
     const selectedIds = this.selectedShapeIds();
+    const movingIds = new Set(selectedIds);
+    // If any frame is selected, all shapes contained inside that frame move with it
+    for (const frame of this.shapes()) {
+      if (frame.type === 'frame' && selectedIds.has(frame.id)) {
+        for (const child of this.shapes()) {
+          if (child.id !== frame.id && this.isShapeInsideFrame(child, frame)) {
+            movingIds.add(child.id);
+          }
+        }
+      }
+    }
+
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
     for (const s of this.shapes()) {
-      if (selectedIds.has(s.id)) {
+      if (movingIds.has(s.id)) {
         this.shapeInitialPositions.set(s.id, { x: s.x, y: s.y });
+      }
+      if (selectedIds.has(s.id)) {
         minX = Math.min(minX, s.x);
         minY = Math.min(minY, s.y);
         maxX = Math.max(maxX, s.x + s.width);
@@ -2276,9 +2436,9 @@ export class CanvasComponent {
     this.connectionInitialWaypoints.clear();
     for (const c of this.connections()) {
       const isSelfLoop =
-        c.targetShapeId && c.sourceShapeId === c.targetShapeId && selectedIds.has(c.sourceShapeId);
+        c.targetShapeId && c.sourceShapeId === c.targetShapeId && movingIds.has(c.sourceShapeId);
       const isBothEndpoints =
-        c.targetShapeId && selectedIds.has(c.sourceShapeId) && selectedIds.has(c.targetShapeId);
+        c.targetShapeId && movingIds.has(c.sourceShapeId) && movingIds.has(c.targetShapeId);
 
       if ((isSelfLoop || isBothEndpoints) && c.waypoints?.length) {
         this.connectionInitialWaypoints.set(
@@ -3264,6 +3424,10 @@ export class CanvasComponent {
       }
       if (event.key === 'n' || event.key === 'N') {
         this.setActiveTool('sticky-note');
+        return;
+      }
+      if (event.key === 'f' || event.key === 'F') {
+        this.setActiveTool('frame');
         return;
       }
       if (event.key === 'Delete' || event.key === 'Backspace') {

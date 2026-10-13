@@ -65,7 +65,7 @@ This document synthesizes the requirements from the `PRD.md` and `TODO.md` into 
 - [x] Build specific node catalogs (UML, Flowcharts, etc.)
 - [x] Implement Sticky Notes (colors, author names)
 - [x] Implement "Think Mode" (Timers, Visibility toggles, Viewer participation)
-- [ ] Implement Frames and Pages
+- [x] Implement Frames and Pages
 
 ## Phase 7: Polish, Export, & Revision History
 *Finalize features and prepare for production.*

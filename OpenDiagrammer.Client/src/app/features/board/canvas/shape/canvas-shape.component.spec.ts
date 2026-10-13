@@ -220,5 +220,34 @@ describe('CanvasShapeComponent', () => {
       pullBtn.click();
       expect(pulledShape).toEqual(padShape);
     });
+
+    it('should render frame with header tab, title, and size badge, and without anchors or center text overlay', () => {
+      const frameShape: CanvasShape = {
+        ...mockShape,
+        type: 'frame',
+        width: 1920,
+        height: 1080,
+        text: 'Presentation Slide 1',
+      };
+      fixture.componentRef.setInput('shape', frameShape);
+      component.isHovered.set(true);
+      fixture.detectChanges();
+
+      const container = fixture.nativeElement.querySelector('.shape-container');
+      expect(container.classList).toContain('is-frame');
+
+      const headerTab = fixture.nativeElement.querySelector('.frame-header-tab');
+      expect(headerTab).toBeTruthy();
+      expect(headerTab.textContent).toContain('Presentation Slide 1');
+      expect(headerTab.textContent).toContain('1920 × 1080');
+
+      // Center text overlay should be omitted for frames
+      const textOverlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+      expect(textOverlay).toBeFalsy();
+
+      // Anchors should be omitted for frames
+      const anchors = fixture.nativeElement.querySelectorAll('.shape-anchor');
+      expect(anchors.length).toBe(0);
+    });
   });
 });

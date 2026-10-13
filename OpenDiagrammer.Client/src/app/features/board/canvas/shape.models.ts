@@ -23,7 +23,9 @@ export type ShapeType =
   | 'uml-package'
   // Sticky note
   | 'sticky-note'
-  | 'sticky-pad';
+  | 'sticky-pad'
+  // Frames & Pages
+  | 'frame';
 
 export interface CatalogShapeItem {
   type: ShapeType;
@@ -206,6 +208,83 @@ export const SHAPE_CATALOG: CatalogShapeItem[] = [
     defaultWidth: 130,
     defaultHeight: 130,
     defaultText: 'Sticky Pad',
+  },
+  {
+    type: 'frame',
+    category: 'basic',
+    label: 'Frame / Page',
+    icon: 'crop_free',
+    defaultWidth: 800,
+    defaultHeight: 600,
+    defaultText: 'Frame 1',
+  },
+];
+
+export interface FramePreset {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  icon: string;
+  description?: string;
+}
+
+export const FRAME_PRESETS: FramePreset[] = [
+  {
+    id: 'custom',
+    name: 'Custom Frame',
+    width: 800,
+    height: 600,
+    icon: 'crop_free',
+    description: '800 × 600',
+  },
+  {
+    id: 'presentation-16-9',
+    name: 'Presentation (16:9)',
+    width: 1920,
+    height: 1080,
+    icon: 'slideshow',
+    description: '1920 × 1080 (HD)',
+  },
+  {
+    id: 'presentation-4-3',
+    name: 'Presentation (4:3)',
+    width: 1024,
+    height: 768,
+    icon: 'present_to_all',
+    description: '1024 × 768 (Standard)',
+  },
+  {
+    id: 'desktop',
+    name: 'Desktop Display',
+    width: 1440,
+    height: 900,
+    icon: 'desktop_windows',
+    description: '1440 × 900',
+  },
+  {
+    id: 'tablet',
+    name: 'Tablet Screen',
+    width: 768,
+    height: 1024,
+    icon: 'tablet',
+    description: '768 × 1024 (iPad)',
+  },
+  {
+    id: 'mobile',
+    name: 'Mobile Phone',
+    width: 375,
+    height: 812,
+    icon: 'smartphone',
+    description: '375 × 812 (Phone)',
+  },
+  {
+    id: 'a4',
+    name: 'A4 Document',
+    width: 842,
+    height: 595,
+    icon: 'article',
+    description: '842 × 595 (Landscape)',
   },
 ];
 

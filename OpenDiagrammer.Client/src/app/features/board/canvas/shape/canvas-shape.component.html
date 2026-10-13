@@ -1,6 +1,7 @@
 <div
   class="shape-container"
   [class.is-selected]="isSelected()"
+  [class.is-frame]="isFrame()"
   [style.transform]="shapeStyles().transform"
   [style.width]="shapeStyles().width"
   [style.height]="shapeStyles().height"
@@ -307,15 +308,42 @@
           fill="rgba(0, 0, 0, 0.08)"
         />
       }
+      @case ('frame') {
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 2"
+          [attr.height]="shape().height - 2"
+          [attr.fill]="shape().fillColor || 'rgba(128, 128, 128, 0.03)'"
+          [attr.stroke]="shape().strokeColor || 'rgba(140, 140, 160, 0.5)'"
+          [attr.stroke-width]="shape().strokeWidth || 1.5"
+          stroke-dasharray="6,4"
+        />
+      }
     }
   </svg>
+
+  @if (isFrame()) {
+    <div
+      class="frame-header-tab"
+      [class.is-selected]="isSelected()"
+      (dblclick)="handleDoubleClick($event)"
+      aria-label="Frame header"
+    >
+      <span class="frame-hash-icon">#</span>
+      <span class="frame-title-text">{{ shape().text || 'Frame' }}</span>
+      <span class="frame-size-badge">{{ shape().width }} × {{ shape().height }}</span>
+    </div>
+  }
 
   @if (isMasked()) {
     <div class="shape-masked-overlay" aria-label="Hidden note">
       <span class="masked-lock-icon">🔒</span>
       <span class="masked-dots">••••••</span>
     </div>
-  } @else if (shape().text && !isEditing()) {
+  } @else if (!isFrame() && shape().text && !isEditing()) {
     <div
       class="shape-text-overlay"
       [style.color]="textColor()"
@@ -353,7 +381,7 @@
   }
 
   <!-- Connection Anchor Points (offset from the shape so resize and connection handles coexist cleanly) -->
-  @if (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected()) {
+  @if (!isFrame() && (showAnchors() || (allowHoverAnchors() && isHovered()) || isSelected())) {
     @for (anchor of anchors; track anchor) {
       <div
         class="shape-anchor anchor-{{ anchor }}"

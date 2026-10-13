@@ -861,24 +861,32 @@
     @if (editingShape(); as editShape) {
       <div
         class="shape-text-inline-editor-wrapper"
-        [style.transform]="'translate(' + editShape.x + 'px, ' + editShape.y + 'px)'"
-        [style.width.px]="editShape.width"
-        [style.height.px]="editShape.height"
+        [class.is-frame-editor]="editShape.type === 'frame'"
+        [style.transform]="
+          editShape.type === 'frame'
+            ? 'translate(' + editShape.x + 'px, ' + (editShape.y - 30) + 'px)'
+            : 'translate(' + editShape.x + 'px, ' + editShape.y + 'px)'
+        "
+        [style.width.px]="editShape.type === 'frame' ? 220 : editShape.width"
+        [style.height.px]="editShape.type === 'frame' ? 28 : editShape.height"
         [style.z-index]="50 + editShape.zIndex"
         (pointerdown)="$event.stopPropagation()"
       >
         <div
           #shapeTextEditor
           class="shape-rich-text-editor"
+          [class.frame-title-editor]="editShape.type === 'frame'"
           contenteditable="true"
-          [style.text-align]="editShape.textAlign || 'center'"
+          [style.text-align]="editShape.type === 'frame' ? 'left' : editShape.textAlign || 'center'"
           [style.color]="
             editShape.fillColor.includes('inverse')
               ? 'var(--canvas-color-inverse-text)'
               : 'var(--mat-sys-on-surface)'
           "
-          [style.font-size.px]="getShapeFittingFontSize(editShape)"
-          [style.font-weight]="editShape.isBold ? 'bold' : null"
+          [style.font-size.px]="
+            editShape.type === 'frame' ? 12 : getShapeFittingFontSize(editShape)
+          "
+          [style.font-weight]="editShape.type === 'frame' || editShape.isBold ? 'bold' : null"
           [style.font-style]="editShape.isItalic ? 'italic' : null"
           [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
           (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
@@ -1014,6 +1022,20 @@
         matTooltip="Sticky Note (N) - Click to stamp, or drag onto canvas"
       >
         <mat-icon>sticky_note_2</mat-icon>
+      </button>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'frame'"
+        (click)="setActiveTool('frame')"
+        (pointerdown)="handleToolPointerDown($event, 'frame')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Frame"
+        matTooltip="Frame / Page (F) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>crop_free</mat-icon>
       </button>
 
       <div class="dock-divider"></div>
@@ -1181,6 +1203,17 @@
     </button>
 
     <div class="dock-divider"></div>
+
+    <button
+      mat-icon-button
+      class="control-btn"
+      [class.active]="isFramesNavigatorOpen()"
+      (click)="toggleFramesNavigator()"
+      aria-label="Frames and Pages"
+      matTooltip="Frames & Pages Navigator"
+    >
+      <mat-icon>art_track</mat-icon>
+    </button>
 
     <button
       mat-icon-button

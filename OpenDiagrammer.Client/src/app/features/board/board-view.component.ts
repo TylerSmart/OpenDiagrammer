@@ -54,6 +54,8 @@ import {
   ThinkModeDialogData,
   ThinkModeDialogResult,
 } from './think-mode-dialog/think-mode-dialog.component';
+import { FramesNavigatorComponent } from './frames-navigator/frames-navigator.component';
+import { CanvasShape, FramePreset } from './canvas/shape.models';
 
 const THEME_ICONS: Record<ThemeMode, string> = {
   light: 'light_mode',
@@ -75,6 +77,7 @@ const THEME_LABELS: Record<ThemeMode, string> = {
     MatTooltipModule,
     MatProgressSpinnerModule,
     CanvasComponent,
+    FramesNavigatorComponent,
   ],
   selector: 'app-board-view',
   styleUrl: './board-view.component.scss',
@@ -108,6 +111,11 @@ export class BoardViewComponent implements OnInit {
   protected readonly saveStatus = signal<'saved' | 'saving' | 'error'>('saved');
 
   protected readonly showLiveCursors = signal<boolean>(true);
+  protected readonly isFramesNavigatorOpen = signal<boolean>(false);
+  protected readonly activeFrameId = signal<string | null>(null);
+  protected readonly framesList = computed<CanvasShape[]>(
+    () => this.canvasComponent()?.frames() ?? [],
+  );
   protected readonly activePresences = computed(() => this.realtimeService.presences());
   protected readonly liveCursorsList = computed(() =>
     Object.values(this.realtimeService.otherUsersCursors()),
@@ -544,5 +552,47 @@ export class BoardViewComponent implements OnInit {
 
   toggleFacilitatorReveal(): void {
     this.facilitatorRevealNotes.update((v) => !v);
+  }
+
+  toggleFramesNavigator(): void {
+    this.isFramesNavigatorOpen.update((open) => !open);
+  }
+
+  handleFrameSelect(frame: CanvasShape): void {
+    this.activeFrameId.set(frame.id);
+    this.canvasComponent()?.zoomToFrame(frame.id);
+  }
+
+  handleFrameAdd(preset: FramePreset): void {
+    const newFrame = this.canvasComponent()?.createFrame(preset);
+    if (newFrame) {
+      this.activeFrameId.set(newFrame.id);
+    }
+  }
+
+  handleFrameRename(event: { id: string; title: string }): void {
+    this.canvasComponent()?.renameFrame(event.id, event.title);
+  }
+
+  handleFrameDelete(id: string): void {
+    this.canvasComponent()?.deleteFrame(id);
+    if (this.activeFrameId() === id) {
+      this.activeFrameId.set(null);
+    }
+  }
+
+  handleFrameReorder(event: { frameId: string; direction: 'up' | 'down' }): void {
+    this.canvasComponent()?.reorderFrames(event.frameId, event.direction);
+  }
+
+  handlePresent(): void {
+    const frames = this.framesList();
+    if (frames.length > 0) {
+      const targetId = this.activeFrameId() || frames[0].id;
+      this.canvasComponent()?.zoomToFrame(targetId);
+      if (!this.fullscreenService.isFullscreen()) {
+        this.fullscreenService.toggleFullscreen();
+      }
+    }
   }
 }

@@ -412,6 +412,21 @@
   }
 }
 
+.shape-text-inline-editor-wrapper.is-frame-editor {
+  padding: 0;
+
+  .shape-rich-text-editor.frame-title-editor {
+    height: 28px;
+    padding: 2px 8px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    line-height: 24px;
+    white-space: nowrap;
+    overflow: hidden;
+    display: block;
+  }
+}
+
 // Selection Bounding Box & Handles
 .selection-box {
   position: absolute;

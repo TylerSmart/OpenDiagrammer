@@ -3,6 +3,7 @@ import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CanvasComponent } from './canvas.component';
 import { CANVAS_CONSTANTS } from './canvas.models';
 import { getShapeAnchorPoint } from './connection.models';
+import { FRAME_PRESETS } from './shape.models';
 
 describe('CanvasComponent', () => {
   let component: CanvasComponent;
@@ -2970,6 +2971,129 @@ describe('CanvasComponent', () => {
       expect(newNote.type).toBe('sticky-note');
       expect(newNote.authorName).toBe('Alice');
       expect(newNote.x).toBeGreaterThan(pad.x);
+    });
+  });
+
+  describe('Frames and Pages', () => {
+    it('should create a frame with default preset dimensions and text', () => {
+      const frame = component.createFrame();
+      expect(frame.type).toBe('frame');
+      expect(frame.width).toBe(800);
+      expect(frame.height).toBe(600);
+      expect(frame.text).toContain('Frame');
+      expect(component.frames().length).toBe(1);
+    });
+
+    it('should create a frame with specific preset (e.g. Presentation 16:9)', () => {
+      const preset = FRAME_PRESETS.find((p) => p.id === 'presentation-16-9')!;
+      const frame = component.createFrame(preset);
+      expect(frame.type).toBe('frame');
+      expect(frame.width).toBe(1920);
+      expect(frame.height).toBe(1080);
+      expect(frame.text).toContain('Presentation (16:9)');
+    });
+
+    it('should switch active tool to frame when pressing F key', () => {
+      expect(component.activeTool()).toBe('select');
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'f' }));
+      expect(component.activeTool()).toBe('frame');
+    });
+
+    it('should correctly detect if shapes are inside frame bounds with isShapeInsideFrame', () => {
+      const frame = component.createFrame(undefined, { x: 500, y: 500 }); // 800x600 centered at 500,500 -> [100, 900], [200, 800]
+      const insideShape = component.createShape('rectangle', { x: 500, y: 500 });
+      const outsideShape = component.createShape('rectangle', { x: 1500, y: 1500 });
+
+      expect(component.isShapeInsideFrame(insideShape, frame)).toBe(true);
+      expect(component.isShapeInsideFrame(outsideShape, frame)).toBe(false);
+      expect(component.isShapeInsideFrame(frame, frame)).toBe(false);
+
+      const contained = component.getShapesInFrame(frame);
+      expect(contained.some((s) => s.id === insideShape.id)).toBe(true);
+      expect(contained.some((s) => s.id === outsideShape.id)).toBe(false);
+    });
+
+    it('should move contained child shapes when the parent frame is moved', () => {
+      const frame = component.createFrame(undefined, { x: 500, y: 500 });
+      const child = component.createShape('rectangle', { x: 500, y: 500 });
+      const outside = component.createShape('rectangle', { x: 1500, y: 1500 });
+
+      const initialChildX = child.x;
+      const initialChildY = child.y;
+      const initialOutsideX = outside.x;
+      const initialOutsideY = outside.y;
+
+      // Select and drag the frame
+      component.selectShape(frame.id);
+      component.handleShapePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 500,
+          clientY: 500,
+          button: 0,
+        }),
+        frame,
+      );
+
+      // Move 50px horizontally and 30px vertically
+      component.handlePointerMove(
+        new PointerEvent('pointermove', {
+          bubbles: true,
+          clientX: 550,
+          clientY: 530,
+        }),
+      );
+
+      component.handlePointerUp(
+        new PointerEvent('pointerup', {
+          bubbles: true,
+          clientX: 550,
+          clientY: 530,
+        }),
+      );
+
+      const movedChild = component.shapes().find((s) => s.id === child.id)!;
+      const movedOutside = component.shapes().find((s) => s.id === outside.id)!;
+
+      expect(movedChild.x).toBe(initialChildX + 50);
+      expect(movedChild.y).toBe(initialChildY + 30);
+      expect(movedOutside.x).toBe(initialOutsideX);
+      expect(movedOutside.y).toBe(initialOutsideY);
+    });
+
+    it('should zoom and pan to fit frame with zoomToFrame and zoomToFitBounds', () => {
+      const frame = component.createFrame(undefined, { x: 1000, y: 800 });
+      component.zoomToFrame(frame.id);
+
+      expect(component.selectedShapeIds().has(frame.id)).toBe(true);
+      expect(component.zoom()).toBeGreaterThan(0);
+    });
+
+    it('should rename, reorder, and delete frames correctly', () => {
+      const frame1 = component.createFrame(undefined, { x: 200, y: 200 });
+      const frame2 = component.createFrame(undefined, { x: 1200, y: 200 });
+
+      expect(component.frames().length).toBe(2);
+
+      component.renameFrame(frame1.id, 'Renamed Screen A');
+      const updated = component.shapes().find((s) => s.id === frame1.id);
+      expect(updated?.text).toBe('Renamed Screen A');
+
+      component.reorderFrames(frame2.id, 'up');
+      const reorderedFrames = component.frames();
+      expect(reorderedFrames[0].id).toBe(frame2.id);
+
+      component.deleteFrame(frame1.id);
+      expect(component.frames().length).toBe(1);
+      expect(component.shapes().some((s) => s.id === frame1.id)).toBe(false);
+    });
+
+    it('should emit openFramesNavigator when toggleFramesNavigator is called', () => {
+      let openCalled = false;
+      component.openFramesNavigator.subscribe(() => (openCalled = true));
+
+      component.toggleFramesNavigator();
+      expect(openCalled).toBe(true);
     });
   });
 });
