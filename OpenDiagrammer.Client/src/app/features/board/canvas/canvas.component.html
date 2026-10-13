@@ -137,6 +137,7 @@
     <!-- Rendered Shapes -->
     @for (shape of shapes(); track shape.id) {
       <app-canvas-shape
+        [attr.data-shape-id]="shape.id"
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
         [isEditing]="editingShapeId() === shape.id"

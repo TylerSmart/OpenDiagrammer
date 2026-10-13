@@ -105,6 +105,7 @@ export interface ReconnectingPreview {
     '(pointermove)': 'handlePointerMove($event)',
     '(pointerup)': 'handlePointerUp($event)',
     '(pointercancel)': 'handlePointerUp($event)',
+    '(dblclick)': 'handleDoubleClick($event)',
     '(contextmenu)': 'handleContextMenu($event)',
     '(blur)': 'handleBlur()',
   },
@@ -171,6 +172,10 @@ export class CanvasComponent {
   private connectionInitialWaypoints = new Map<string, CanvasPoint[]>();
   private isAltDragPending = false;
   private hasClonedForAltDrag = false;
+  private hasPointerCaptureForMove = false;
+  private lastShapePointerDownTime = 0;
+  private lastShapePointerDownId: string | null = null;
+  private lastShapePointerDownPos: CanvasPoint | null = null;
 
   // Resize state
   private isResizing = false;
@@ -707,25 +712,64 @@ export class CanvasComponent {
     }
     this.selectedShapeIds.set(new Set([shapeId]));
     this.editingShapeId.set(shapeId);
-    queueMicrotask(() => {
-      const editorEl = this.shapeRichTextEditor()?.nativeElement;
-      if (editorEl) {
-        editorEl.innerHTML = shape.text || '';
-        editorEl.focus();
-        try {
-          const selection = window.getSelection();
-          if (selection) {
-            const range = document.createRange();
-            range.selectNodeContents(editorEl);
-            range.collapse(false);
-            selection.removeAllRanges();
-            selection.addRange(range);
-          }
-        } catch {
-          // Ignore selection range errors in headless or unsupported environments
+    setTimeout(() => {
+      this.focusShapeTextEditor(shape);
+    }, 0);
+  }
+
+  focusShapeTextEditor(shape: CanvasShape): void {
+    if (shape.type === 'uml-class') {
+      const headerEl = this.umlClassHeaderEditor()?.nativeElement;
+      const attrEl = this.umlClassAttrEditor()?.nativeElement;
+      const methodEl = this.umlClassMethodEditor()?.nativeElement;
+      if (headerEl && attrEl && methodEl) {
+        const isCurrentlyFocused =
+          document.activeElement === headerEl ||
+          document.activeElement === attrEl ||
+          document.activeElement === methodEl;
+        if (!isCurrentlyFocused) {
+          const parsed = parseUmlClassText(shape.text);
+          if (headerEl.innerHTML !== parsed.className) headerEl.innerHTML = parsed.className;
+          if (attrEl.innerHTML !== parsed.attributes) attrEl.innerHTML = parsed.attributes;
+          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+          headerEl.focus();
         }
       }
-    });
+    } else if (shape.type === 'uml-interface') {
+      const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
+      const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
+      if (headerEl && methodEl) {
+        const isCurrentlyFocused =
+          document.activeElement === headerEl || document.activeElement === methodEl;
+        if (!isCurrentlyFocused) {
+          const parsed = parseUmlInterfaceText(shape.text);
+          if (headerEl.innerHTML !== parsed.interfaceName)
+            headerEl.innerHTML = parsed.interfaceName;
+          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
+          headerEl.focus();
+        }
+      }
+    } else {
+      const editorEl = this.shapeRichTextEditor()?.nativeElement;
+      if (editorEl) {
+        if (document.activeElement !== editorEl) {
+          editorEl.innerHTML = shape.text || '';
+          editorEl.focus();
+          try {
+            const selection = window.getSelection();
+            if (selection) {
+              const range = document.createRange();
+              range.selectNodeContents(editorEl);
+              range.collapse(false);
+              selection.removeAllRanges();
+              selection.addRange(range);
+            }
+          } catch {
+            // Ignore selection range errors in headless or unsupported environments
+          }
+        }
+      }
+    }
   }
 
   finishEditingShapeText(shapeId: string, contentHtml: string): void {
@@ -1123,46 +1167,7 @@ export class CanvasComponent {
         return;
       }
 
-      if (shape.type === 'uml-class') {
-        const headerEl = this.umlClassHeaderEditor()?.nativeElement;
-        const attrEl = this.umlClassAttrEditor()?.nativeElement;
-        const methodEl = this.umlClassMethodEditor()?.nativeElement;
-        if (headerEl && attrEl && methodEl) {
-          const parsed = parseUmlClassText(shape.text);
-          if (headerEl.innerHTML !== parsed.className) headerEl.innerHTML = parsed.className;
-          if (attrEl.innerHTML !== parsed.attributes) attrEl.innerHTML = parsed.attributes;
-          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
-          headerEl.focus();
-        }
-      } else if (shape.type === 'uml-interface') {
-        const headerEl = this.umlIfaceHeaderEditor()?.nativeElement;
-        const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
-        if (headerEl && methodEl) {
-          const parsed = parseUmlInterfaceText(shape.text);
-          if (headerEl.innerHTML !== parsed.interfaceName)
-            headerEl.innerHTML = parsed.interfaceName;
-          if (methodEl.innerHTML !== parsed.methods) methodEl.innerHTML = parsed.methods;
-          headerEl.focus();
-        }
-      } else {
-        const editorEl = this.shapeRichTextEditor()?.nativeElement;
-        if (editorEl) {
-          editorEl.innerHTML = shape.text || '';
-          editorEl.focus();
-          try {
-            const selection = window.getSelection();
-            if (selection) {
-              const range = document.createRange();
-              range.selectNodeContents(editorEl);
-              range.collapse(false);
-              selection.removeAllRanges();
-              selection.addRange(range);
-            }
-          } catch {
-            // Ignore selection range errors
-          }
-        }
-      }
+      this.focusShapeTextEditor(shape);
     });
 
     effect(() => {
@@ -1572,7 +1577,8 @@ export class CanvasComponent {
     }
 
     // 1. If double-clicking over an existing shape (via DOM target or coordinates), start editing its text!
-    const shapeEl = target?.closest('.shape-container') as HTMLElement | null;
+    const shapeEl = (target?.closest('.shape-container') ||
+      target?.closest('app-canvas-shape')) as HTMLElement | null;
     const shapeIdFromDom = shapeEl?.getAttribute('data-shape-id');
     if (shapeIdFromDom) {
       this.startEditingShapeText(shapeIdFromDom);
@@ -2645,6 +2651,31 @@ export class CanvasComponent {
     }
 
     const isMultiSelect = event.shiftKey || event.ctrlKey || event.metaKey;
+    if (!isMultiSelect) {
+      const now = performance.now();
+      const isDoubleTap =
+        this.lastShapePointerDownId === shape.id &&
+        now - this.lastShapePointerDownTime < 450 &&
+        this.lastShapePointerDownPos &&
+        Math.hypot(
+          event.clientX - this.lastShapePointerDownPos.x,
+          event.clientY - this.lastShapePointerDownPos.y,
+        ) < 12;
+
+      this.lastShapePointerDownTime = now;
+      this.lastShapePointerDownId = shape.id;
+      this.lastShapePointerDownPos = { x: event.clientX, y: event.clientY };
+
+      if (isDoubleTap) {
+        this.lastShapePointerDownTime = 0;
+        this.lastShapePointerDownId = null;
+        this.lastShapePointerDownPos = null;
+        this.isMovingShapes = false;
+        this.startEditingShapeText(shape.id);
+        return;
+      }
+    }
+
     if (!this.isShapeSelected(shape.id)) {
       this.selectShape(shape.id, isMultiSelect);
     } else if (isMultiSelect) {
@@ -2715,12 +2746,6 @@ export class CanvasComponent {
           c.waypoints.map((p) => ({ ...p })),
         );
       }
-    }
-
-    try {
-      (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
-    } catch {
-      // Ignored
     }
   }
 
@@ -3255,6 +3280,15 @@ export class CanvasComponent {
       const rawDeltaX = currentWorld.x - this.moveStartPoint.x;
       const rawDeltaY = currentWorld.y - this.moveStartPoint.y;
 
+      if (!this.hasPointerCaptureForMove && Math.hypot(rawDeltaX, rawDeltaY) >= 3) {
+        this.hasPointerCaptureForMove = true;
+        try {
+          (this.elementRef.nativeElement as HTMLElement)?.setPointerCapture(event.pointerId);
+        } catch {
+          // Ignored
+        }
+      }
+
       if (this.isAltDragPending && !this.hasClonedForAltDrag) {
         if (Math.hypot(rawDeltaX, rawDeltaY) >= 3) {
           this.performAltDragClone();
@@ -3490,6 +3524,7 @@ export class CanvasComponent {
 
     if (this.isMovingShapes) {
       this.isMovingShapes = false;
+      this.hasPointerCaptureForMove = false;
       this.moveStartPoint = null;
       this.initialMovingBounds = null;
       this.alignmentGuides.set([]);

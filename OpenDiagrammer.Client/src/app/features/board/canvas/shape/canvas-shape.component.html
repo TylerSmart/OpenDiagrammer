@@ -1,5 +1,6 @@
 <div
   class="shape-container"
+  [attr.data-shape-id]="shape().id"
   [class.is-selected]="isSelected()"
   [class.is-frame]="isFrame()"
   [style.transform]="shapeStyles().transform"

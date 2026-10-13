@@ -3114,6 +3114,31 @@ describe('CanvasComponent', () => {
       expect(component.selectedShapeIds().has(shape.id)).toBe(true);
     });
 
+    it('should initiate inline text editing on quick successive pointerdown taps on the same shape', () => {
+      const shape = component.createShape('rectangle', { x: 200, y: 150 });
+      fixture.detectChanges();
+
+      const screenPt = component.worldToScreen({ x: 200, y: 150 });
+      const event1 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+      component.handleShapePointerDown(event1, shape);
+      expect(component.selectedShapeIds().has(shape.id)).toBe(true);
+      expect(component.editingShapeId()).toBeNull();
+
+      const event2 = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: screenPt.x,
+        clientY: screenPt.y,
+        bubbles: true,
+      });
+      component.handleShapePointerDown(event2, shape);
+      expect(component.editingShapeId()).toBe(shape.id);
+    });
+
     it('should adjust shape font size and clamp within bounds', () => {
       const shape = component.createShape('rectangle', { x: 100, y: 100 });
       expect(shape.fontSize ?? 14).toBe(14);
