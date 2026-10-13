@@ -552,6 +552,19 @@
   }
 }
 
+.viewer-participation-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.25rem 0.625rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  border-radius: 9999px;
+  background-color: var(--mat-sys-tertiary-container);
+  color: var(--mat-sys-on-tertiary-container);
+  margin-left: 0.25rem;
+  white-space: nowrap;
+}
+
 // Floating Canvas Controls Dock (Bottom Left)
 .canvas-controls-dock {
   position: absolute;

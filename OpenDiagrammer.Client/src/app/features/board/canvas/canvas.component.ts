@@ -15,7 +15,11 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { BoardBackgroundType, CanvasCursorDto } from '../../../core/models/board.models';
+import {
+  BoardBackgroundType,
+  CanvasCursorDto,
+  ThinkModeConfig,
+} from '../../../core/models/board.models';
 import { FullscreenService } from '../../../core/services/fullscreen/fullscreen.service';
 import {
   CANVAS_CONSTANTS,
@@ -103,6 +107,10 @@ export class CanvasComponent {
   readonly liveCursors = input<CanvasCursorDto[]>([]);
   readonly showLiveCursors = input<boolean>(true);
   readonly currentUsername = input<string | null | undefined>(null);
+  readonly thinkMode = input<boolean>(false);
+  readonly thinkModeConfig = input<ThinkModeConfig | null>(null);
+  readonly canViewerParticipate = input<boolean>(false);
+  readonly facilitatorReveal = input<boolean>(false);
 
   // Transform and diagram change output events
   readonly transformChange = output<CanvasTransform>();
@@ -667,11 +675,21 @@ export class CanvasComponent {
   }
 
   startEditingShapeText(shapeId: string): void {
-    if (this.readOnly()) {
-      return;
-    }
     const shape = this.shapes().find((s) => s.id === shapeId);
     if (!shape) {
+      return;
+    }
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
+    }
+    if (this.isShapeMasked(shape)) {
       return;
     }
     this.selectedShapeIds.set(new Set([shapeId]));
@@ -759,6 +777,45 @@ export class CanvasComponent {
       ),
     );
     this.emitDiagramChange();
+  }
+
+  isShapeMasked(shape: CanvasShape): boolean {
+    if (!this.thinkMode()) {
+      return false;
+    }
+    const config = this.thinkModeConfig();
+    if (!config?.hideOthersWriting) {
+      return false;
+    }
+    if (this.facilitatorReveal()) {
+      return false;
+    }
+    if (shape.type !== 'sticky-note') {
+      return false;
+    }
+    const current = this.currentUsername();
+    if (!current) {
+      return true;
+    }
+    if (shape.authorName === current) {
+      return false;
+    }
+    if (config.groups && config.groups.length > 0) {
+      const userGroups = config.groups.filter((g) => g.memberUsernames.includes(current));
+      for (const g of userGroups) {
+        if (shape.authorName && g.memberUsernames.includes(shape.authorName)) {
+          return false;
+        }
+      }
+    }
+    return true;
+  }
+
+  pullStickyNoteFromPad(padShape: CanvasShape): void {
+    const newX = padShape.x + padShape.width + 20;
+    const newY = padShape.y;
+    const note = this.createShape('sticky-note', { x: newX + 60, y: newY + 60 });
+    this.selectShape(note.id);
   }
 
   getShapeFittingFontSize(shape: CanvasShape): number {
@@ -1205,7 +1262,9 @@ export class CanvasComponent {
 
   setActiveTool(tool: ActiveTool): void {
     if (this.readOnly() && tool !== 'select') {
-      return;
+      if (!this.thinkMode() || !this.canViewerParticipate() || tool !== 'sticky-note') {
+        return;
+      }
     }
     if (this.inProgressConnection()) {
       this.inProgressConnection.set(null);
@@ -1398,6 +1457,29 @@ export class CanvasComponent {
   deleteSelectedShapes(): void {
     const selected = this.selectedShapeIds();
     const selectedConns = this.selectedConnectionIds();
+
+    if (this.readOnly()) {
+      if (!this.thinkMode() || !this.canViewerParticipate()) {
+        return;
+      }
+      const allowedIds = new Set(
+        this.shapes()
+          .filter(
+            (s) =>
+              selected.has(s.id) &&
+              s.type === 'sticky-note' &&
+              s.authorName === this.currentUsername(),
+          )
+          .map((s) => s.id),
+      );
+      if (allowedIds.size === 0) {
+        return;
+      }
+      this.shapes.update((list) => list.filter((s) => !allowedIds.has(s.id)));
+      this.clearSelection();
+      this.emitDiagramChange();
+      return;
+    }
 
     if (selected.size > 0) {
       this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
@@ -2155,6 +2237,17 @@ export class CanvasComponent {
       return;
     }
 
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
+    }
+
     this.isMovingShapes = true;
     this.moveStartPoint = this.screenToWorld({ x: event.clientX, y: event.clientY });
     this.shapeInitialPositions.clear();
@@ -2219,6 +2312,17 @@ export class CanvasComponent {
     const shape = this.shapes().find((s) => s.id === shapeId);
     if (!shape) {
       return;
+    }
+
+    if (this.readOnly()) {
+      if (
+        !this.thinkMode() ||
+        !this.canViewerParticipate() ||
+        shape.type !== 'sticky-note' ||
+        shape.authorName !== this.currentUsername()
+      ) {
+        return;
+      }
     }
 
     this.isResizing = true;
@@ -2288,6 +2392,11 @@ export class CanvasComponent {
       }
 
       if (currentTool !== 'select' && currentTool !== 'connection') {
+        if (this.readOnly()) {
+          if (!this.thinkMode() || !this.canViewerParticipate() || currentTool !== 'sticky-note') {
+            return;
+          }
+        }
         const newShape = this.createShape(currentTool as ShapeType, worldPoint);
         this.isMovingShapes = true;
         this.moveStartPoint = worldPoint;

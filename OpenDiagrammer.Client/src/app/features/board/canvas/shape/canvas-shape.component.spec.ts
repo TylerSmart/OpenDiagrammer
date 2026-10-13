@@ -179,5 +179,46 @@ describe('CanvasShapeComponent', () => {
       const badge = fixture.nativeElement.querySelector('.sticky-author-badge');
       expect(badge).toBeFalsy();
     });
+
+    it('should show masked overlay and hide text and author when isMasked is true', () => {
+      fixture.componentRef.setInput('shape', {
+        ...mockShape,
+        type: 'sticky-note',
+        text: 'Secret Idea',
+        authorName: 'Alice',
+      });
+      fixture.componentRef.setInput('isMasked', true);
+      fixture.detectChanges();
+
+      const maskedOverlay = fixture.nativeElement.querySelector('.shape-masked-overlay');
+      expect(maskedOverlay).toBeTruthy();
+      expect(maskedOverlay.textContent).toContain('••••••');
+
+      const textOverlay = fixture.nativeElement.querySelector('.shape-text-overlay');
+      expect(textOverlay).toBeFalsy();
+
+      const authorBadge = fixture.nativeElement.querySelector('.sticky-author-badge');
+      expect(authorBadge).toBeFalsy();
+    });
+
+    it('should render sticky pad and emit pullStickyNote on button click', () => {
+      const padShape: CanvasShape = {
+        ...mockShape,
+        type: 'sticky-pad',
+      };
+      fixture.componentRef.setInput('shape', padShape);
+      fixture.detectChanges();
+
+      let pulledShape: CanvasShape | null = null;
+      component.pullStickyNote.subscribe((s) => {
+        pulledShape = s;
+      });
+
+      const pullBtn = fixture.nativeElement.querySelector('.sticky-pad-pull-button');
+      expect(pullBtn).toBeTruthy();
+
+      pullBtn.click();
+      expect(pulledShape).toEqual(padShape);
+    });
   });
 });

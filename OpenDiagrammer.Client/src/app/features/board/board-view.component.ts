@@ -1,4 +1,13 @@
-import { Component, DestroyRef, OnInit, computed, inject, signal, viewChild } from '@angular/core';
+import {
+  Component,
+  DestroyRef,
+  OnInit,
+  computed,
+  effect,
+  inject,
+  signal,
+  viewChild,
+} from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
@@ -15,7 +24,10 @@ import {
   BoardDetailDto,
   BoardMode,
   BoardRole,
+  ThinkModeConfig,
+  UpdateBoardRequest,
   UpdateCanvasDataRequest,
+  canChangeBoardMode,
   canManageBoardSettings,
   getRoleName,
 } from '../../core/models/board.models';
@@ -37,6 +49,11 @@ import {
   BoardSettingsDialogData,
   BoardSettingsDialogResult,
 } from './board-settings-dialog/board-settings-dialog.component';
+import {
+  ThinkModeDialogComponent,
+  ThinkModeDialogData,
+  ThinkModeDialogResult,
+} from './think-mode-dialog/think-mode-dialog.component';
 
 const THEME_ICONS: Record<ThemeMode, string> = {
   light: 'light_mode',
@@ -102,6 +119,34 @@ export class BoardViewComponent implements OnInit {
   protected readonly BoardRole = BoardRole;
   protected readonly getRoleName = getRoleName;
   protected readonly canManageSettings = canManageBoardSettings;
+  protected readonly canChangeMode = canChangeBoardMode;
+
+  protected readonly facilitatorRevealNotes = signal<boolean>(false);
+  protected readonly isTimerPaused = signal<boolean>(false);
+  protected readonly timerSecondsRemaining = signal<number | null>(null);
+  private timerInterval: ReturnType<typeof setInterval> | null = null;
+
+  protected readonly thinkModeConfig = computed<ThinkModeConfig | null>(() => {
+    const raw = this.board()?.thinkModeConfigJson;
+    if (!raw) {
+      return null;
+    }
+    try {
+      return JSON.parse(raw) as ThinkModeConfig;
+    } catch {
+      return null;
+    }
+  });
+
+  protected readonly timerFormatted = computed<string>(() => {
+    const sec = this.timerSecondsRemaining();
+    if (sec === null) {
+      return '--:--';
+    }
+    const mins = Math.floor(sec / 60);
+    const remainingSecs = sec % 60;
+    return `${mins.toString().padStart(2, '0')}:${remainingSecs.toString().padStart(2, '0')}`;
+  });
 
   protected readonly themeIcon = computed(() => THEME_ICONS[this.themeService.mode()]);
   protected readonly themeLabel = computed(() => THEME_LABELS[this.themeService.mode()]);
@@ -152,7 +197,29 @@ export class BoardViewComponent implements OnInit {
       )
       .subscribe();
 
+    effect(() => {
+      const modeUpdate = this.realtimeService.boardModeUpdate();
+      if (modeUpdate) {
+        this.board.update((b) =>
+          b
+            ? {
+                ...b,
+                mode: modeUpdate.mode,
+                thinkModeConfigJson: modeUpdate.thinkModeConfigJson,
+              }
+            : null,
+        );
+      }
+    });
+
+    this.timerInterval = setInterval(() => {
+      this.tickThinkModeTimer();
+    }, 1000);
+
     this.destroyRef.onDestroy(() => {
+      if (this.timerInterval) {
+        clearInterval(this.timerInterval);
+      }
       this.flushPendingSave();
       void this.realtimeService.stopConnection();
       this.crdtService.destroy();
@@ -343,5 +410,139 @@ export class BoardViewComponent implements OnInit {
         this.loadBoard(current.id);
       }
     });
+  }
+
+  private tickThinkModeTimer(): void {
+    const current = this.board();
+    if (!current || current.mode !== BoardMode.ThinkMode) {
+      this.timerSecondsRemaining.set(null);
+      return;
+    }
+    const config = this.thinkModeConfig();
+    if (!config?.timerEndsAt || this.isTimerPaused()) {
+      return;
+    }
+    const diffMs = new Date(config.timerEndsAt).getTime() - Date.now();
+    const remaining = Math.max(0, Math.ceil(diffMs / 1000));
+    this.timerSecondsRemaining.set(remaining);
+
+    if (remaining === 0 && config.isTimerRunning !== false) {
+      if (canChangeBoardMode(current.userRole)) {
+        this.handleTimerExpired();
+      }
+    }
+  }
+
+  private handleTimerExpired(): void {
+    this.snackBar.open('⏰ Think Mode timer expired! Switched to normal board mode.', 'Close', {
+      duration: 5000,
+    });
+    this.endThinkMode();
+  }
+
+  openThinkModeDialog(): void {
+    const current = this.board();
+    if (!current) {
+      return;
+    }
+    const dialogRef = this.dialog.open<
+      ThinkModeDialogComponent,
+      ThinkModeDialogData,
+      ThinkModeDialogResult
+    >(ThinkModeDialogComponent, {
+      width: '540px',
+      data: {
+        boardId: current.id,
+        isCurrentlyActive: current.mode === BoardMode.ThinkMode,
+        currentConfig: this.thinkModeConfig(),
+      },
+    });
+
+    dialogRef.afterClosed().subscribe((result) => {
+      if (!result) {
+        return;
+      }
+      if (result.action === 'start' || result.action === 'update') {
+        const configJson = result.config ? JSON.stringify(result.config) : null;
+        this.setBoardMode(BoardMode.ThinkMode, configJson);
+      } else if (result.action === 'end') {
+        this.endThinkMode();
+      }
+    });
+  }
+
+  endThinkMode(): void {
+    this.setBoardMode(BoardMode.Normal, null);
+    this.snackBar.open('Think Mode ended. Board returned to normal mode.', 'Close', {
+      duration: 3000,
+    });
+  }
+
+  setBoardMode(mode: BoardMode, configJson: string | null): void {
+    const current = this.board();
+    if (!current) {
+      return;
+    }
+    this.board.update((b) => (b ? { ...b, mode, thinkModeConfigJson: configJson } : null));
+    void this.realtimeService.sendBoardModeUpdate(mode, configJson);
+
+    const request: UpdateBoardRequest = {
+      name: current.name,
+      description: current.description,
+      backgroundType: current.backgroundType,
+      backgroundColor: current.backgroundColor,
+      backgroundOpacity: current.backgroundOpacity,
+      mode,
+      thinkModeConfigJson: configJson,
+    };
+    this.boardService.updateBoard(current.id, request).subscribe();
+  }
+
+  toggleTimerPause(): void {
+    const config = this.thinkModeConfig();
+    if (!config) {
+      return;
+    }
+    const isPaused = this.isTimerPaused();
+    if (isPaused) {
+      const remaining = this.timerSecondsRemaining() ?? config.timerSeconds ?? 300;
+      const newEndsAt = new Date(Date.now() + remaining * 1000).toISOString();
+      const updatedConfig: ThinkModeConfig = {
+        ...config,
+        timerEndsAt: newEndsAt,
+        isTimerRunning: true,
+      };
+      this.isTimerPaused.set(false);
+      this.setBoardMode(BoardMode.ThinkMode, JSON.stringify(updatedConfig));
+    } else {
+      const updatedConfig: ThinkModeConfig = {
+        ...config,
+        isTimerRunning: false,
+      };
+      this.isTimerPaused.set(true);
+      this.setBoardMode(BoardMode.ThinkMode, JSON.stringify(updatedConfig));
+    }
+  }
+
+  addTimeToTimer(seconds: number): void {
+    const config = this.thinkModeConfig();
+    if (!config) {
+      return;
+    }
+    const currentEnd = config.timerEndsAt ? new Date(config.timerEndsAt).getTime() : Date.now();
+    const baseTime = Math.max(Date.now(), currentEnd);
+    const newEndsAt = new Date(baseTime + seconds * 1000).toISOString();
+    const updatedConfig: ThinkModeConfig = {
+      ...config,
+      timerEndsAt: newEndsAt,
+      timerSeconds: (config.timerSeconds ?? 0) + seconds,
+      isTimerRunning: true,
+    };
+    this.isTimerPaused.set(false);
+    this.setBoardMode(BoardMode.ThinkMode, JSON.stringify(updatedConfig));
+  }
+
+  toggleFacilitatorReveal(): void {
+    this.facilitatorRevealNotes.update((v) => !v);
   }
 }

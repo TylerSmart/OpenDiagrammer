@@ -16,10 +16,12 @@ export class CanvasShapeComponent {
   readonly showAnchors = input<boolean>(false);
   readonly allowHoverAnchors = input<boolean>(true);
   readonly isEditing = input<boolean>(false);
+  readonly isMasked = input<boolean>(false);
 
   readonly isHovered = signal<boolean>(false);
 
   readonly shapeDoubleClick = output<CanvasShape>();
+  readonly pullStickyNote = output<CanvasShape>();
 
   readonly anchorPointerDown = output<{
     event: PointerEvent;
@@ -119,7 +121,15 @@ export class CanvasShapeComponent {
 
   handleDoubleClick(event: MouseEvent): void {
     event.stopPropagation();
+    if (this.isMasked()) {
+      return;
+    }
     this.shapeDoubleClick.emit(this.shape());
+  }
+
+  handlePullNote(event: MouseEvent): void {
+    event.stopPropagation();
+    this.pullStickyNote.emit(this.shape());
   }
 
   handleAnchorDown(event: PointerEvent, anchor: AnchorPosition): void {

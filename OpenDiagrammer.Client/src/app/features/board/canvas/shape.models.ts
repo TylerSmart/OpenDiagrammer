@@ -22,7 +22,8 @@ export type ShapeType =
   | 'uml-usecase'
   | 'uml-package'
   // Sticky note
-  | 'sticky-note';
+  | 'sticky-note'
+  | 'sticky-pad';
 
 export interface CatalogShapeItem {
   type: ShapeType;
@@ -196,6 +197,15 @@ export const SHAPE_CATALOG: CatalogShapeItem[] = [
     defaultWidth: 120,
     defaultHeight: 120,
     defaultText: 'Note',
+  },
+  {
+    type: 'sticky-pad',
+    category: 'basic',
+    label: 'Sticky Note Pad',
+    icon: 'note_stack',
+    defaultWidth: 130,
+    defaultHeight: 130,
+    defaultText: 'Sticky Pad',
   },
 ];
 

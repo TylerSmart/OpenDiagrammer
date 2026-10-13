@@ -140,6 +140,7 @@
         [shape]="shape"
         [isSelected]="isShapeSelected(shape.id)"
         [isEditing]="editingShapeId() === shape.id"
+        [isMasked]="isShapeMasked(shape)"
         [showAnchors]="
           !readOnly() &&
           (activeTool() === 'connection' ||
@@ -150,6 +151,7 @@
         [allowHoverAnchors]="!readOnly() && !hasSelectedConnection()"
         (pointerdown)="handleShapePointerDown($event, shape)"
         (shapeDoubleClick)="startEditingShapeText(shape.id)"
+        (pullStickyNote)="pullStickyNoteFromPad($event)"
         (anchorPointerDown)="handleAnchorPointerDown($event)"
         (anchorHover)="handleAnchorHover($event)"
       ></app-canvas-shape>
@@ -1100,6 +1102,44 @@
           </div>
         </div>
       </mat-menu>
+    </div>
+  } @else if (thinkMode() && canViewerParticipate()) {
+    <div
+      class="canvas-tools-dock viewer-think-dock"
+      role="toolbar"
+      aria-label="Viewer Think Mode tools"
+      (pointerdown)="$event.stopPropagation()"
+    >
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'select'"
+        (click)="setActiveTool('select')"
+        aria-label="Selection Tool"
+        matTooltip="Select tool (V)"
+      >
+        <mat-icon>near_me</mat-icon>
+      </button>
+
+      <div class="dock-divider"></div>
+
+      <button
+        mat-icon-button
+        class="tool-btn"
+        [class.active]="activeTool() === 'sticky-note'"
+        (click)="setActiveTool('sticky-note')"
+        (pointerdown)="handleToolPointerDown($event, 'sticky-note')"
+        (pointermove)="handleToolPointerMove($event)"
+        (pointerup)="handleToolPointerUp($event)"
+        aria-label="Add Sticky Note"
+        matTooltip="Sticky Note (N) - Click to stamp, or drag onto canvas"
+      >
+        <mat-icon>sticky_note_2</mat-icon>
+      </button>
+
+      <div class="viewer-participation-pill">
+        <span>Think Mode: Sticky Notes Enabled</span>
+      </div>
     </div>
   }
 

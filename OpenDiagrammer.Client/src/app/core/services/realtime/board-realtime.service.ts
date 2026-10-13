@@ -1,7 +1,12 @@
 import { Service, inject, signal } from '@angular/core';
 import * as signalR from '@microsoft/signalr';
 import { apiUrl } from '../../api/api-url';
-import { BoardSyncInitDto, CanvasCursorDto, UserPresenceDto } from '../../models/board.models';
+import {
+  BoardMode,
+  BoardSyncInitDto,
+  CanvasCursorDto,
+  UserPresenceDto,
+} from '../../models/board.models';
 import { AuthService } from '../auth/auth.service';
 import { CrdtService, uint8ArrayToBase64, base64ToUint8Array } from '../crdt/crdt.service';
 
@@ -18,6 +23,10 @@ export class BoardRealtimeService {
   public readonly connectionState = signal<RealtimeConnectionState>('disconnected');
   public readonly presences = signal<UserPresenceDto[]>([]);
   public readonly otherUsersCursors = signal<Record<string, CanvasCursorDto>>({});
+  public readonly boardModeUpdate = signal<{
+    mode: BoardMode;
+    thinkModeConfigJson: string | null;
+  } | null>(null);
 
   public async startConnection(boardId: string): Promise<BoardSyncInitDto | null> {
     if (this.currentBoardId === boardId && this.connectionState() === 'connected') {
@@ -141,6 +150,13 @@ export class BoardRealtimeService {
         return [...list, user];
       });
     });
+
+    this.hubConnection.on(
+      'ReceiveBoardModeUpdate',
+      (mode: BoardMode, thinkModeConfigJson: string | null) => {
+        this.boardModeUpdate.set({ mode, thinkModeConfigJson });
+      },
+    );
   }
 
   public async sendCrdtUpdate(update: Uint8Array): Promise<void> {
@@ -180,6 +196,26 @@ export class BoardRealtimeService {
         this.currentBoardId,
         isTyping,
         activeSelectionId ?? null,
+      );
+    } catch {
+      // Silently ignore
+    }
+  }
+
+  public async sendBoardModeUpdate(
+    mode: BoardMode,
+    thinkModeConfigJson: string | null,
+  ): Promise<void> {
+    if (!this.hubConnection || this.connectionState() !== 'connected' || !this.currentBoardId) {
+      return;
+    }
+
+    try {
+      await this.hubConnection.invoke(
+        'SendBoardModeUpdate',
+        this.currentBoardId,
+        mode,
+        thinkModeConfigJson,
       );
     } catch {
       // Silently ignore

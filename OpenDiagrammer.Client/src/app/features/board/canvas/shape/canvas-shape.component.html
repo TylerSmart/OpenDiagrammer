@@ -266,10 +266,56 @@
           [attr.stroke-width]="shape().strokeWidth"
         />
       }
+      @case ('sticky-pad') {
+        <rect
+          x="6"
+          y="6"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 8"
+          [attr.height]="shape().height - 8"
+          fill="rgba(0, 0, 0, 0.12)"
+        />
+        <rect
+          x="3"
+          y="3"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 6"
+          [attr.height]="shape().height - 6"
+          [attr.fill]="shape().fillColor || 'var(--canvas-color-amber-fill)'"
+          opacity="0.75"
+        />
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 4"
+          [attr.height]="shape().height - 4"
+          [attr.fill]="shape().fillColor || 'var(--canvas-color-amber-fill)'"
+          [attr.stroke]="shape().strokeColor || 'var(--canvas-color-amber-stroke)'"
+          [attr.stroke-width]="shape().strokeWidth"
+        />
+        <rect
+          x="1"
+          y="1"
+          rx="4"
+          ry="4"
+          [attr.width]="shape().width - 4"
+          height="16"
+          fill="rgba(0, 0, 0, 0.08)"
+        />
+      }
     }
   </svg>
 
-  @if (shape().text && !isEditing()) {
+  @if (isMasked()) {
+    <div class="shape-masked-overlay" aria-label="Hidden note">
+      <span class="masked-lock-icon">🔒</span>
+      <span class="masked-dots">••••••</span>
+    </div>
+  } @else if (shape().text && !isEditing()) {
     <div
       class="shape-text-overlay"
       [style.color]="textColor()"
@@ -282,7 +328,24 @@
     ></div>
   }
 
-  @if (shape().type === 'sticky-note' && shape().showAuthor !== false && shape().authorName) {
+  @if (shape().type === 'sticky-pad') {
+    <button
+      type="button"
+      class="sticky-pad-pull-button"
+      (pointerdown)="$event.stopPropagation()"
+      (click)="handlePullNote($event)"
+      aria-label="Pull sticky note from pad"
+    >
+      + Pull Note
+    </button>
+  }
+
+  @if (
+    shape().type === 'sticky-note' &&
+    shape().showAuthor !== false &&
+    shape().authorName &&
+    !isMasked()
+  ) {
     <div class="sticky-author-badge" [attr.aria-label]="'Author: ' + shape().authorName">
       <span class="author-icon">✍</span>
       <span class="author-name">{{ shape().authorName }}</span>

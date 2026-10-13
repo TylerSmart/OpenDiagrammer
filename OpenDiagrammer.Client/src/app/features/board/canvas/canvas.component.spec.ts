@@ -2844,4 +2844,132 @@ describe('CanvasComponent', () => {
       expect(component.activeTool()).toBe('sticky-note');
     });
   });
+
+  describe('Think Mode and Viewer Participation', () => {
+    it('should not mask shapes when Think Mode is false', () => {
+      fixture.componentRef.setInput('thinkMode', false);
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const shape = component.createShape('sticky-note', { x: 100, y: 100 });
+      shape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(shape)).toBe(false);
+    });
+
+    it('should mask another user sticky note when Think Mode has hideOthersWriting', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', { hideOthersWriting: true });
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(true);
+
+      const aliceShape = component.createShape('sticky-note', { x: 200, y: 100 });
+      aliceShape.authorName = 'Alice';
+
+      expect(component.isShapeMasked(aliceShape)).toBe(false);
+    });
+
+    it('should not mask notes when facilitatorReveal is true', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', { hideOthersWriting: true });
+      fixture.componentRef.setInput('currentUsername', 'Facilitator');
+      fixture.componentRef.setInput('facilitatorReveal', true);
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(false);
+    });
+
+    it('should not mask notes when users belong to the same group', () => {
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('thinkModeConfig', {
+        hideOthersWriting: true,
+        groups: [
+          {
+            id: 'g1',
+            name: 'Designers',
+            memberUsernames: ['Alice', 'Bob'],
+          },
+        ],
+      });
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const bobShape = component.createShape('sticky-note', { x: 100, y: 100 });
+      bobShape.authorName = 'Bob';
+
+      expect(component.isShapeMasked(bobShape)).toBe(false);
+
+      const charlieShape = component.createShape('sticky-note', { x: 200, y: 100 });
+      charlieShape.authorName = 'Charlie';
+
+      expect(component.isShapeMasked(charlieShape)).toBe(true);
+    });
+
+    it('should allow viewers to create sticky notes in Think Mode with viewer participation', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('canViewerParticipate', true);
+      fixture.componentRef.setInput('currentUsername', 'ViewerUser');
+      fixture.detectChanges();
+
+      component.setActiveTool('sticky-note');
+      component.handlePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 200,
+          button: 0,
+        }),
+      );
+
+      const stickyNotes = component.shapes().filter((s) => s.type === 'sticky-note');
+      expect(stickyNotes.length).toBe(1);
+      expect(stickyNotes[0].authorName).toBe('ViewerUser');
+    });
+
+    it('should NOT allow viewers to create non-sticky shapes in Think Mode', () => {
+      fixture.componentRef.setInput('readOnly', true);
+      fixture.componentRef.setInput('thinkMode', true);
+      fixture.componentRef.setInput('canViewerParticipate', true);
+      fixture.detectChanges();
+
+      component.setActiveTool('rectangle');
+      component.handlePointerDown(
+        new PointerEvent('pointerdown', {
+          bubbles: true,
+          clientX: 200,
+          clientY: 200,
+          button: 0,
+        }),
+      );
+
+      const rects = component.shapes().filter((s) => s.type === 'rectangle');
+      expect(rects.length).toBe(0);
+    });
+
+    it('should pull a sticky note from a sticky pad dispenser', () => {
+      fixture.componentRef.setInput('currentUsername', 'Alice');
+      fixture.detectChanges();
+
+      const pad = component.createShape('sticky-pad', { x: 100, y: 100 });
+      expect(pad.type).toBe('sticky-pad');
+
+      const initialCount = component.shapes().length;
+      component.pullStickyNoteFromPad(pad);
+
+      expect(component.shapes().length).toBe(initialCount + 1);
+      const newNote = component.shapes()[component.shapes().length - 1];
+      expect(newNote.type).toBe('sticky-note');
+      expect(newNote.authorName).toBe('Alice');
+      expect(newNote.x).toBeGreaterThan(pad.x);
+    });
+  });
 });

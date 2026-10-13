@@ -82,4 +82,21 @@ describe('BoardRealtimeService', () => {
     await service.sendCursor(42, 99);
     expect(mockSend).toHaveBeenCalledWith('SendCursor', 'board-123', 42, 99);
   });
+
+  it('should invoke hubConnection.invoke for sendBoardModeUpdate when connected', async () => {
+    const mockInvoke = vi.fn().mockResolvedValue(undefined);
+    (service as unknown as { hubConnection: unknown }).hubConnection = {
+      invoke: mockInvoke,
+    };
+    (service as unknown as { currentBoardId: string }).currentBoardId = 'board-123';
+    service.connectionState.set('connected');
+
+    await service.sendBoardModeUpdate(1, '{"timerSeconds":300}');
+    expect(mockInvoke).toHaveBeenCalledWith(
+      'SendBoardModeUpdate',
+      'board-123',
+      1,
+      '{"timerSeconds":300}',
+    );
+  });
 });

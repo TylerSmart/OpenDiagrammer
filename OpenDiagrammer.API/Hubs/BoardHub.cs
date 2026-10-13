@@ -14,6 +14,7 @@ public interface IBoardClient
     Task ReceiveCrdtUpdate(byte[] update);
     Task ReceiveCursor(CanvasCursorDto cursor);
     Task ReceivePresenceUpdate(UserPresenceDto user);
+    Task ReceiveBoardModeUpdate(BoardMode mode, string? thinkModeConfigJson);
 }
 
 [Authorize]
@@ -212,6 +213,48 @@ public sealed class BoardHub(IBoardService boardService, ICrdtMergeService crdtM
             var groupName = GetGroupName(boardId);
             await Clients.OthersInGroup(groupName).ReceivePresenceUpdate(updatedPresence);
         }
+    }
+
+    public async Task SendBoardModeUpdate(Guid boardId, BoardMode mode, string? thinkModeConfigJson)
+    {
+        var userId = CurrentUserId;
+        var board = await boardService.GetBoardByIdAsync(
+            userId,
+            boardId,
+            Context.ConnectionAborted
+        );
+        if (board is null)
+        {
+            throw new HubException("Board not found.");
+        }
+
+        if (!board.UserRole.CanChangeBoardMode())
+        {
+            throw new HubException(
+                "Only board owners and administrators can change the board mode."
+            );
+        }
+
+        var updateRequest = new UpdateBoardRequest(
+            Name: board.Name,
+            Description: board.Description,
+            BackgroundType: board.BackgroundType,
+            BackgroundColor: board.BackgroundColor,
+            BackgroundOpacity: board.BackgroundOpacity,
+            Mode: mode,
+            ThinkModeConfigJson: thinkModeConfigJson,
+            CanvasDataJson: null
+        );
+
+        await boardService.UpdateBoardAsync(
+            userId,
+            boardId,
+            updateRequest,
+            Context.ConnectionAborted
+        );
+
+        var groupName = GetGroupName(boardId);
+        await Clients.Group(groupName).ReceiveBoardModeUpdate(mode, thinkModeConfigJson);
     }
 
     public override async Task OnDisconnectedAsync(Exception? exception)
