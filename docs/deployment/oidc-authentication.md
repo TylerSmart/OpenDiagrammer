@@ -13,7 +13,7 @@ This guide explains how to configure external OpenID Connect (OIDC) and OAuth 2.
    - [Step 3: Create OAuth 2.0 Client Credentials](#step-3-create-oauth-20-client-credentials)
 3. [Deploying with Docker](#deploying-with-docker)
    - [Environment Variables Reference](#environment-variables-reference)
-   - [Sample `docker-compose.prod.yml`](#sample-docker-composeprodyml)
+   - [Sample `docker-compose.yml`](#sample-docker-composeyml)
    - [Sample `.env` File](#sample-env-file)
 4. [Reverse Proxy & HTTPS Setup](#reverse-proxy--https-setup)
 5. [Other Common OIDC Providers](#other-common-oidc-providers)
@@ -31,7 +31,7 @@ OpenDiagrammer supports both local email/password registration and external OIDC
 When OIDC is enabled:
 1. The frontend queries `/api/auth/providers` to check available sign-in options.
 2. Clicking **"Sign in with [Provider]"** redirects the user to your provider's authorization page.
-3. Upon authentication, the provider redirects back with an authorization code.
+3. Upon authentication, the provider redirects back to `/login/callback` with an authorization code.
 4. OpenDiagrammer securely exchanges the code with the provider for an ID token, retrieves the user's profile (`email`, `name`, `sub`), and:
    - **Links existing accounts** if a local account already exists with the matching email address.
    - **Auto-provisions a new user** if no account exists yet.
@@ -43,7 +43,7 @@ When OIDC is enabled:
 
 ### Prerequisites
 - A Google account.
-- Your public domain name or local address where OpenDiagrammer is hosted (e.g., `https://diagrams.yourdomain.com` or `http://localhost:8080`).
+- Your public domain name or local address where OpenDiagrammer is hosted (e.g. `https://diagrams.yourdomain.com` or `http://localhost:8080`).
 
 ---
 
@@ -122,24 +122,20 @@ In ASP.NET Core, nested configuration properties are specified in environment va
 
 ---
 
-### Sample `docker-compose.prod.yml`
+### Sample `docker-compose.yml`
 
-Here is an example `docker-compose.prod.yml` configuration:
+Here is an example `docker-compose.yml` configuration configured for Google OIDC:
 
 ```yaml
 name: open-diagrammer-prod
 
 services:
   api:
-    image: opendiagrammer:latest
-    # Or build locally:
-    # build:
-    #   context: .
-    #   dockerfile: OpenDiagrammer.API/Dockerfile
+    image: ghcr.io/tylersmart/opendiagrammer:latest
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "${APP_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -147,6 +143,9 @@ services:
       
       # JWT Session Secret (Must be at least 32 characters)
       Authentication__Jwt__Secret: "${JWT_SECRET}"
+      Authentication__Jwt__Issuer: "OpenDiagrammer"
+      Authentication__Jwt__Audience: "OpenDiagrammer"
+      Authentication__Jwt__ExpirationMinutes: 1440
       
       # Google OIDC Configuration
       Authentication__Oidc__Enabled: "true"
@@ -176,7 +175,7 @@ services:
       test:
         [
           "CMD-SHELL",
-          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P ${MSSQL_SA_PASSWORD} -C -Q \"SELECT 1\" -b -o /dev/null",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null",
         ]
       interval: 5s
       timeout: 5s
@@ -191,14 +190,17 @@ volumes:
 
 ### Sample `.env` File
 
-Place a `.env` file alongside `docker-compose.prod.yml`:
+Place a `.env` file alongside `docker-compose.yml`:
 
 ```env
 # Database password
-MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!
+MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
 
 # OpenDiagrammer JWT signing key (generate a random 32+ character string)
 JWT_SECRET=ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!
+
+# Host Port
+APP_PORT=8080
 
 # Google OAuth Credentials
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
@@ -207,7 +209,7 @@ GOOGLE_CLIENT_SECRET=GOCSPX-your-google-client-secret
 
 Launch the stack:
 ```bash
-docker compose -f docker-compose.prod.yml up -d
+docker compose up -d
 ```
 
 ---
@@ -280,8 +282,8 @@ server {
 ## Troubleshooting & FAQs
 
 ### Error: `redirect_uri_mismatch`
-- **Cause**: The redirect URI registered in Google Cloud Console does not match the URI sent during login.
-- **Fix**: Check that the redirect URI in the Google Cloud Console exactly matches `https://your-domain.com/login/callback` (including protocol `https` and no extra trailing slash).
+- **Cause**: The redirect URI registered in your identity provider console does not match the URI sent during login.
+- **Fix**: Check that the redirect URI in your provider console exactly matches `https://your-domain.com/login/callback` (including protocol `https` and without trailing slash).
 
 ### User profile missing name or email
 - **Cause**: The configured `Scope` does not include `email` and `profile`.

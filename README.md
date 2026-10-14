@@ -1,142 +1,112 @@
 # OpenDiagrammer
 
-OpenDiagrammer is an open-source diagramming tool similar to Miro and Lucidchart. It allows users to maintain named boards that can be shared and collaborated on in real-time. Whether you're building flow charts, mind maps, or UML diagrams, OpenDiagrammer provides an infinite canvas to bring your ideas to life.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Docker Image](https://img.shields.io/badge/ghcr.io-tylersmart%2Fopendiagrammer-blue?logo=docker)](https://github.com/TylerSmart/OpenDiagrammer/pkgs/container/opendiagrammer)
+[![Publish Docker](https://github.com/TylerSmart/OpenDiagrammer/actions/workflows/docker-publish.yml/badge.svg)](https://github.com/TylerSmart/OpenDiagrammer/actions/workflows/docker-publish.yml)
+
+**OpenDiagrammer** is an open-source, self-hostable collaborative diagramming canvas inspired by Miro and Lucidchart. It empowers teams and individuals to maintain named diagram boards with real-time multiplayer editing, live cursors, offline resilience via CRDTs, structured brainstorm sessions, and granular permission controls.
+
+---
 
 ## Features
 
-- **Real-Time Collaboration**: Work together with others simultaneously with live cursors and updates.
-- **Offline Capabilities**: Keep working even when your internet connection drops. Changes seamlessly sync when reconnected using CRDTs.
-- **Customizable Nodes & Connections**: Add rich text, colors, and specific shapes to your diagrams.
-- **Think Mode**: Enforce structured collaboration sessions using sticky notes and timers.
-- **Role-Based Access Control**: Securely share boards with specific permissions (Owner, Admin, Editor, Viewer).
-- **Exporting**: Export your boards to PDF, SVG, PNG, or JPEG.
+- **Infinite Canvas & Flexible Drawing**: Create flowcharts, system diagrams, mind maps, and wireframes with customizable shapes, rich text, colors, and connection arrows.
+- **Real-Time Multiplayer Collaboration**: Work together simultaneously with live cursor tracking, presence indicators, and instant canvas updates powered by SignalR.
+- **Offline-First & Conflict-Free**: Keep diagramming seamlessly without an internet connection. Changes sync automatically upon reconnecting using CRDTs (Yjs).
+- **Think Mode**: Facilitate structured team ideation with timers, sticky notes, and brainstorm phases.
+- **Role-Based Access Control**: Securely collaborate with project members using fine-grained board permissions (Owner, Admin, Editor, Viewer).
+- **Single Sign-On (SSO / OIDC)**: Authenticate with local email/password or connect your external identity provider (Google, Authentik, Keycloak, or Microsoft Entra ID).
+- **Exporting & Snapshots**: Export your boards to PNG, SVG, PDF, or JSON board snapshots with complete revision history.
+- **Self-Hostable Anywhere**: Packaged as a unified, production-ready multi-arch Docker container (`linux/amd64` and `linux/arm64`).
 
-## Versioning
+---
 
-_(To be implemented - Semantic Versioning tags will appear here)_
+## Tech Stack
 
-## Test Statuses & Coverage
+| Layer | Technology |
+|---|---|
+| **Frontend** | [Angular 22](https://angular.dev/), TypeScript, [Yjs](https://yjs.dev/) (CRDTs), HTML5 Canvas & SVG |
+| **Backend** | [ASP.NET Core 10](https://dotnet.microsoft.com/), SignalR, [Scalar](https://scalar.com/) OpenAPI |
+| **Data & ORM** | [Microsoft SQL Server](https://www.microsoft.com/sql-server), Entity Framework Core |
+| **Packaging** | Docker, Docker Compose, Multi-Arch Container Images via GitHub Actions |
 
-_(To be implemented - CI/CD badges for Build Status and Test Coverage will appear here)_
+---
 
-## Installation / Deployment
+## Quick Start (Docker)
 
-OpenDiagrammer is packaged as a lightweight, production-ready Docker container and can be deployed anywhere Docker runs, from a cloud VPS to a home server or NAS.
+You can launch OpenDiagrammer in seconds using Docker Compose:
 
-### Quick Start (Docker Compose)
+```yaml
+name: open-diagrammer-prod
 
-Deploy OpenDiagrammer in seconds using Docker Compose:
+services:
+  api:
+    image: ghcr.io/tylersmart/opendiagrammer:latest
+    container_name: open-diagrammer-api
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_HTTP_PORTS: 8080
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=YourStrongPassword123!_MustIncludeCaps;TrustServerCertificate=True;"
+      Authentication__Jwt__Secret: "ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: open-diagrammer-sqlserver
+    restart: unless-stopped
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "YourStrongPassword123!_MustIncludeCaps"
+      MSSQL_PID: "Developer"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrongPassword123!_MustIncludeCaps' -C -Q 'SELECT 1' -b -o /dev/null",
+        ]
+      interval: 5s
+      timeout: 5s
+      retries: 24
+      start_period: 20s
+
+volumes:
+  sqlserver_data:
+```
+
+Run:
 
 ```bash
-# 1. Clone the repository
-git clone https://github.com/YourOrg/OpenDiagrammer.git
-cd OpenDiagrammer
-
-# 2. Build and start the services
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d
 ```
 
-The application will be live at `http://localhost:8080`.
+Open `http://localhost:8080` in your web browser.
 
-For detailed configuration (database persistence, environment variables, reverse proxies with SSL/TLS, and backups), see our dedicated deployment guides:
+---
 
-- **[Production Docker Deployment Guide](docs/deployment/docker-deployment.md)** — Comprehensive guide for deploying on any Linux host with Nginx, Caddy, Traefik, or Cloudflare Tunnel.
-- **[TrueNAS Scale Deployment Guide](docs/deployment/truenas-scale.md)** — Step-by-step instructions for TrueNAS Scale (Electric Eel 24.10+ and Dragonfish 24.04), ZFS datasets, permissions, and automated snapshot backups.
-- **[OIDC & OAuth2 Authentication Guide](docs/deployment/oidc-authentication.md)** — Step-by-step setup for Single Sign-On with Google, Authentik, Keycloak, and Entra ID.
+## Documentation
 
-## Local development
+For comprehensive guides on deployment, configuration, backups, and development, please refer to our dedicated documentation:
 
-The API and Angular client run **on your machine** (Visual Studio F5 with hot reload). Docker is used only for SQL Server.
+- 🐳 **[Production Docker Deployment Guide](docs/deployment/docker-deployment.md)** — Step-by-step production deployment with reverse proxies (Nginx, Caddy, Traefik, Cloudflare Tunnel), automated backups, and environment tuning.
+- 🚀 **[TrueNAS Scale Deployment Guide](docs/deployment/truenas-scale.md)** — Native Docker Compose setup for TrueNAS Scale (Electric Eel 24.10+) and Dragonfish (24.04), ZFS datasets, and automated snapshots.
+- 🔐 **[OIDC & SSO Authentication Guide](docs/deployment/oidc-authentication.md)** — Configure Single Sign-On with Google OAuth 2.0, Authentik, Keycloak, or Microsoft Entra ID.
+- 🛠️ **[Contributing & Development Guide](CONTRIBUTING.md)** — Workstation setup (.NET 10 & Angular 22), database migrations (EF Core), code styling, test execution, and pull request guidelines.
 
-### Prerequisites
+---
 
-1. [Docker Desktop for Windows](https://docs.docker.com/desktop/setup/install/windows-install/) with **Linux containers** (WSL2 backend).
-2. Visual Studio with the solution's multiple startup projects (API + client), same as today.
-3. Node.js for the Angular client (unchanged).
+## Contributing
 
-### First-time and everyday F5
+Contributions of any kind are welcomed and appreciated! Please see our **[Contributing Guide](CONTRIBUTING.md)** for detailed instructions on getting started with local development and submitting pull requests.
 
-1. Start Docker Desktop and wait until it is running.
-2. Press F5 in Visual Studio.
+---
 
-A Debug build from Visual Studio runs `scripts/ensure-local-infra.ps1`, which starts the containers and creates the `OpenDiagrammer` database. The first SQL Server start can take about 30 seconds. Later F5s are fast if the containers are already healthy.
+## License
 
-If Docker Desktop is not running, the build fails with a message to start it.
-
-### Manual start (Cursor, CLI, or without Visual Studio)
-
-From the repository root:
-
-```powershell
-.\scripts\ensure-local-infra.ps1
-```
-
-Then run the API (`ASPNETCORE_ENVIRONMENT=Local`) and the Angular client as usual.
-
-### Local services
-
-| Service    | Host endpoint     | Notes                                                                                                                      |
-| ---------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| SQL Server | `localhost,14333` | Database `OpenDiagrammer`. User `sa`, password `OpenDiagrammer_Local_Dev_1`. Port 14333 avoids a local SQL Server on 1433. |
-
-SSMS / Azure Data Studio: server `localhost,14333`, SQL authentication, database `OpenDiagrammer`.
-
-### Troubleshooting
-
-- **Docker is not available** — Start Docker Desktop. Use Linux containers, not Windows containers.
-- **WSL not running** — Open Docker Desktop and wait until the engine is ready; restart WSL if needed (`wsl --shutdown`, then start Docker again).
-- **Port already in use** — Another process is bound to 14333, 6379, 9000, or 9001. Stop that process or change the host ports in `docker-compose.yml` and `appsettings.Local.json` together.
-- **`--wait` timeout / SQL healthcheck failing** — First boot can be slow. Re-run `.\scripts\ensure-local-infra.ps1`. Check `docker compose ps` and `docker compose logs sqlserver`.
-
-Do **not** point a Local debug session at Development AWS resources. Local and Development share the same configuration keys; only the endpoints differ.
-
-## Screenshots
-
-_(Screenshots of the UI, Light/Dark modes, and the collaborative canvas will be added here)_
-
-## Licensing
-
-OpenDiagrammer is open-source software. See the [LICENSING.md](LICENSING.md) file for details.
-
-## EF Core
-
-Schema lives in `OpenDiagrammerDbContext` (`OpenDiagrammer.Data`). Change the model, then add a migration and commit it. Local F5 applies pending migrations automatically; other environments should run `database update` (or an equivalent deploy step) instead of relying on startup.
-
-Restore the EF tool once per machine:
-
-```powershell
-dotnet tool restore
-```
-
-All commands below are from the repository root.
-
-**Add a migration** after changing entities or configurations:
-
-```powershell
-dotnet ef migrations add <MigrationName> --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
-```
-
-**Apply migrations** to the database in `appsettings.Development.json` (or the current environment):
-
-```powershell
-dotnet ef database update --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
-```
-
-**Revert the last migration** (database and then delete the migration files if you also want them gone):
-
-```powershell
-dotnet ef database update <PreviousMigrationName> --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
-dotnet ef migrations remove --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
-```
-
-`migrations remove` only works if the last migration has not been applied, or after you have rolled the database back. List applied migrations with:
-
-```powershell
-dotnet ef migrations list --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API
-```
-
-SQL scripts (for reviewing or applying without the CLI):
-
-```powershell
-dotnet ef migrations script --project OpenDiagrammer.Data --startup-project OpenDiagrammer.API --output OpenDiagrammer.sql
-```
+OpenDiagrammer is free and open-source software licensed under the **[MIT License](LICENSE)**.

@@ -26,7 +26,7 @@ This guide provides step-by-step instructions for deploying OpenDiagrammer on **
 OpenDiagrammer runs as a self-contained web service that includes:
 
 - The ASP.NET Core 10 backend API & real-time SignalR CRDT synchronization.
-- The Angular 22 interactive web application.
+- The Angular interactive web application served from static files.
 - Microsoft SQL Server 2022 for persistent storage.
 
 ### Prerequisites
@@ -34,7 +34,7 @@ OpenDiagrammer runs as a self-contained web service that includes:
 - A running **TrueNAS Scale** instance.
 - An initialized storage pool (e.g. `tank` or `pool0`).
 - **Apps** service configured and running on your preferred storage pool (**Apps** -> **Settings** -> **Choose Pool**).
-- A domain name or local DNS record pointing to your TrueNAS host (e.g., `diagrams.myhomelab.net` or `192.168.1.100`).
+- A domain name or local DNS record pointing to your TrueNAS host (e.g. `diagrams.myhomelab.net` or `192.168.1.100`).
 
 ---
 
@@ -66,7 +66,7 @@ sudo chmod -R 770 /mnt/tank/opendiagrammer/db
 ```
 
 > [!NOTE]
-> Adjust `/mnt/tank` to match your actual ZFS pool name (e.g., `/mnt/pool0`).
+> Adjust `/mnt/tank` to match your actual ZFS pool name (e.g. `/mnt/pool0`).
 
 ---
 
@@ -83,36 +83,43 @@ TrueNAS Scale 24.10 (Electric Eel) natively supports Docker Compose via **Custom
 5. Under **Compose File**, paste the following configuration:
 
 ```yaml
+name: open-diagrammer-prod
+
 services:
-  app:
-    image: ghcr.io/yourorg/opendiagrammer:latest # Or your local build/image tag
-    container_name: opendiagrammer-app
+  api:
+    image: ghcr.io/tylersmart/opendiagrammer:latest
+    container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "8080:8080" # Change 8080 if your TrueNAS host has another app using this port
+      - "8080:8080" # Change host port if another app is already using 8080
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=YourStrongPassword123!_MustIncludeCaps;TrustServerCertificate=True;"
       Authentication__Jwt__Secret: "ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!"
+      Authentication__Jwt__Issuer: "OpenDiagrammer"
+      Authentication__Jwt__Audience: "OpenDiagrammer"
+      Authentication__Jwt__ExpirationMinutes: 1440
+      
       # Optional: External OIDC / SSO (Google, Authentik, Keycloak)
       # Authentication__Oidc__Enabled: "true"
       # Authentication__Oidc__ProviderName: "Authentik"
       # Authentication__Oidc__Authority: "https://auth.myhomelab.net/application/o/opendiagrammer/"
       # Authentication__Oidc__ClientId: "your-client-id"
       # Authentication__Oidc__ClientSecret: "your-client-secret"
+      # Authentication__Oidc__Scope: "openid profile email"
     depends_on:
       sqlserver:
         condition: service_healthy
 
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
-    container_name: opendiagrammer-sqlserver
+    container_name: open-diagrammer-sqlserver
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: "YourStrongPassword123!_MustIncludeCaps"
-      MSSQL_PID: "Express"
+      MSSQL_PID: "Developer"
     volumes:
       - /mnt/tank/opendiagrammer/db:/var/opt/mssql
     healthcheck:
@@ -121,15 +128,14 @@ services:
           "CMD-SHELL",
           "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P 'YourStrongPassword123!_MustIncludeCaps' -C -Q 'SELECT 1' -b -o /dev/null",
         ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 10
-      start_period: 25s
+      retries: 24
+      start_period: 20s
 ```
 
 > [!IMPORTANT]
->
-> - Replace `YourStrongPassword123!_MustIncludeCaps` with your own database password.
+> - Replace `YourStrongPassword123!_MustIncludeCaps` with your own secure password.
 > - Replace `ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!` with a 32+ character random string (e.g. generated via `openssl rand -base64 32`).
 > - Update `/mnt/tank/opendiagrammer/db` to your actual dataset path.
 
@@ -145,7 +151,7 @@ For TrueNAS Scale 24.04 (Dragonfish), deploy using the Custom App wizard:
 1. In the WebUI, go to **Apps** -> **Discover Apps** -> **Custom App**.
 2. **Application Name**: `opendiagrammer`.
 3. **Container Image**:
-   - Repository: `ghcr.io/yourorg/opendiagrammer` (or your image repository)
+   - Repository: `ghcr.io/tylersmart/opendiagrammer`
    - Tag: `latest`
 4. **Port Forwarding**:
    - Container Port: `8080`
@@ -153,7 +159,7 @@ For TrueNAS Scale 24.04 (Dragonfish), deploy using the Custom App wizard:
 5. **Environment Variables**:
    - `ASPNETCORE_ENVIRONMENT`: `Production`
    - `ASPNETCORE_HTTP_PORTS`: `8080`
-   - `ConnectionStrings__DefaultConnection`: `Server=127.0.0.1;Database=OpenDiagrammer;User Id=sa;Password=...`
+   - `ConnectionStrings__DefaultConnection`: `Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=...`
    - `Authentication__Jwt__Secret`: `Your32CharKeyHere`
 6. **Storage**:
    - Mount Type: `Host Path`
@@ -176,7 +182,7 @@ If you run **Nginx Proxy Manager** (available from the TrueNAS community catalog
 3. **Details Tab**:
    - Domain Names: `diagrams.yourdomain.com`
    - Scheme: `http`
-   - Forward Hostname / IP: IP address of your TrueNAS server (e.g., `192.168.1.100`)
+   - Forward Hostname / IP: IP address of your TrueNAS server (e.g. `192.168.1.100`)
    - Forward Port: `8080`
    - Enable: **Cache Assets**, **Block Common Exploits**, **Websockets Support** (Essential for SignalR live collaboration!)
 4. **SSL Tab**:
@@ -222,7 +228,7 @@ One of the greatest benefits of running on TrueNAS Scale is atomic, zero-downtim
 3. **Dataset**: `tank/opendiagrammer`.
 4. **Recursive**: Checked.
 5. **Schedule**:
-   - Frequency: Daily (e.g., at `02:00 AM`).
+   - Frequency: Daily (e.g. at `02:00 AM`).
    - Lifetime: 14 Days (or your retention preference).
 6. Click **Save**.
 

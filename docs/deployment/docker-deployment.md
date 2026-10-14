@@ -9,16 +9,17 @@ This guide provides step-by-step instructions for deploying OpenDiagrammer in pr
 1. [Architecture Overview](#architecture-overview)
 2. [Prerequisites](#prerequisites)
 3. [Quick Start](#quick-start)
-4. [Environment Configuration Reference](#environment-configuration-reference)
-5. [Database Persistence & Automated Migrations](#database-persistence--automated-migrations)
-6. [Reverse Proxy & SSL / TLS Configuration](#reverse-proxy--ssl--tls-configuration)
+4. [Production Docker Compose Configuration](#production-docker-compose-configuration)
+5. [Environment Configuration Reference](#environment-configuration-reference)
+6. [Database Persistence & Automated Migrations](#database-persistence--automated-migrations)
+7. [Reverse Proxy & SSL / TLS Configuration](#reverse-proxy--ssl--tls-configuration)
    - [Nginx](#nginx)
    - [Caddy](#caddy)
    - [Traefik](#traefik)
    - [Cloudflare Tunnel](#cloudflare-tunnel)
-7. [Database Backup & Restore](#database-backup--restore)
-8. [Updating OpenDiagrammer](#updating-opendiagrammer)
-9. [Troubleshooting & Logs](#troubleshooting--logs)
+8. [Database Backup & Restore](#database-backup--restore)
+9. [Updating OpenDiagrammer](#updating-opendiagrammer)
+10. [Troubleshooting & Logs](#troubleshooting--logs)
 
 ---
 
@@ -27,8 +28,8 @@ This guide provides step-by-step instructions for deploying OpenDiagrammer in pr
 OpenDiagrammer's production container architecture is designed to be streamlined, lightweight, and robust:
 
 - **`open-diagrammer-api` (Unified Application Container)**:
-  - Serves the compiled Angular 22 Single Page Application (SPA) from static files.
-  - Hosts the ASP.NET Core 10 Web API and Swagger / OpenAPI endpoints.
+  - Serves the compiled Angular Single Page Application (SPA) from static files.
+  - Hosts the ASP.NET Core 10 Web API and OpenAPI / Scalar documentation endpoints.
   - Hosts the real-time SignalR CRDT collaboration hub (`/hubs/board`) over WebSockets.
   - Listens on internal port `8080`.
   - Automatically verifies and applies pending database schema migrations on container boot.
@@ -36,7 +37,7 @@ OpenDiagrammer's production container architecture is designed to be streamlined
   - Microsoft SQL Server 2022 Linux container (`mcr.microsoft.com/mssql/server:2022-latest`).
   - Persists all relational data, board snapshots, revision history, and user credentials in a persistent named volume or host bind-mount.
 
-```
+```text
 ┌────────────────────────────────────────────────────────┐
 │                     Client Browser                     │
 └───────────────────────────┬────────────────────────────┘
@@ -65,25 +66,25 @@ OpenDiagrammer's production container architecture is designed to be streamlined
 - **Hardware Requirements**:
   - Minimum: 2 CPU cores, 2 GB RAM (SQL Server requires at least 2 GB RAM).
   - Recommended: 4 CPU cores, 4 GB+ RAM.
-- **A Domain Name**: pointing to your server's IP address (e.g., `diagrams.yourdomain.com`).
+- **A Domain Name**: Pointing to your server's IP address (e.g., `diagrams.yourdomain.com`).
 
 ---
 
 ## Quick Start
 
-### 1. Clone or Copy the Repository
+### 1. Create Application Directory
+
+You do not need to clone the full source code repository to run OpenDiagrammer in production. Create an application directory on your server:
 
 ```bash
-git clone https://github.com/YourOrg/OpenDiagrammer.git /opt/opendiagrammer
-cd /opt/opendiagrammer
+mkdir -p /opt/opendiagrammer && cd /opt/opendiagrammer
 ```
 
 ### 2. Configure Environment Variables (`.env`)
 
-Create a `.env` file in the project root alongside `docker-compose.prod.yml`:
+Create a `.env` file:
 
 ```bash
-cp .env.example .env
 nano .env
 ```
 
@@ -97,41 +98,60 @@ openssl rand -base64 32
 Configure your `.env` file:
 
 ```env
-# Database Settings
-SQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
+# Database SA Password (must include uppercase, lowercase, numbers, and special characters)
+MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
 
-# OpenDiagrammer Security Settings
+# OpenDiagrammer Security Settings (at least 32 characters)
 JWT_SECRET=ReplaceWithYourGeneratedBase64SecretKeyAtLeast32CharsLong!
 
-# Application Port (Host port mapping)
+# Application Host Port Mapping
 APP_PORT=8080
 
-# Optional: Hostname for CORS / Cookies
+# Optional: Hostname for Reverse Proxy / CORS
 APP_HOST=diagrams.yourdomain.com
 ```
 
-### 3. Review `docker-compose.prod.yml`
+### 3. Create `docker-compose.yml`
 
-Verify `docker-compose.prod.yml`:
+Create your `docker-compose.yml` file:
+
+```bash
+nano docker-compose.yml
+```
+
+Paste the production configuration:
 
 ```yaml
 name: open-diagrammer-prod
 
 services:
   api:
-    build:
-      context: .
-      dockerfile: OpenDiagrammer.API/Dockerfile
-    image: opendiagrammer:latest
+    image: ghcr.io/tylersmart/opendiagrammer:latest
     container_name: open-diagrammer-api
     restart: unless-stopped
+    ports:
+      - "${APP_PORT:-8080}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
-      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=${SQL_SA_PASSWORD};TrustServerCertificate=True;"
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;"
+      
+      # JWT Authentication Secret
       Authentication__Jwt__Secret: "${JWT_SECRET}"
-    ports:
-      - "${APP_PORT:-8080}:8080"
+      Authentication__Jwt__Issuer: "OpenDiagrammer"
+      Authentication__Jwt__Audience: "OpenDiagrammer"
+      Authentication__Jwt__ExpirationMinutes: 1440
+      
+      # Optional: External OIDC / SSO (Google, Authentik, Keycloak, Entra ID)
+      # Authentication__Oidc__Enabled: "true"
+      # Authentication__Oidc__ProviderName: "Google"
+      # Authentication__Oidc__Authority: "https://accounts.google.com"
+      # Authentication__Oidc__ClientId: "your-client-id.apps.googleusercontent.com"
+      # Authentication__Oidc__ClientSecret: "your-client-secret"
+      # Authentication__Oidc__Scope: "openid profile email"
+      # Authentication__Oidc__AuthorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      # Authentication__Oidc__TokenEndpoint: "https://oauth2.googleapis.com/token"
+      # Authentication__Oidc__UserInfoEndpoint: "https://openidconnect.googleapis.com/v1/userinfo"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -142,75 +162,84 @@ services:
     restart: unless-stopped
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: "${SQL_SA_PASSWORD}"
-      MSSQL_PID: "Express" # Or "Developer" / "Standard"
+      MSSQL_SA_PASSWORD: "${MSSQL_SA_PASSWORD}"
+      MSSQL_PID: "Developer" # Options: Developer, Express, Standard
     volumes:
       - sqlserver_data:/var/opt/mssql
     healthcheck:
       test:
         [
           "CMD-SHELL",
-          '/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P "${SQL_SA_PASSWORD}" -C -Q "SELECT 1" -b -o /dev/null',
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" -b -o /dev/null",
         ]
-      interval: 10s
+      interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 24
       start_period: 20s
 
 volumes:
   sqlserver_data:
-    name: opendiagrammer_sqlserver_data
 ```
 
-### 4. Build and Launch
+> [!TIP]
+> If you prefer to build the container from source code instead of pulling the prebuilt image from GHCR, clone the repository and add a `build:` block to the `api` service:
+> ```yaml
+> build:
+>   context: .
+>   dockerfile: OpenDiagrammer.API/Dockerfile
+> ```
 
-Start the services in detached mode:
+### 4. Launch the Application
+
+Start the services:
 
 ```bash
-docker compose -f docker-compose.prod.yml up -d --build
+docker compose up -d
 ```
 
-Monitor the startup logs to verify the database healthcheck and automatic EF Core migration execution:
+Monitor the startup logs to verify that the database healthcheck passes and migrations are automatically executed:
 
 ```bash
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose logs -f api
 ```
 
-You should see log entries showing:
+You should see log output confirming:
 
 ```text
-Applying migration '20261013210602_AddBoardRevisions'...
 Database migration complete.
 Now listening on: http://[::]:8080
 Application started. Press Ctrl+C to shut down.
 ```
 
-Visit `http://your-server-ip:8080` in your web browser. You should see the OpenDiagrammer sign-in page!
+Open `http://<your-server-ip>:8080` in your web browser. You should see the OpenDiagrammer sign-in page!
 
 ---
 
 ## Environment Configuration Reference
 
-The following environment variables can be customized in `.env` or passed directly to the `api` service container:
+The following environment variables can be customized in `.env` or passed directly to the `api` container:
 
-| Variable                               | Default                 | Description                                                         |
-| -------------------------------------- | ----------------------- | ------------------------------------------------------------------- |
-| `ASPNETCORE_ENVIRONMENT`               | `Production`            | Controls ASP.NET Core environment mode. Always set to `Production`. |
-| `ASPNETCORE_HTTP_PORTS`                | `8080`                  | Internal listening port inside the container.                       |
-| `ConnectionStrings__DefaultConnection` | Required                | ADO.NET connection string pointing to SQL Server.                   |
-| `Authentication__Jwt__Secret`          | Required                | Secret signing key for JWT auth tokens. Must be >= 32 characters.   |
-| `Authentication__Jwt__Issuer`          | `OpenDiagrammer.API`    | Token issuer claim.                                                 |
-| `Authentication__Jwt__Audience`        | `OpenDiagrammer.Client` | Token audience claim.                                               |
-| `Authentication__Jwt__ExpiryMinutes`   | `10080` (7 days)        | Session token validity duration in minutes.                         |
-| `Authentication__Oidc__Enabled`        | `false`                 | Set to `true` to enable external Single Sign-On.                    |
-| `Authentication__Oidc__ProviderName`   | -                       | Display label on the login screen (e.g., `Google`, `Authentik`).    |
-| `Authentication__Oidc__Authority`      | -                       | OIDC Identity Provider discovery authority URL.                     |
-| `Authentication__Oidc__ClientId`       | -                       | OAuth2 Client ID from your provider.                                |
-| `Authentication__Oidc__ClientSecret`   | -                       | OAuth2 Client Secret from your provider.                            |
-| `Authentication__Oidc__Scope`          | `openid profile email`  | Requested OAuth2 scopes.                                            |
+| Variable                                      | Default               | Description                                                                  |
+| --------------------------------------------- | --------------------- | ---------------------------------------------------------------------------- |
+| `ASPNETCORE_ENVIRONMENT`                      | `Production`          | ASP.NET Core environment mode. Always set to `Production`.                   |
+| `ASPNETCORE_HTTP_PORTS`                       | `8080`                | Internal listening port inside the container.                                |
+| `ConnectionStrings__DefaultConnection`        | Required              | ADO.NET connection string pointing to SQL Server.                            |
+| `Authentication__Jwt__Secret`                 | Required              | Secret signing key for JWT tokens. Must be >= 32 characters.                 |
+| `Authentication__Jwt__Issuer`                 | `OpenDiagrammer`      | Token issuer claim.                                                          |
+| `Authentication__Jwt__Audience`               | `OpenDiagrammer`      | Token audience claim.                                                        |
+| `Authentication__Jwt__ExpirationMinutes`      | `1440` (24 hours)     | Session token validity duration in minutes.                                  |
+| `Authentication__Oidc__Enabled`               | `false`               | Set to `true` to enable external Single Sign-On.                             |
+| `Authentication__Oidc__ProviderName`          | `OIDC`                | Display label on the login screen (e.g. `Google`, `Authentik`, `Keycloak`).  |
+| `Authentication__Oidc__Authority`             | -                     | OIDC Identity Provider discovery authority URL.                              |
+| `Authentication__Oidc__ClientId`              | -                     | OAuth2 Client ID from your provider.                                         |
+| `Authentication__Oidc__ClientSecret`          | -                     | OAuth2 Client Secret from your provider.                                     |
+| `Authentication__Oidc__Scope`                 | `openid profile email`| Requested OAuth2 scopes.                                                     |
+| `Authentication__Oidc__AuthorizationEndpoint` | (Auto-derived)        | Custom authorization endpoint URL (optional).                                |
+| `Authentication__Oidc__TokenEndpoint`         | (Auto-derived)        | Custom token exchange URL (optional).                                        |
+| `Authentication__Oidc__UserInfoEndpoint`      | (Auto-derived)        | Custom user info endpoint URL (optional).                                    |
 
 > [!TIP]
-> For complete step-by-step instructions on setting up Google, Authentik, Keycloak, or Entra ID SSO, see the **[OIDC Authentication Guide](oidc-authentication.md)**.
+> For complete step-by-step instructions on setting up Google, Authentik, Keycloak, or Entra ID SSO, see the **[OIDC & OAuth2 Authentication Guide](oidc-authentication.md)**.
 
 ---
 
@@ -223,7 +252,7 @@ OpenDiagrammer uses Entity Framework Core with automatic startup migrations:
 3. It evaluates pending migrations in `OpenDiagrammer.Data/Migrations` and executes any unapplied schema updates.
 4. Database tables, indexes, CRDT snapshots, revision history, and user accounts are fully managed without requiring manual SQL script execution.
 
-All database files (`.mdf`, `.ldf`, system catalogs) reside inside `/var/opt/mssql` inside the `sqlserver` container and are persisted in the `sqlserver_data` Docker volume.
+All database files reside inside `/var/opt/mssql` inside the `sqlserver` container and are persisted across updates in the `sqlserver_data` Docker volume.
 
 ---
 
@@ -293,7 +322,7 @@ Add the following block to your `/etc/caddy/Caddyfile`:
 ```caddy
 diagrams.yourdomain.com {
     reverse_proxy 127.0.0.1:8080 {
-        # Caddy automatically proxies WebSockets out of the box!
+        # Caddy automatically proxies WebSockets out of the box
         header_up X-Forwarded-Proto {scheme}
     }
 }
@@ -309,7 +338,7 @@ sudo systemctl reload caddy
 
 ### Traefik
 
-If running Traefik as your Docker edge router, add labels to the `api` service in `docker-compose.prod.yml`:
+If running Traefik as your Docker edge router, add labels to the `api` service in `docker-compose.yml`:
 
 ```yaml
 services:
@@ -329,7 +358,7 @@ services:
 
 If using `cloudflared` (Zero Trust Tunnel):
 
-1. In Cloudflare Zero Trust Dashboard, navigate to **Networks** -> **Tunnels**.
+1. In the Cloudflare Zero Trust Dashboard, navigate to **Networks** -> **Tunnels**.
 2. Add a Public Hostname:
    - Subdomain: `diagrams`
    - Domain: `yourdomain.com`
@@ -347,7 +376,7 @@ You can take a clean SQL Server backup using `sqlcmd` directly inside the contai
 
 ```bash
 docker exec -t open-diagrammer-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-  -S localhost -U sa -P "YourStrongDatabasePassword123!" -C \
+  -S localhost -U sa -P "${MSSQL_SA_PASSWORD}" -C \
   -Q "BACKUP DATABASE [OpenDiagrammer] TO DISK = N'/var/opt/mssql/data/OpenDiagrammer_backup.bak' WITH NOFORMAT, NOINIT, SKIP, NOREWIND, NOUNLOAD, STATS = 10"
 ```
 
@@ -361,17 +390,17 @@ docker cp open-diagrammer-sqlserver:/var/opt/mssql/data/OpenDiagrammer_backup.ba
 
 1. Copy the backup file into the SQL Server container:
    ```bash
-   docker cp /backups/opendiagrammer_2026-10-13.bak open-diagrammer-sqlserver:/var/opt/mssql/data/restore.bak
+   docker cp /backups/opendiagrammer_backup.bak open-diagrammer-sqlserver:/var/opt/mssql/data/restore.bak
    ```
 2. Execute the restore command:
    ```bash
    docker exec -t open-diagrammer-sqlserver /opt/mssql-tools18/bin/sqlcmd \
-     -S localhost -U sa -P "YourStrongDatabasePassword123!" -C \
+     -S localhost -U sa -P "${MSSQL_SA_PASSWORD}" -C \
      -Q "RESTORE DATABASE [OpenDiagrammer] FROM DISK = N'/var/opt/mssql/data/restore.bak' WITH REPLACE"
    ```
 3. Restart the `open-diagrammer-api` container to re-initialize connection pools:
    ```bash
-   docker compose -f docker-compose.prod.yml restart api
+   docker compose restart api
    ```
 
 ---
@@ -383,14 +412,14 @@ To update to a new version:
 ```bash
 cd /opt/opendiagrammer
 
-# 1. Pull latest code or release tag
-git pull origin main
+# 1. Pull latest image from GHCR
+docker compose pull
 
-# 2. Rebuild and restart the container
-docker compose -f docker-compose.prod.yml up -d --build
+# 2. Re-create the container with zero downtime
+docker compose up -d
 
 # 3. Verify logs
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose logs -f api
 ```
 
 The database container remains untouched with all data preserved in `sqlserver_data`, and any new EF Core migrations are automatically applied on startup.
@@ -403,20 +432,20 @@ The database container remains untouched with all data preserved in `sqlserver_d
 
 ```bash
 # View combined logs
-docker compose -f docker-compose.prod.yml logs -f
+docker compose logs -f
 
 # View API logs only
-docker compose -f docker-compose.prod.yml logs -f api
+docker compose logs -f api
 
 # View SQL Server logs only
-docker compose -f docker-compose.prod.yml logs -f sqlserver
+docker compose logs -f sqlserver
 ```
 
 ### Common Issues
 
 1. **SQL Server container exiting with code 1**:
    - Cause: The SA password does not meet Microsoft SQL Server complexity requirements (must contain uppercase, lowercase, numbers, and special symbols; minimum 8 characters).
-   - Fix: Update `SQL_SA_PASSWORD` in `.env` to a compliant password and restart.
+   - Fix: Update `MSSQL_SA_PASSWORD` in `.env` to a compliant password and restart.
 2. **Container running out of memory**:
    - Cause: Host has less than 2 GB RAM available for SQL Server.
    - Fix: Ensure the host has at least 2 GB free memory or allocate swap space.
