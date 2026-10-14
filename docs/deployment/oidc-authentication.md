@@ -6,21 +6,29 @@ This guide explains how to configure external OpenID Connect (OIDC) and OAuth 2.
 
 ## Table of Contents
 
-1. [How OIDC Authentication Works in OpenDiagrammer](#how-oidc-authentication-works-in-opendiagrammer)
-2. [Step-by-Step Guide: Google OAuth 2.0](#step-by-step-guide-google-oauth-20)
-   - [Step 1: Create a Google Cloud Project](#step-1-create-a-google-cloud-project)
-   - [Step 2: Configure the OAuth Consent Screen](#step-2-configure-the-oauth-consent-screen)
-   - [Step 3: Create OAuth 2.0 Client Credentials](#step-3-create-oauth-20-client-credentials)
-3. [Deploying with Docker](#deploying-with-docker)
-   - [Environment Variables Reference](#environment-variables-reference)
-   - [Sample `docker-compose.yml`](#sample-docker-composeyml)
-   - [Sample `.env` File](#sample-env-file)
-4. [Reverse Proxy & HTTPS Setup](#reverse-proxy--https-setup)
-5. [Other Common OIDC Providers](#other-common-oidc-providers)
-   - [Authentik](#authentik)
-   - [Keycloak](#keycloak)
-   - [Microsoft Entra ID](#microsoft-entra-id)
-6. [Troubleshooting & FAQs](#troubleshooting--faqs)
+- [OIDC \& OAuth2 Authentication Setup Guide](#oidc--oauth2-authentication-setup-guide)
+  - [Table of Contents](#table-of-contents)
+  - [How OIDC Authentication Works in OpenDiagrammer](#how-oidc-authentication-works-in-opendiagrammer)
+  - [Step-by-Step Guide: Google OAuth 2.0](#step-by-step-guide-google-oauth-20)
+    - [Prerequisites](#prerequisites)
+    - [Step 1: Create a Google Cloud Project](#step-1-create-a-google-cloud-project)
+    - [Step 2: Configure the OAuth Consent Screen](#step-2-configure-the-oauth-consent-screen)
+    - [Step 3: Create OAuth 2.0 Client Credentials](#step-3-create-oauth-20-client-credentials)
+  - [Deploying with Docker](#deploying-with-docker)
+    - [Environment Variables Reference](#environment-variables-reference)
+    - [Sample `docker-compose.yml`](#sample-docker-composeyml)
+    - [Sample `.env` File](#sample-env-file)
+  - [Reverse Proxy \& HTTPS Setup](#reverse-proxy--https-setup)
+    - [Caddy Example:](#caddy-example)
+    - [Nginx Example:](#nginx-example)
+  - [Other Common OIDC Providers](#other-common-oidc-providers)
+    - [Authentik](#authentik)
+    - [Keycloak](#keycloak)
+    - [Microsoft Entra ID (Azure AD)](#microsoft-entra-id-azure-ad)
+  - [Troubleshooting \& FAQs](#troubleshooting--faqs)
+    - [Error: `redirect_uri_mismatch`](#error-redirect_uri_mismatch)
+    - [User profile missing name or email](#user-profile-missing-name-or-email)
+    - [Can I still use local accounts when OIDC is enabled?](#can-i-still-use-local-accounts-when-oidc-is-enabled)
 
 ---
 
@@ -43,7 +51,7 @@ When OIDC is enabled:
 
 ### Prerequisites
 - A Google account.
-- Your public domain name or local address where OpenDiagrammer is hosted (e.g. `https://diagrams.yourdomain.com` or `http://localhost:8580`).
+- Your public domain name or local address where OpenDiagrammer is hosted (e.g. `https://diagrams.yourdomain.com` or `http://localhost:62949`).
 
 ---
 
@@ -90,12 +98,12 @@ When OIDC is enabled:
    ```text
    https://diagrams.yourdomain.com
    ```
-   *(For local testing: `http://localhost:8580`)*
+   *(For local testing: `http://localhost:62949`)*
 6. Under **Authorized redirect URIs**, click **+ Add URI** and enter your callback URL:
    ```text
    https://diagrams.yourdomain.com/login/callback
    ```
-   *(For local testing: `http://localhost:8580/login/callback`)*
+   *(For local testing: `http://localhost:62949/login/callback`)*
 7. Click **Create**.
 8. A modal will display your **Client ID** and **Client Secret**. Copy both values for the next step.
 
@@ -135,19 +143,19 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      # Maps external port 8580 to internal container port 8080
-      - "${APP_PORT:-8580}:8080"
+      # Maps external port 62949 to internal container port 8080
+      - "${APP_PORT:-62949}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=${MSSQL_SA_PASSWORD};TrustServerCertificate=True;"
-      
+
       # JWT Session Secret (Must be at least 32 characters)
       Authentication__Jwt__Secret: "${JWT_SECRET}"
       Authentication__Jwt__Issuer: "OpenDiagrammer"
       Authentication__Jwt__Audience: "OpenDiagrammer"
       Authentication__Jwt__ExpirationMinutes: 1440
-      
+
       # Google OIDC Configuration
       Authentication__Oidc__Enabled: "true"
       Authentication__Oidc__ProviderName: "Google"
@@ -200,8 +208,8 @@ MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
 # OpenDiagrammer JWT signing key (generate a random 32+ character string)
 JWT_SECRET=ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!
 
-# Host Port (default: 8580 to prevent conflicts with 8080)
-APP_PORT=8580
+# Host Port (default: 62949 to prevent conflicts with 8080)
+APP_PORT=62949
 
 # Google OAuth Credentials
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
@@ -228,7 +236,7 @@ When placing OpenDiagrammer behind a reverse proxy (such as **Nginx**, **Caddy**
 ### Caddy Example:
 ```caddy
 diagrams.yourdomain.com {
-    reverse_proxy localhost:8580
+    reverse_proxy localhost:62949
 }
 ```
 
@@ -241,7 +249,7 @@ server {
     # SSL configuration...
 
     location / {
-        proxy_pass http://localhost:8580;
+        proxy_pass http://localhost:62949;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

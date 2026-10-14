@@ -45,7 +45,7 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "8580:8080"
+      - "62949:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
@@ -86,7 +86,7 @@ Run:
 docker compose up -d
 ```
 
-Open `http://localhost:8580` in your web browser.
+Open `http://localhost:62949` in your web browser.
 
 ---
 

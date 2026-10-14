@@ -91,19 +91,19 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      # Host port 8580 avoids common conflicts with TrueNAS WebUI (80/443) and other apps on 8080
-      - "8580:8080"
+      # Host port 62949 avoids common conflicts with TrueNAS WebUI (80/443) and other apps on 8080
+      - "62949:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=YourStrongPassword123!_MustIncludeCaps;TrustServerCertificate=True;"
-      
+
       # JWT Authentication Secret
       Authentication__Jwt__Secret: "ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!"
       Authentication__Jwt__Issuer: "OpenDiagrammer"
       Authentication__Jwt__Audience: "OpenDiagrammer"
       Authentication__Jwt__ExpirationMinutes: 1440
-      
+
       # Optional: External OIDC / SSO (Google, Authentik, Keycloak, Entra ID)
       # Authentication__Oidc__Enabled: "true"
       # Authentication__Oidc__ProviderName: "Google"
@@ -163,7 +163,7 @@ For TrueNAS Scale 24.04 (Dragonfish), deploy using the Custom App wizard:
    - Tag: `latest`
 4. **Port Forwarding**:
    - Container Port: `8080`
-   - Node Port / Host Port: `8580` (or `30080` if using NodePort ranges)
+   - Node Port / Host Port: `62949` (or `30080` if using NodePort ranges)
 5. **Environment Variables**:
    - `ASPNETCORE_ENVIRONMENT`: `Production`
    - `ASPNETCORE_HTTP_PORTS`: `8080`
@@ -191,7 +191,7 @@ If you run **Nginx Proxy Manager** (available from the TrueNAS community catalog
    - Domain Names: `diagrams.yourdomain.com`
    - Scheme: `http`
    - Forward Hostname / IP: IP address of your TrueNAS server (e.g. `192.168.1.100`)
-   - Forward Port: `8580`
+   - Forward Port: `62949`
    - Enable: **Cache Assets**, **Block Common Exploits**, **Websockets Support** (Essential for SignalR live collaboration!)
 4. **SSL Tab**:
    - SSL Certificate: Request a new Let's Encrypt Certificate or choose your wildcard certificate.
@@ -206,7 +206,7 @@ Ensure your reverse proxy enables WebSocket upgrades. In Caddy, WebSockets are p
 
 ```caddy
 diagrams.yourdomain.com {
-    reverse_proxy 192.168.1.100:8580
+    reverse_proxy 192.168.1.100:62949
 }
 ```
 
@@ -219,7 +219,7 @@ If using a Cloudflare Tunnel:
 1. In Cloudflare Zero Trust, add a public hostname:
    - Subdomain: `diagrams`
    - Domain: `yourdomain.com`
-   - Service: `HTTP://<truenas-internal-ip>:8580`
+   - Service: `HTTP://<truenas-internal-ip>:62949`
 2. Under **Additional application settings**:
    - Ensure **WebSockets** is toggled ON.
 
@@ -279,9 +279,9 @@ Now, if a user accidentally deletes a board, or if data corruption occurs, you c
 ### 3. Port conflict with TrueNAS WebUI
 
 - **Cause**: TrueNAS uses port 80/443 for its management portal, and many custom apps claim 8080.
-- **Solution**: OpenDiagrammer maps host port `8580` by default to avoid conflicts.
+- **Solution**: OpenDiagrammer maps host port `62949` by default to avoid conflicts.
   ```yaml
   ports:
-    - "8580:8080"
+    - "62949:8080"
   ```
-  Access the web interface at `http://truenas-ip:8580`.
+  Access the web interface at `http://truenas-ip:62949`.
