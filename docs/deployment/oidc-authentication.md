@@ -43,7 +43,7 @@ When OIDC is enabled:
 
 ### Prerequisites
 - A Google account.
-- Your public domain name or local address where OpenDiagrammer is hosted (e.g. `https://diagrams.yourdomain.com` or `http://localhost:8080`).
+- Your public domain name or local address where OpenDiagrammer is hosted (e.g. `https://diagrams.yourdomain.com` or `http://localhost:8580`).
 
 ---
 
@@ -90,12 +90,12 @@ When OIDC is enabled:
    ```text
    https://diagrams.yourdomain.com
    ```
-   *(For local testing: `http://localhost:8080`)*
+   *(For local testing: `http://localhost:8580`)*
 6. Under **Authorized redirect URIs**, click **+ Add URI** and enter your callback URL:
    ```text
    https://diagrams.yourdomain.com/login/callback
    ```
-   *(For local testing: `http://localhost:8080/login/callback`)*
+   *(For local testing: `http://localhost:8580/login/callback`)*
 7. Click **Create**.
 8. A modal will display your **Client ID** and **Client Secret**. Copy both values for the next step.
 
@@ -135,7 +135,8 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:8080"
+      # Maps external port 8580 to internal container port 8080
+      - "${APP_PORT:-8580}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: "8080"
@@ -199,8 +200,8 @@ MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
 # OpenDiagrammer JWT signing key (generate a random 32+ character string)
 JWT_SECRET=ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!
 
-# Host Port
-APP_PORT=8080
+# Host Port (default: 8580 to prevent conflicts with 8080)
+APP_PORT=8580
 
 # Google OAuth Credentials
 GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
@@ -227,7 +228,7 @@ When placing OpenDiagrammer behind a reverse proxy (such as **Nginx**, **Caddy**
 ### Caddy Example:
 ```caddy
 diagrams.yourdomain.com {
-    reverse_proxy localhost:8080
+    reverse_proxy localhost:8580
 }
 ```
 
@@ -240,7 +241,7 @@ server {
     # SSL configuration...
 
     location / {
-        proxy_pass http://localhost:8080;
+        proxy_pass http://localhost:8580;
         proxy_http_version 1.1;
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection "upgrade";

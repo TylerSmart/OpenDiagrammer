@@ -31,7 +31,7 @@ OpenDiagrammer's production container architecture is designed to be streamlined
   - Serves the compiled Angular Single Page Application (SPA) from static files.
   - Hosts the ASP.NET Core 10 Web API and OpenAPI / Scalar documentation endpoints.
   - Hosts the real-time SignalR CRDT collaboration hub (`/hubs/board`) over WebSockets.
-  - Listens on internal port `8080`.
+  - Listens on internal port `8080` (mapped to host port `8580` by default to avoid conflicts).
   - Automatically verifies and applies pending database schema migrations on container boot.
 - **`open-diagrammer-sqlserver` (Database Container)**:
   - Microsoft SQL Server 2022 Linux container (`mcr.microsoft.com/mssql/server:2022-latest`).
@@ -45,7 +45,7 @@ OpenDiagrammer's production container architecture is designed to be streamlined
 ┌───────────────────────────▼────────────────────────────┐
 │          Reverse Proxy (Nginx / Caddy / Traefik)       │
 └───────────────────────────┬────────────────────────────┘
-                            │ HTTP & WS (8080)
+                            │ HTTP & WS (8580)
 ┌───────────────────────────▼────────────────────────────┐
 │      OpenDiagrammer Container (SPA + API + SignalR)    │
 └───────────────────────────┬────────────────────────────┘
@@ -104,8 +104,8 @@ MSSQL_SA_PASSWORD=YourStrongDatabasePassword123!_MustIncludeCapsAndSpecial
 # OpenDiagrammer Security Settings (at least 32 characters)
 JWT_SECRET=ReplaceWithYourGeneratedBase64SecretKeyAtLeast32CharsLong!
 
-# Application Host Port Mapping
-APP_PORT=8080
+# Application Host Port Mapping (default: 8580 to prevent conflicts with 8080)
+APP_PORT=8580
 
 # Optional: Hostname for Reverse Proxy / CORS
 APP_HOST=diagrams.yourdomain.com
@@ -130,7 +130,8 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "${APP_PORT:-8080}:8080"
+      # Maps external port 8580 on your host to internal container port 8080
+      - "${APP_PORT:-8580}:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
@@ -181,6 +182,10 @@ volumes:
   sqlserver_data:
 ```
 
+> [!NOTE]
+> **Docker Named Volumes vs. Host Bind Mounts (e.g. TrueNAS)**:
+> In standard Docker, `sqlserver_data:/var/opt/mssql` is a Docker-managed named volume, which requires declaring `volumes: sqlserver_data:` at the bottom of the Compose file. On systems like TrueNAS Scale, a host path bind-mount (`/mnt/tank/...:/var/opt/mssql`) is used instead to leverage ZFS datasets and automated snapshots, which does not require a top-level `volumes:` section.
+
 > [!TIP]
 > If you prefer to build the container from source code instead of pulling the prebuilt image from GHCR, clone the repository and add a `build:` block to the `api` service:
 > ```yaml
@@ -211,7 +216,7 @@ Now listening on: http://[::]:8080
 Application started. Press Ctrl+C to shut down.
 ```
 
-Open `http://<your-server-ip>:8080` in your web browser. You should see the OpenDiagrammer sign-in page!
+Open `http://<your-server-ip>:8580` in your web browser. You should see the OpenDiagrammer sign-in page!
 
 ---
 
@@ -286,7 +291,7 @@ server {
     client_max_body_size 50M;
 
     location / {
-        proxy_pass http://127.0.0.1:8080;
+        proxy_pass http://127.0.0.1:8580;
         proxy_http_version 1.1;
 
         # WebSocket support for SignalR real-time collaboration
@@ -321,7 +326,7 @@ Add the following block to your `/etc/caddy/Caddyfile`:
 
 ```caddy
 diagrams.yourdomain.com {
-    reverse_proxy 127.0.0.1:8080 {
+    reverse_proxy 127.0.0.1:8580 {
         # Caddy automatically proxies WebSockets out of the box
         header_up X-Forwarded-Proto {scheme}
     }
@@ -363,7 +368,7 @@ If using `cloudflared` (Zero Trust Tunnel):
    - Subdomain: `diagrams`
    - Domain: `yourdomain.com`
    - Service Type: `HTTP`
-   - URL: `localhost:8080` (or `open-diagrammer-api:8080` if in same Docker network)
+   - URL: `localhost:8580` (or `open-diagrammer-api:8080` if in same Docker network)
 3. Under **Additional application settings** -> **HTTP Settings**, enable **No TLS Verify** (if applicable) and ensure **WebSockets** are enabled on your Cloudflare zone.
 
 ---
@@ -452,5 +457,5 @@ docker compose logs -f sqlserver
 3. **WebSockets disconnecting frequently**:
    - Cause: Reverse proxy timeout is too short for idle persistent connections.
    - Fix: Increase `proxy_read_timeout` to `86400s` in Nginx, or enable keep-alive pings.
-4. **Port 8080 already in use**:
-   - Fix: Change `APP_PORT=8085` in `.env` and update your reverse proxy `proxy_pass` to match.
+4. **Port 8580 already in use**:
+   - Fix: Change `APP_PORT=8585` in `.env` and update your reverse proxy `proxy_pass` to match.

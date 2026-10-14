@@ -91,23 +91,29 @@ services:
     container_name: open-diagrammer-api
     restart: unless-stopped
     ports:
-      - "8080:8080" # Change host port if another app is already using 8080
+      # Host port 8580 avoids common conflicts with TrueNAS WebUI (80/443) and other apps on 8080
+      - "8580:8080"
     environment:
       ASPNETCORE_ENVIRONMENT: Production
       ASPNETCORE_HTTP_PORTS: 8080
       ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=OpenDiagrammer;User Id=sa;Password=YourStrongPassword123!_MustIncludeCaps;TrustServerCertificate=True;"
+      
+      # JWT Authentication Secret
       Authentication__Jwt__Secret: "ReplaceWithAStrongSecretKeyAtLeast32CharactersLong!"
       Authentication__Jwt__Issuer: "OpenDiagrammer"
       Authentication__Jwt__Audience: "OpenDiagrammer"
       Authentication__Jwt__ExpirationMinutes: 1440
       
-      # Optional: External OIDC / SSO (Google, Authentik, Keycloak)
+      # Optional: External OIDC / SSO (Google, Authentik, Keycloak, Entra ID)
       # Authentication__Oidc__Enabled: "true"
-      # Authentication__Oidc__ProviderName: "Authentik"
-      # Authentication__Oidc__Authority: "https://auth.myhomelab.net/application/o/opendiagrammer/"
-      # Authentication__Oidc__ClientId: "your-client-id"
+      # Authentication__Oidc__ProviderName: "Google"
+      # Authentication__Oidc__Authority: "https://accounts.google.com"
+      # Authentication__Oidc__ClientId: "your-client-id.apps.googleusercontent.com"
       # Authentication__Oidc__ClientSecret: "your-client-secret"
       # Authentication__Oidc__Scope: "openid profile email"
+      # Authentication__Oidc__AuthorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth"
+      # Authentication__Oidc__TokenEndpoint: "https://oauth2.googleapis.com/token"
+      # Authentication__Oidc__UserInfoEndpoint: "https://openidconnect.googleapis.com/v1/userinfo"
     depends_on:
       sqlserver:
         condition: service_healthy
@@ -121,6 +127,8 @@ services:
       MSSQL_SA_PASSWORD: "YourStrongPassword123!_MustIncludeCaps"
       MSSQL_PID: "Developer"
     volumes:
+      # Host bind-mount to your ZFS dataset. Because this is a host directory path
+      # (not a Docker-managed named volume), no top-level "volumes:" section is needed.
       - /mnt/tank/opendiagrammer/db:/var/opt/mssql
     healthcheck:
       test:
@@ -155,7 +163,7 @@ For TrueNAS Scale 24.04 (Dragonfish), deploy using the Custom App wizard:
    - Tag: `latest`
 4. **Port Forwarding**:
    - Container Port: `8080`
-   - Node Port / Host Port: `8080` (or `30080` if using NodePort ranges)
+   - Node Port / Host Port: `8580` (or `30080` if using NodePort ranges)
 5. **Environment Variables**:
    - `ASPNETCORE_ENVIRONMENT`: `Production`
    - `ASPNETCORE_HTTP_PORTS`: `8080`
@@ -183,7 +191,7 @@ If you run **Nginx Proxy Manager** (available from the TrueNAS community catalog
    - Domain Names: `diagrams.yourdomain.com`
    - Scheme: `http`
    - Forward Hostname / IP: IP address of your TrueNAS server (e.g. `192.168.1.100`)
-   - Forward Port: `8080`
+   - Forward Port: `8580`
    - Enable: **Cache Assets**, **Block Common Exploits**, **Websockets Support** (Essential for SignalR live collaboration!)
 4. **SSL Tab**:
    - SSL Certificate: Request a new Let's Encrypt Certificate or choose your wildcard certificate.
@@ -198,7 +206,7 @@ Ensure your reverse proxy enables WebSocket upgrades. In Caddy, WebSockets are p
 
 ```caddy
 diagrams.yourdomain.com {
-    reverse_proxy 192.168.1.100:8080
+    reverse_proxy 192.168.1.100:8580
 }
 ```
 
@@ -211,7 +219,7 @@ If using a Cloudflare Tunnel:
 1. In Cloudflare Zero Trust, add a public hostname:
    - Subdomain: `diagrams`
    - Domain: `yourdomain.com`
-   - Service: `HTTP://<truenas-internal-ip>:8080`
+   - Service: `HTTP://<truenas-internal-ip>:8580`
 2. Under **Additional application settings**:
    - Ensure **WebSockets** is toggled ON.
 
@@ -270,10 +278,10 @@ Now, if a user accidentally deletes a board, or if data corruption occurs, you c
 
 ### 3. Port conflict with TrueNAS WebUI
 
-- **Cause**: TrueNAS uses port 80/443 for its management portal.
-- **Solution**: In the Compose file, map the container to port `8080` (or `30080`):
+- **Cause**: TrueNAS uses port 80/443 for its management portal, and many custom apps claim 8080.
+- **Solution**: OpenDiagrammer maps host port `8580` by default to avoid conflicts.
   ```yaml
   ports:
-    - "8080:8080"
+    - "8580:8080"
   ```
-  Access the web interface at `http://truenas-ip:8080`.
+  Access the web interface at `http://truenas-ip:8580`.
