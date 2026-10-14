@@ -11,6 +11,8 @@ import {
 } from '@angular/forms';
 import { MatButtonModule } from '@angular/material/button';
 import { MatCardModule } from '@angular/material/card';
+import { MatDialogModule } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule, MatIconRegistry } from '@angular/material/icon';
 import { MatInputModule } from '@angular/material/input';
@@ -55,6 +57,8 @@ const passwordMatchValidator: ValidatorFn = (control: AbstractControl): Validati
   imports: [
     ReactiveFormsModule,
     MatCardModule,
+    MatDialogModule,
+    MatDividerModule,
     MatTabsModule,
     MatFormFieldModule,
     MatInputModule,

@@ -29,6 +29,11 @@
           <mat-icon>brightness_auto</mat-icon>
           <span>System</span>
         </button>
+        <mat-divider></mat-divider>
+        <button mat-menu-item (click)="themeService.openThemeSettingsDialog()">
+          <mat-icon>palette</mat-icon>
+          <span>Customize Theme...</span>
+        </button>
       </mat-menu>
 
       <!-- User Menu -->

@@ -152,7 +152,7 @@ export const SHAPE_CATALOG: CatalogShapeItem[] = [
     label: 'UML Class',
     icon: 'view_agenda',
     defaultWidth: 160,
-    defaultHeight: 120,
+    defaultHeight: 92,
     defaultText: 'ClassName\n---\n+ attribute: type\n---\n+ method(): void',
   },
   {
@@ -161,7 +161,7 @@ export const SHAPE_CATALOG: CatalogShapeItem[] = [
     label: 'UML Interface',
     icon: 'integration_instructions',
     defaultWidth: 150,
-    defaultHeight: 100,
+    defaultHeight: 80,
     defaultText: '«interface»\nInterfaceName\n---\n+ operation()',
   },
   {
@@ -961,7 +961,7 @@ export function parseUmlClassText(text: string | undefined | null): UmlClassSect
   if (!text) {
     return { className: 'ClassName', attributes: '+ attribute: type', methods: '+ method(): void' };
   }
-  const parts = text.split(/\s*(?:---|<hr\s*\/?>)\s*/);
+  const parts = text.split(/(?:\r?\n)?[ \t]*(?:---|<hr\s*\/?>)[ \t]*(?:\r?\n)?/);
   return {
     className: parts[0] ?? '',
     attributes: parts[1] ?? '',
@@ -970,7 +970,7 @@ export function parseUmlClassText(text: string | undefined | null): UmlClassSect
 }
 
 export function formatUmlClassText(sections: UmlClassSections): string {
-  return `${sections.className.trim()}\n---\n${sections.attributes.trim()}\n---\n${sections.methods.trim()}`;
+  return `${sections.className}\n---\n${sections.attributes}\n---\n${sections.methods}`;
 }
 
 export interface UmlInterfaceSections {
@@ -982,7 +982,7 @@ export function parseUmlInterfaceText(text: string | undefined | null): UmlInter
   if (!text) {
     return { interfaceName: '«interface»\nInterfaceName', methods: '+ operation()' };
   }
-  const parts = text.split(/\s*(?:---|<hr\s*\/?>)\s*/);
+  const parts = text.split(/(?:\r?\n)?[ \t]*(?:---|<hr\s*\/?>)[ \t]*(?:\r?\n)?/);
   return {
     interfaceName: parts[0] ?? '',
     methods: parts.slice(1).join('\n---\n') ?? '',
@@ -990,47 +990,86 @@ export function parseUmlInterfaceText(text: string | undefined | null): UmlInter
 }
 
 export function formatUmlInterfaceText(sections: UmlInterfaceSections): string {
-  return `${sections.interfaceName.trim()}\n---\n${sections.methods.trim()}`;
+  return `${sections.interfaceName}\n---\n${sections.methods}`;
 }
 
-function countLines(text: string | undefined | null): number {
+export function normalizeHtmlToText(html: string | undefined | null): string {
+  if (!html) {
+    return '';
+  }
+  return (
+    html
+      // An empty block line like <div><br></div> or <p><br></p> represents a single newline
+      .replace(/<(?:div|p)[^>]*>\s*<br\s*\/?>\s*<\/(?:div|p)>/gi, '\n')
+      // Any remaining <br> represents a newline
+      .replace(/<br\s*\/?>/gi, '\n')
+      // Start of block elements represent a newline
+      .replace(/<(?:div|p|h[1-6])[^>]*>/gi, '\n')
+      // Remove closing tags and any other HTML tags
+      .replace(/<\/(?:div|p|h[1-6])>/gi, '')
+      .replace(/<[^>]+>/g, '')
+      // Decode common HTML entities
+      .replace(/&nbsp;/gi, ' ')
+      .replace(/&amp;/gi, '&')
+      .replace(/&lt;/gi, '<')
+      .replace(/&gt;/gi, '>')
+      // Remove at most one leading newline if the content began with a block tag like <div>
+      .replace(/^\n/, '')
+  );
+}
+
+function countLines(text: string | undefined | null, width?: number, fontSize = 13): number {
   if (!text) {
     return 1;
   }
-  const normalized = text
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<div[^>]*>/gi, '')
-    .replace(/<[^>]+>/g, '');
-  const lines = normalized.split(/\r?\n/).filter((l) => l.trim().length > 0);
-  return Math.max(1, lines.length);
+  const normalized = normalizeHtmlToText(text);
+  if (!normalized) {
+    return 1;
+  }
+  const lines = normalized.split(/\r?\n/);
+  if (!width || width <= 0) {
+    return Math.max(1, lines.length);
+  }
+  const availWidth = Math.max(40, width - 24);
+  const avgCharWidth = fontSize * 0.58;
+  const charsPerLine = Math.max(1, Math.floor(availWidth / avgCharWidth));
+
+  let totalVisualLines = 0;
+  for (const line of lines) {
+    const visualLines = line.length === 0 ? 1 : Math.max(1, Math.ceil(line.length / charsPerLine));
+    totalVisualLines += visualLines;
+  }
+  return Math.max(1, totalVisualLines);
 }
 
-export function computeUmlClassRequiredHeight(sections: UmlClassSections, fontSize = 13): number {
+export function computeUmlClassRequiredHeight(
+  sections: UmlClassSections,
+  fontSize = 13,
+  width?: number,
+): number {
   const lineH = Math.max(18, Math.round(fontSize * 1.4));
-  const classLines = countLines(sections.className);
-  const attrLines = countLines(sections.attributes);
-  const methodLines = countLines(sections.methods);
+  const classLines = countLines(sections.className, width, fontSize);
+  const attrLines = countLines(sections.attributes, width, fontSize);
+  const methodLines = countLines(sections.methods, width, fontSize);
 
   const headerH = Math.max(32, classLines * lineH + 14);
   const attrH = Math.max(26, attrLines * lineH + 12);
   const methodH = Math.max(26, methodLines * lineH + 12);
 
-  return Math.max(120, headerH + attrH + methodH);
+  return headerH + attrH + methodH;
 }
 
 export function computeUmlInterfaceRequiredHeight(
   sections: UmlInterfaceSections,
   fontSize = 13,
+  width?: number,
 ): number {
   const lineH = Math.max(18, Math.round(fontSize * 1.4));
-  const ifaceLines = countLines(sections.interfaceName);
-  const methodLines = countLines(sections.methods);
+  const ifaceLines = countLines(sections.interfaceName, width, fontSize);
+  const methodLines = countLines(sections.methods, width, fontSize);
 
   const headerH = Math.max(34, ifaceLines * lineH + 14);
   const methodH = Math.max(26, methodLines * lineH + 12);
 
-  return Math.max(100, headerH + methodH);
+  return headerH + methodH;
 }

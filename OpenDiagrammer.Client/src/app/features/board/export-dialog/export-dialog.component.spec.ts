@@ -86,6 +86,15 @@ describe('ExportDialogComponent', () => {
     expect(component.selectedBackground()).toBe('theme');
   });
 
+  it('should compute selectedAreaLabel and selectedAreaIcon correctly', () => {
+    expect(component.selectedAreaIcon()).toBe('select_all');
+    expect(component.selectedAreaLabel()).toBe('Entire Board (All content)');
+
+    component.selectedArea.set('frame-1');
+    expect(component.selectedAreaIcon()).toBe('crop_free');
+    expect(component.selectedAreaLabel()).toContain('Frame A');
+  });
+
   it('should update format when user selects a different format', () => {
     component.selectedFormat.set('svg');
     expect(component.selectedFormat()).toBe('svg');

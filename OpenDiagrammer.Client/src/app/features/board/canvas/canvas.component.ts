@@ -49,6 +49,7 @@ import {
   CANVAS_COLOR_PRESETS,
   CatalogShapeItem,
   ResizeHandlePosition,
+  ResizeSnappingResult,
   SHAPE_CONSTANTS,
   ShapeType,
   computeShapeMovementSnapping,
@@ -99,8 +100,8 @@ export interface ReconnectingPreview {
   templateUrl: './canvas.component.html',
   host: {
     tabindex: '0',
-    '(keydown)': 'handleKeyDown($event)',
-    '(keyup)': 'handleKeyUp($event)',
+    '(window:keydown)': 'handleKeyDown($event)',
+    '(window:keyup)': 'handleKeyUp($event)',
     '(wheel)': 'handleWheel($event)',
     '(pointerdown)': 'handlePointerDown($event)',
     '(pointermove)': 'handlePointerMove($event)',
@@ -374,6 +375,11 @@ export class CanvasComponent {
     return this.shapes().find((s) => s.id === id) || null;
   });
 
+  readonly isSingleSelectedUmlShape = computed<boolean>(() => {
+    const shape = this.singleSelectedShape();
+    return shape ? shape.type === 'uml-class' || shape.type === 'uml-interface' : false;
+  });
+
   // Inline shape rich text editing state
   readonly editingShapeId = signal<string | null>(null);
 
@@ -641,6 +647,7 @@ export class CanvasComponent {
     const conn = this.singleSelectedConnection();
     if (conn) {
       this.updateConnection(conn.id, { routing, waypoints: [] });
+      this.emitDiagramChange();
     }
   }
 
@@ -648,6 +655,7 @@ export class CanvasComponent {
     const conn = this.singleSelectedConnection();
     if (conn) {
       this.updateConnection(conn.id, { pattern });
+      this.emitDiagramChange();
     }
   }
 
@@ -669,12 +677,14 @@ export class CanvasComponent {
     }
 
     this.updateConnection(conn.id, { startMarker, endMarker });
+    this.emitDiagramChange();
   }
 
   setConnectionColor(color: string): void {
     const conn = this.singleSelectedConnection();
     if (conn) {
       this.updateConnection(conn.id, { strokeColor: color });
+      this.emitDiagramChange();
     }
   }
 
@@ -682,6 +692,7 @@ export class CanvasComponent {
     const conn = this.singleSelectedConnection();
     if (conn) {
       this.updateConnection(conn.id, { strokeWidth: width });
+      this.emitDiagramChange();
     }
   }
 
@@ -700,9 +711,13 @@ export class CanvasComponent {
   finishEditingConnectionText(connId: string, text: string): void {
     this.updateConnection(connId, { text: text.trim() || undefined });
     this.editingConnectionId.set(null);
+    this.emitDiagramChange();
   }
 
   startEditingShapeText(shapeId: string, section?: 'header' | 'attributes' | 'methods'): void {
+    if (this.editingShapeId() && this.editingShapeId() !== shapeId) {
+      this.commitActiveEditingText();
+    }
     const shape = this.shapes().find((s) => s.id === shapeId);
     if (!shape) {
       return;
@@ -805,15 +820,62 @@ export class CanvasComponent {
   }
 
   finishEditingShapeText(shapeId: string, contentHtml: string): void {
-    if (this.editingShapeId() !== shapeId) {
+    if (this.editingShapeId() !== null && this.editingShapeId() !== shapeId) {
       return;
     }
     this.savedEditorRange = null;
     const sanitized = sanitizeRichText(contentHtml.trim());
-    this.shapes.update((list) =>
-      list.map((s) => (s.id === shapeId ? { ...s, text: sanitized || undefined } : s)),
-    );
+    const currentShape = this.shapes().find((s) => s.id === shapeId);
+    const newText = sanitized || undefined;
+    const textChanged = currentShape ? currentShape.text !== newText : false;
+
+    if (textChanged) {
+      this.shapes.update((list) =>
+        list.map((s) => (s.id === shapeId ? { ...s, text: newText } : s)),
+      );
+    }
     this.editingShapeId.set(null);
+    if (textChanged) {
+      this.emitDiagramChange();
+    }
+  }
+
+  commitActiveEditingText(): void {
+    const editId = this.editingShapeId();
+    if (!editId) {
+      return;
+    }
+    const shape = this.shapes().find((s) => s.id === editId);
+    if (!shape) {
+      this.editingShapeId.set(null);
+      return;
+    }
+
+    if (shape.type === 'uml-class' || shape.type === 'uml-interface') {
+      const activeEl = this.getActiveEditorElement();
+      if (activeEl) {
+        this.persistActiveEditorContent(editId, activeEl);
+      }
+      this.editingShapeId.set(null);
+      return;
+    }
+
+    const editorEl = this.shapeRichTextEditor()?.nativeElement;
+    if (editorEl) {
+      this.finishEditingShapeText(editId, editorEl.innerHTML);
+    } else {
+      this.editingShapeId.set(null);
+    }
+  }
+
+  handleShapeTextInput(shapeId: string, contentHtml: string): void {
+    const sanitized = sanitizeRichText(contentHtml.trim());
+    const currentShape = this.shapes().find((s) => s.id === shapeId);
+    const newText = sanitized || undefined;
+    if (currentShape && currentShape.text === newText) {
+      return;
+    }
+    this.shapes.update((list) => list.map((s) => (s.id === shapeId ? { ...s, text: newText } : s)));
     this.emitDiagramChange();
   }
 
@@ -896,13 +958,17 @@ export class CanvasComponent {
       const methodEl = this.umlClassMethodEditor()?.nativeElement;
       if (headerEl && attrEl && methodEl) {
         const sections: UmlClassSections = {
-          className: sanitizeRichText(headerEl.innerHTML.trim()),
-          attributes: sanitizeRichText(attrEl.innerHTML.trim()),
-          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+          className: sanitizeRichText(headerEl.innerHTML),
+          attributes: sanitizeRichText(attrEl.innerHTML),
+          methods: sanitizeRichText(methodEl.innerHTML),
         };
         const formatted = formatUmlClassText(sections);
-        const requiredH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13);
-        const newHeight = Math.max(requiredH, shape.height);
+        const calcH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13, shape.width);
+        const domH =
+          (headerEl?.offsetHeight || 0) +
+          (attrEl?.offsetHeight || 0) +
+          (methodEl?.offsetHeight || 0);
+        const newHeight = Math.max(calcH, domH);
         this.shapes.update((list) =>
           list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
         );
@@ -916,12 +982,17 @@ export class CanvasComponent {
       const methodEl = this.umlIfaceMethodEditor()?.nativeElement;
       if (headerEl && methodEl) {
         const sections: UmlInterfaceSections = {
-          interfaceName: sanitizeRichText(headerEl.innerHTML.trim()),
-          methods: sanitizeRichText(methodEl.innerHTML.trim()),
+          interfaceName: sanitizeRichText(headerEl.innerHTML),
+          methods: sanitizeRichText(methodEl.innerHTML),
         };
         const formatted = formatUmlInterfaceText(sections);
-        const requiredH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13);
-        const newHeight = Math.max(requiredH, shape.height);
+        const calcH = computeUmlInterfaceRequiredHeight(
+          sections,
+          shape.fontSize || 13,
+          shape.width,
+        );
+        const domH = (headerEl?.offsetHeight || 0) + (methodEl?.offsetHeight || 0);
+        const newHeight = Math.max(calcH, domH);
         this.shapes.update((list) =>
           list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
         );
@@ -1040,7 +1111,15 @@ export class CanvasComponent {
         }
         const currentSize = s.fontSize || 14;
         const newSize = Math.max(8, Math.min(72, currentSize + delta));
-        return { ...s, fontSize: newSize };
+        let newH = s.height;
+        if (s.type === 'uml-class') {
+          const sections = parseUmlClassText(s.text);
+          newH = computeUmlClassRequiredHeight(sections, newSize, s.width);
+        } else if (s.type === 'uml-interface') {
+          const sections = parseUmlInterfaceText(s.text);
+          newH = computeUmlInterfaceRequiredHeight(sections, newSize, s.width);
+        }
+        return { ...s, fontSize: newSize, height: newH };
       }),
     );
     this.emitDiagramChange();
@@ -1052,7 +1131,20 @@ export class CanvasComponent {
     }
     const boundedSize = Math.max(8, Math.min(72, size));
     this.shapes.update((list) =>
-      list.map((s) => (s.id === shapeId ? { ...s, fontSize: boundedSize } : s)),
+      list.map((s) => {
+        if (s.id !== shapeId) {
+          return s;
+        }
+        let newH = s.height;
+        if (s.type === 'uml-class') {
+          const sections = parseUmlClassText(s.text);
+          newH = computeUmlClassRequiredHeight(sections, boundedSize, s.width);
+        } else if (s.type === 'uml-interface') {
+          const sections = parseUmlInterfaceText(s.text);
+          newH = computeUmlInterfaceRequiredHeight(sections, boundedSize, s.width);
+        }
+        return { ...s, fontSize: boundedSize, height: newH };
+      }),
     );
     this.emitDiagramChange();
   }
@@ -1069,13 +1161,15 @@ export class CanvasComponent {
       return;
     }
     const sections: UmlClassSections = {
-      className: sanitizeRichText(headerEl.innerHTML.trim()),
-      attributes: sanitizeRichText(attrEl.innerHTML.trim()),
-      methods: sanitizeRichText(methodEl.innerHTML.trim()),
+      className: sanitizeRichText(headerEl.innerHTML),
+      attributes: sanitizeRichText(attrEl.innerHTML),
+      methods: sanitizeRichText(methodEl.innerHTML),
     };
     const formatted = formatUmlClassText(sections);
-    const requiredH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13);
-    const newHeight = Math.max(requiredH, shape.height);
+    const calcH = computeUmlClassRequiredHeight(sections, shape.fontSize || 13, shape.width);
+    const domH =
+      (headerEl?.offsetHeight || 0) + (attrEl?.offsetHeight || 0) + (methodEl?.offsetHeight || 0);
+    const newHeight = Math.max(calcH, domH);
 
     this.shapes.update((list) =>
       list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
@@ -1094,12 +1188,13 @@ export class CanvasComponent {
       return;
     }
     const sections: UmlInterfaceSections = {
-      interfaceName: sanitizeRichText(headerEl.innerHTML.trim()),
-      methods: sanitizeRichText(methodEl.innerHTML.trim()),
+      interfaceName: sanitizeRichText(headerEl.innerHTML),
+      methods: sanitizeRichText(methodEl.innerHTML),
     };
     const formatted = formatUmlInterfaceText(sections);
-    const requiredH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13);
-    const newHeight = Math.max(requiredH, shape.height);
+    const calcH = computeUmlInterfaceRequiredHeight(sections, shape.fontSize || 13, shape.width);
+    const domH = (headerEl?.offsetHeight || 0) + (methodEl?.offsetHeight || 0);
+    const newHeight = Math.max(calcH, domH);
 
     this.shapes.update((list) =>
       list.map((s) => (s.id === shapeId ? { ...s, text: formatted, height: newHeight } : s)),
@@ -1891,13 +1986,47 @@ export class CanvasComponent {
 
   clearSelection(): void {
     if (this.editingShapeId()) {
-      this.editingShapeId.set(null);
+      this.commitActiveEditingText();
+    }
+    if (this.editingConnectionId()) {
+      const connId = this.editingConnectionId()!;
+      const inputEl = this.connTextInput()?.nativeElement;
+      if (inputEl) {
+        this.finishEditingConnectionText(connId, inputEl.value);
+      } else {
+        this.editingConnectionId.set(null);
+      }
     }
     this.selectedShapeIds.set(new Set<string>());
     this.selectedConnectionIds.set(new Set<string>());
   }
 
+  selectAll(): void {
+    if (this.readOnly()) {
+      return;
+    }
+    if (this.editingShapeId()) {
+      this.commitActiveEditingText();
+    }
+    const connId = this.editingConnectionId();
+    if (connId) {
+      const inputEl = this.connTextInput()?.nativeElement;
+      if (inputEl) {
+        this.finishEditingConnectionText(connId, inputEl.value);
+      } else {
+        this.editingConnectionId.set(null);
+      }
+    }
+    const allShapeIds = new Set(this.shapes().map((s) => s.id));
+    const allConnIds = new Set(this.connections().map((c) => c.id));
+    this.selectedShapeIds.set(allShapeIds);
+    this.selectedConnectionIds.set(allConnIds);
+  }
+
   selectShape(id: string, multiSelect = false): void {
+    if (this.editingShapeId() && this.editingShapeId() !== id) {
+      this.commitActiveEditingText();
+    }
     const current = new Set(this.selectedShapeIds());
     const targetShape = this.shapes().find((s) => s.id === id);
     const idsToSelect =
@@ -1926,8 +2055,16 @@ export class CanvasComponent {
     this.pushUndoSnapshot();
     const catalogItem = SHAPE_CATALOG.find((i) => i.type === type);
     const width = catalogItem?.defaultWidth ?? SHAPE_CONSTANTS.DEFAULT_WIDTH;
-    const height = catalogItem?.defaultHeight ?? SHAPE_CONSTANTS.DEFAULT_HEIGHT;
+    let height = catalogItem?.defaultHeight ?? SHAPE_CONSTANTS.DEFAULT_HEIGHT;
     const defaultText = catalogItem?.defaultText;
+
+    if (type === 'uml-class' && defaultText) {
+      const sections = parseUmlClassText(defaultText);
+      height = computeUmlClassRequiredHeight(sections, 13, width);
+    } else if (type === 'uml-interface' && defaultText) {
+      const sections = parseUmlInterfaceText(defaultText);
+      height = computeUmlInterfaceRequiredHeight(sections, 13, width);
+    }
 
     const isTextBlock = type === 'text-block';
     const isSticky = type === 'sticky-note';
@@ -2073,6 +2210,7 @@ export class CanvasComponent {
         return next;
       });
     }
+    this.emitDiagramChange();
   }
 
   reorderFrames(frameId: string, direction: 'up' | 'down'): void {
@@ -2103,6 +2241,7 @@ export class CanvasComponent {
     updated[toIdx] = temp;
 
     this.shapes.set(updated);
+    this.emitDiagramChange();
   }
 
   toggleFramesNavigator(): void {
@@ -2111,6 +2250,7 @@ export class CanvasComponent {
 
   updateShape(id: string, partial: Partial<CanvasShape>): void {
     this.shapes.update((list) => list.map((s) => (s.id === id ? { ...s, ...partial } : s)));
+    this.emitDiagramChange();
   }
 
   setSelectedShapesColor(preset: CanvasColorPreset): void {
@@ -2129,6 +2269,7 @@ export class CanvasComponent {
           : s,
       ),
     );
+    this.emitDiagramChange();
   }
 
   isShapeColorActive(preset: CanvasColorPreset): boolean {
@@ -2174,6 +2315,10 @@ export class CanvasComponent {
       return;
     }
 
+    if (this.editingShapeId() && selected.has(this.editingShapeId()!)) {
+      this.editingShapeId.set(null);
+    }
+
     if (selected.size > 0) {
       this.shapes.update((list) => list.filter((s) => !selected.has(s.id)));
       // Also remove any connections linked to deleted shapes
@@ -2187,6 +2332,7 @@ export class CanvasComponent {
     }
 
     this.clearSelection();
+    this.emitDiagramChange();
   }
 
   // Layer Management (Z-Index / Stacking Order)
@@ -2204,6 +2350,7 @@ export class CanvasComponent {
     this.shapes.update((list) =>
       list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
     );
+    this.emitDiagramChange();
   }
 
   sendToBack(shapeIds?: string[]): void {
@@ -2220,6 +2367,7 @@ export class CanvasComponent {
     this.shapes.update((list) =>
       list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
     );
+    this.emitDiagramChange();
   }
 
   bringForward(shapeIds?: string[]): void {
@@ -2240,6 +2388,7 @@ export class CanvasComponent {
     this.shapes.update((list) =>
       list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
     );
+    this.emitDiagramChange();
   }
 
   sendBackward(shapeIds?: string[]): void {
@@ -2260,6 +2409,7 @@ export class CanvasComponent {
     this.shapes.update((list) =>
       list.map((s) => ({ ...s, zIndex: newZIndexMap.get(s.id) ?? s.zIndex })),
     );
+    this.emitDiagramChange();
   }
 
   // Grouping API
@@ -2272,6 +2422,7 @@ export class CanvasComponent {
     this.shapes.update((list) =>
       list.map((s) => (selected.has(s.id) ? { ...s, groupId: newGroupId } : s)),
     );
+    this.emitDiagramChange();
     return newGroupId;
   }
 
@@ -2290,6 +2441,7 @@ export class CanvasComponent {
         s.groupId && targetGroupIds.has(s.groupId) ? { ...s, groupId: undefined } : s,
       ),
     );
+    this.emitDiagramChange();
   }
 
   // Copy, Cut, Paste, and Duplicate API (Within and Across Boards)
@@ -3095,6 +3247,14 @@ export class CanvasComponent {
 
     event.stopPropagation();
 
+    if (!this.editingShapeId() && !this.editingConnectionId()) {
+      this.elementRef.nativeElement.focus({ preventScroll: true });
+    }
+
+    if (this.editingShapeId() && this.editingShapeId() !== shape.id) {
+      this.commitActiveEditingText();
+    }
+
     const inProg = this.inProgressConnection();
 
     if (inProg) {
@@ -3267,6 +3427,12 @@ export class CanvasComponent {
       return;
     }
 
+    if (shape.type === 'uml-class' || shape.type === 'uml-interface') {
+      if (handle !== 'w' && handle !== 'e') {
+        return;
+      }
+    }
+
     if (this.readOnly()) {
       if (
         !this.thinkMode() ||
@@ -3334,11 +3500,17 @@ export class CanvasComponent {
         target.closest('[role="toolbar"]') ||
         target.closest('[role="menu"]') ||
         target.closest('[role="dialog"]') ||
-        target.closest('.mat-mdc-button-base') ||
-        target.closest('.mat-mdc-menu-panel') ||
         target.closest('.cdk-overlay-container'))
     ) {
       return;
+    }
+
+    if (
+      !target?.closest('input, textarea, [contenteditable="true"]') &&
+      !this.editingShapeId() &&
+      !this.editingConnectionId()
+    ) {
+      this.elementRef.nativeElement.focus({ preventScroll: true });
     }
 
     // Left click on empty canvas
@@ -4147,19 +4319,7 @@ export class CanvasComponent {
         maintainAspectRatio,
         keep1to1,
       );
-      this.shapes.update((list) =>
-        list.map((s) =>
-          s.id === init.id
-            ? {
-                ...s,
-                x: res.newX,
-                y: res.newY,
-                width: res.newWidth,
-                height: res.newHeight,
-              }
-            : s,
-        ),
-      );
+      this.commitResizedShape(init, res);
       return;
     }
 
@@ -4177,6 +4337,36 @@ export class CanvasComponent {
     );
 
     this.alignmentGuides.set(res.guides);
+    this.commitResizedShape(init, res);
+  }
+
+  private commitResizedShape(init: CanvasShape, res: ResizeSnappingResult): void {
+    const isUmlClass = init.type === 'uml-class';
+    const isUmlInterface = init.type === 'uml-interface';
+    if (isUmlClass || isUmlInterface) {
+      let reqH: number;
+      if (isUmlClass) {
+        const sections = parseUmlClassText(init.text);
+        reqH = computeUmlClassRequiredHeight(sections, init.fontSize || 13, res.newWidth);
+      } else {
+        const sections = parseUmlInterfaceText(init.text);
+        reqH = computeUmlInterfaceRequiredHeight(sections, init.fontSize || 13, res.newWidth);
+      }
+      this.shapes.update((list) =>
+        list.map((s) =>
+          s.id === init.id
+            ? {
+                ...s,
+                x: res.newX,
+                y: init.y,
+                width: res.newWidth,
+                height: reqH,
+              }
+            : s,
+        ),
+      );
+      return;
+    }
 
     this.shapes.update((list) =>
       list.map((s) =>
@@ -4194,10 +4384,16 @@ export class CanvasComponent {
   }
 
   handleKeyDown(event: KeyboardEvent): void {
+    const target = event.target as HTMLElement | null;
     if (
-      event.target instanceof HTMLInputElement ||
-      event.target instanceof HTMLTextAreaElement ||
-      (event.target as HTMLElement)?.isContentEditable
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLTextAreaElement ||
+      target?.isContentEditable ||
+      target?.closest('input, textarea, [contenteditable="true"]') ||
+      target?.closest(
+        '.cdk-overlay-container, mat-dialog-container, .mat-mdc-dialog-container, .mat-mdc-menu-panel, .frames-navigator-sidebar',
+      ) ||
+      document.querySelector('.cdk-overlay-container .mat-mdc-dialog-container')
     ) {
       return;
     }
@@ -4208,7 +4404,7 @@ export class CanvasComponent {
 
     if (event.key === 'Escape') {
       if (this.editingShapeId()) {
-        this.editingShapeId.set(null);
+        this.commitActiveEditingText();
         return;
       }
       if (this.isResizing && this.resizeInitialShape) {
@@ -4241,6 +4437,22 @@ export class CanvasComponent {
       }
       this.setActiveTool('select');
       this.clearSelection();
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && (event.key === 'a' || event.key === 'A')) {
+      event.preventDefault();
+      this.selectAll();
+      return;
+    }
+
+    if (
+      event.key === 'Delete' ||
+      event.key === 'Backspace' ||
+      ((event.ctrlKey || event.metaKey) && (event.key === 'Backspace' || event.key === 'Delete'))
+    ) {
+      event.preventDefault();
+      this.deleteSelectedShapes();
       return;
     }
 
@@ -4283,10 +4495,6 @@ export class CanvasComponent {
       }
       if (event.key === 'f' || event.key === 'F') {
         this.setActiveTool('frame');
-        return;
-      }
-      if (event.key === 'Delete' || event.key === 'Backspace') {
-        this.deleteSelectedShapes();
         return;
       }
     }

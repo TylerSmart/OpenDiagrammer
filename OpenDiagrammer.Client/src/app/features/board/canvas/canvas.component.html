@@ -289,41 +289,61 @@
         [style.height.px]="box.height"
       >
         @if (!readOnly() && selectedShapeIds().size === 1) {
-          <!-- Full-length OS-window edge resize strips -->
-          <div
-            class="resize-edge edge-n"
-            (pointerdown)="handleResizePointerDown($event, 'n')"
-          ></div>
-          <div
-            class="resize-edge edge-s"
-            (pointerdown)="handleResizePointerDown($event, 's')"
-          ></div>
-          <div
-            class="resize-edge edge-w"
-            (pointerdown)="handleResizePointerDown($event, 'w')"
-          ></div>
-          <div
-            class="resize-edge edge-e"
-            (pointerdown)="handleResizePointerDown($event, 'e')"
-          ></div>
+          @if (isSingleSelectedUmlShape()) {
+            <!-- Horizontal-only resize handles for UML class and interface shapes -->
+            <div
+              class="resize-edge edge-w"
+              (pointerdown)="handleResizePointerDown($event, 'w')"
+            ></div>
+            <div
+              class="resize-edge edge-e"
+              (pointerdown)="handleResizePointerDown($event, 'e')"
+            ></div>
+            <div
+              class="resize-handle handle-w"
+              (pointerdown)="handleResizePointerDown($event, 'w')"
+            ></div>
+            <div
+              class="resize-handle handle-e"
+              (pointerdown)="handleResizePointerDown($event, 'e')"
+            ></div>
+          } @else {
+            <!-- Full-length OS-window edge resize strips -->
+            <div
+              class="resize-edge edge-n"
+              (pointerdown)="handleResizePointerDown($event, 'n')"
+            ></div>
+            <div
+              class="resize-edge edge-s"
+              (pointerdown)="handleResizePointerDown($event, 's')"
+            ></div>
+            <div
+              class="resize-edge edge-w"
+              (pointerdown)="handleResizePointerDown($event, 'w')"
+            ></div>
+            <div
+              class="resize-edge edge-e"
+              (pointerdown)="handleResizePointerDown($event, 'e')"
+            ></div>
 
-          <!-- Corner resize grips -->
-          <div
-            class="resize-handle handle-nw"
-            (pointerdown)="handleResizePointerDown($event, 'nw')"
-          ></div>
-          <div
-            class="resize-handle handle-ne"
-            (pointerdown)="handleResizePointerDown($event, 'ne')"
-          ></div>
-          <div
-            class="resize-handle handle-se"
-            (pointerdown)="handleResizePointerDown($event, 'se')"
-          ></div>
-          <div
-            class="resize-handle handle-sw"
-            (pointerdown)="handleResizePointerDown($event, 'sw')"
-          ></div>
+            <!-- Corner resize grips -->
+            <div
+              class="resize-handle handle-nw"
+              (pointerdown)="handleResizePointerDown($event, 'nw')"
+            ></div>
+            <div
+              class="resize-handle handle-ne"
+              (pointerdown)="handleResizePointerDown($event, 'ne')"
+            ></div>
+            <div
+              class="resize-handle handle-se"
+              (pointerdown)="handleResizePointerDown($event, 'se')"
+            ></div>
+            <div
+              class="resize-handle handle-sw"
+              (pointerdown)="handleResizePointerDown($event, 'sw')"
+            ></div>
+          }
         }
       </div>
     }
@@ -1094,6 +1114,7 @@
             [style.font-weight]="editShape.type === 'frame' || editShape.isBold ? 'bold' : null"
             [style.font-style]="editShape.isItalic ? 'italic' : null"
             [style.text-decoration]="editShape.isUnderline ? 'underline' : null"
+            (input)="handleShapeTextInput(editShape.id, shapeTextEditor.innerHTML)"
             (blur)="finishEditingShapeText(editShape.id, shapeTextEditor.innerHTML)"
             (keydown)="handleRichTextKeydown($event, editShape.id, shapeTextEditor)"
             (keyup)="saveCurrentEditorSelection()"

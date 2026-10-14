@@ -1,0 +1,265 @@
+<div class="theme-dialog-container">
+  <!-- Dialog Header -->
+  <div class="theme-dialog-header" mat-dialog-title>
+    <div class="header-title-group">
+      <div class="header-icon-badge">
+        <mat-icon>palette</mat-icon>
+      </div>
+      <div>
+        <h2 class="dialog-title">Theme & Appearance</h2>
+        <p class="dialog-subtitle">Personalize your color palettes, theme mode, and typography.</p>
+      </div>
+    </div>
+    <button mat-icon-button type="button" aria-label="Close theme settings" (click)="close()">
+      <mat-icon>close</mat-icon>
+    </button>
+  </div>
+
+  <mat-dialog-content class="theme-dialog-content">
+    <!-- Theme Mode Selector -->
+    <section class="section-group">
+      <div class="section-header">
+        <mat-icon class="section-icon">brightness_6</mat-icon>
+        <span class="section-title">Color Scheme</span>
+      </div>
+      <div class="mode-button-group" role="radiogroup" aria-label="Color scheme mode">
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="themeService.mode() === 'light'"
+          (click)="setMode('light')"
+          role="radio"
+          [attr.aria-checked]="themeService.mode() === 'light'"
+        >
+          <mat-icon>light_mode</mat-icon>
+          <span>Light</span>
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="themeService.mode() === 'dark'"
+          (click)="setMode('dark')"
+          role="radio"
+          [attr.aria-checked]="themeService.mode() === 'dark'"
+        >
+          <mat-icon>dark_mode</mat-icon>
+          <span>Dark</span>
+        </button>
+        <button
+          type="button"
+          class="mode-btn"
+          [class.active]="themeService.mode() === 'system'"
+          (click)="setMode('system')"
+          role="radio"
+          [attr.aria-checked]="themeService.mode() === 'system'"
+        >
+          <mat-icon>brightness_auto</mat-icon>
+          <span>System</span>
+        </button>
+      </div>
+    </section>
+
+    <!-- Color Roles -->
+    <section class="section-group">
+      <div class="section-header">
+        <mat-icon class="section-icon">color_lens</mat-icon>
+        <span class="section-title">Color Roles</span>
+      </div>
+
+      <mat-tab-group animationDuration="150ms" class="color-roles-tabs">
+        <!-- Primary Palette Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <span
+              class="tab-color-dot"
+              [style.background-color]="themeService.primaryPaletteDef().previewColor"
+            ></span>
+            <span>Primary</span>
+          </ng-template>
+          <div class="palette-tab-content">
+            <p class="tab-description">
+              Controls primary actions, active tool selection, focused elements, and prominent UI
+              buttons.
+            </p>
+            <div class="swatches-grid" role="radiogroup" aria-label="Primary color palette">
+              @for (palette of palettes; track palette.id) {
+                <button
+                  type="button"
+                  class="swatch-btn"
+                  [class.active]="themeService.primaryPalette() === palette.id"
+                  [style.background-color]="palette.previewColor"
+                  [matTooltip]="palette.name"
+                  [attr.aria-label]="'Primary color: ' + palette.name"
+                  (click)="setPrimary(palette.id)"
+                  role="radio"
+                  [attr.aria-checked]="themeService.primaryPalette() === palette.id"
+                >
+                  @if (themeService.primaryPalette() === palette.id) {
+                    <mat-icon class="swatch-check">check</mat-icon>
+                  }
+                </button>
+              }
+            </div>
+            <div class="active-palette-name">
+              Selected: <strong>{{ themeService.primaryPaletteDef().name }}</strong>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Secondary Palette Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <span
+              class="tab-color-dot"
+              [style.background-color]="themeService.secondaryPaletteDef().previewColor"
+            ></span>
+            <span>Secondary</span>
+          </ng-template>
+          <div class="palette-tab-content">
+            <p class="tab-description">
+              Controls secondary buttons, badges, filter chips, and floating interactive controls.
+            </p>
+            <div class="swatches-grid" role="radiogroup" aria-label="Secondary color palette">
+              @for (palette of palettes; track palette.id) {
+                <button
+                  type="button"
+                  class="swatch-btn"
+                  [class.active]="themeService.secondaryPalette() === palette.id"
+                  [style.background-color]="palette.previewColor"
+                  [matTooltip]="palette.name"
+                  [attr.aria-label]="'Secondary color: ' + palette.name"
+                  (click)="setSecondary(palette.id)"
+                  role="radio"
+                  [attr.aria-checked]="themeService.secondaryPalette() === palette.id"
+                >
+                  @if (themeService.secondaryPalette() === palette.id) {
+                    <mat-icon class="swatch-check">check</mat-icon>
+                  }
+                </button>
+              }
+            </div>
+            <div class="active-palette-name">
+              Selected: <strong>{{ themeService.secondaryPaletteDef().name }}</strong>
+            </div>
+          </div>
+        </mat-tab>
+
+        <!-- Tertiary Palette Tab -->
+        <mat-tab>
+          <ng-template mat-tab-label>
+            <span
+              class="tab-color-dot"
+              [style.background-color]="themeService.tertiaryPaletteDef().previewColor"
+            ></span>
+            <span>Tertiary</span>
+          </ng-template>
+          <div class="palette-tab-content">
+            <p class="tab-description">
+              Controls accent highlights, tags, contrast badges, and complementary board indicators.
+            </p>
+            <div class="swatches-grid" role="radiogroup" aria-label="Tertiary color palette">
+              @for (palette of palettes; track palette.id) {
+                <button
+                  type="button"
+                  class="swatch-btn"
+                  [class.active]="themeService.tertiaryPalette() === palette.id"
+                  [style.background-color]="palette.previewColor"
+                  [matTooltip]="palette.name"
+                  [attr.aria-label]="'Tertiary color: ' + palette.name"
+                  (click)="setTertiary(palette.id)"
+                  role="radio"
+                  [attr.aria-checked]="themeService.tertiaryPalette() === palette.id"
+                >
+                  @if (themeService.tertiaryPalette() === palette.id) {
+                    <mat-icon class="swatch-check">check</mat-icon>
+                  }
+                </button>
+              }
+            </div>
+            <div class="active-palette-name">
+              Selected: <strong>{{ themeService.tertiaryPaletteDef().name }}</strong>
+            </div>
+          </div>
+        </mat-tab>
+      </mat-tab-group>
+    </section>
+
+    <!-- Font Family Selection -->
+    <section class="section-group">
+      <div class="section-header">
+        <mat-icon class="section-icon">font_download</mat-icon>
+        <span class="section-title">Typography & Font</span>
+      </div>
+      <div class="fonts-list" role="radiogroup" aria-label="Application font family">
+        @for (font of fonts; track font.id) {
+          <button
+            type="button"
+            class="font-card"
+            [class.active]="themeService.fontFamily() === font.id"
+            (click)="setFont(font.id)"
+            role="radio"
+            [attr.aria-checked]="themeService.fontFamily() === font.id"
+          >
+            <div class="font-card-left">
+              <div class="font-meta">
+                <span class="font-name" [style.font-family]="font.fontFamily">{{
+                  font.label
+                }}</span>
+                <span class="font-category-chip">{{ font.category }}</span>
+              </div>
+              <div class="font-sample-text" [style.font-family]="font.fontFamily">
+                {{ font.previewSample }}
+              </div>
+            </div>
+            <div class="font-card-right">
+              @if (themeService.fontFamily() === font.id) {
+                <mat-icon class="font-selected-icon">check_circle</mat-icon>
+              } @else {
+                <span class="font-radio-unselected"></span>
+              }
+            </div>
+          </button>
+        }
+      </div>
+    </section>
+
+    <!-- Live Preview Showcase -->
+    <section class="section-group preview-section">
+      <div class="section-header">
+        <mat-icon class="section-icon">visibility</mat-icon>
+        <span class="section-title">Live Preview</span>
+      </div>
+      <div class="preview-card" [style.font-family]="themeService.fontFamilyDef().fontFamily">
+        <div class="preview-header">
+          <span class="preview-heading">Collaborative Diagram Board</span>
+          <span class="preview-chip tertiary-chip">Active Session</span>
+        </div>
+        <p class="preview-body">
+          Diagramming in real-time with your custom Material 3 theme. Fast, responsive, and
+          beautifully styled.
+        </p>
+        <div class="preview-actions">
+          <button type="button" class="preview-btn primary-btn">
+            <mat-icon>add</mat-icon>
+            <span>Primary Action</span>
+          </button>
+          <button type="button" class="preview-btn secondary-btn">
+            <mat-icon>tune</mat-icon>
+            <span>Secondary Action</span>
+          </button>
+        </div>
+      </div>
+    </section>
+  </mat-dialog-content>
+
+  <!-- Dialog Actions -->
+  <mat-dialog-actions class="theme-dialog-actions" align="end">
+    <button mat-button type="button" (click)="resetDefaults()" class="reset-btn">
+      <mat-icon>restart_alt</mat-icon>
+      <span>Reset to Defaults</span>
+    </button>
+    <button mat-flat-button color="primary" type="button" (click)="close()">
+      <span>Done</span>
+    </button>
+  </mat-dialog-actions>
+</div>

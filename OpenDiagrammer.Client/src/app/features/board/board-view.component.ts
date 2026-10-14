@@ -12,6 +12,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatButtonModule } from '@angular/material/button';
 import { MatDialog } from '@angular/material/dialog';
+import { MatDividerModule } from '@angular/material/divider';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenuModule } from '@angular/material/menu';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
@@ -79,6 +80,7 @@ const THEME_LABELS: Record<ThemeMode, string> = {
 @Component({
   imports: [
     MatButtonModule,
+    MatDividerModule,
     MatIconModule,
     MatMenuModule,
     MatTooltipModule,
@@ -110,6 +112,7 @@ export class BoardViewComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);
   private readonly saveTrigger$ = new Subject<CanvasDiagramData>();
   private pendingDiagramData: CanvasDiagramData | null = null;
+  private hasSyncedInitialCrdt = false;
 
   protected readonly board = signal<BoardDetailDto | null>(null);
   protected readonly isLoading = signal<boolean>(false);
@@ -230,7 +233,11 @@ export class BoardViewComponent implements OnInit {
     effect(() => {
       const canvas = this.canvasComponent();
       const crdtData = this.crdtService.diagramData();
+      if (this.hasSyncedInitialCrdt) {
+        return;
+      }
       if (canvas && crdtData.shapes.length > 0 && canvas.shapes().length === 0) {
+        this.hasSyncedInitialCrdt = true;
         untracked(() => {
           canvas.applyExternalDiagramData(crdtData);
         });
@@ -283,11 +290,13 @@ export class BoardViewComponent implements OnInit {
         canvas.applyExternalDiagramData(latest);
       }
     }
+    this.hasSyncedInitialCrdt = true;
   }
 
   loadBoard(id: string): void {
     this.isLoading.set(true);
     this.errorMessage.set(null);
+    this.hasSyncedInitialCrdt = false;
 
     this.boardService.getBoardById(id).subscribe({
       next: (b) => {
@@ -302,6 +311,9 @@ export class BoardViewComponent implements OnInit {
           try {
             parsed = JSON.parse(b.canvasDataJson);
             this.isBoardEmpty.set(!parsed?.shapes || parsed.shapes.length === 0);
+            if (parsed?.shapes && parsed.shapes.length > 0) {
+              this.hasSyncedInitialCrdt = true;
+            }
           } catch {
             this.isBoardEmpty.set(true);
           }

@@ -559,5 +559,28 @@ describe('BoardViewComponent', () => {
         }),
       );
     });
+
+    it('should not resurrect shapes when all shapes are deleted from canvas', async () => {
+      fixture.detectChanges();
+      await fixture.whenStable();
+
+      const canvas = component['canvasComponent']();
+      expect(canvas).toBeTruthy();
+
+      const emptyDiagramData: CanvasDiagramData = {
+        shapes: [],
+        connections: [],
+        zoom: 1,
+        panX: 0,
+        panY: 0,
+      };
+
+      const applySpy = vi.spyOn(canvas!, 'applyExternalDiagramData');
+      component.handleDiagramChange(emptyDiagramData);
+      fixture.detectChanges();
+
+      expect(component['isBoardEmpty']()).toBe(true);
+      expect(applySpy).not.toHaveBeenCalled();
+    });
   });
 });

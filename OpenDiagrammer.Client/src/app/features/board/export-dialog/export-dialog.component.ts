@@ -53,6 +53,21 @@ export class ExportDialogComponent {
   readonly selectedBackground = signal<ExportBackground>('theme');
   readonly isExporting = signal<boolean>(false);
 
+  readonly selectedAreaIcon = computed(() => {
+    return this.selectedArea() === 'full' ? 'select_all' : 'crop_free';
+  });
+
+  readonly selectedAreaLabel = computed(() => {
+    if (this.selectedArea() === 'full') {
+      return 'Entire Board (All content)';
+    }
+    const frame = this.data.frames?.find((f) => f.id === this.selectedArea());
+    if (frame) {
+      return `Frame: ${frame.text || 'Untitled Frame'} (${frame.width} × ${frame.height})`;
+    }
+    return 'Entire Board (All content)';
+  });
+
   readonly availableFormats: {
     format: ExportFormat;
     label: string;

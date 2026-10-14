@@ -1,9 +1,17 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { BoardBackgroundType } from '../../../core/models/board.models';
 import { CanvasComponent } from './canvas.component';
-import { CANVAS_CONSTANTS, CanvasDiagramData } from './canvas.models';
+import { CANVAS_CONSTANTS, CanvasDiagramData, CanvasPoint } from './canvas.models';
 import { getShapeAnchorPoint } from './connection.models';
-import { FRAME_PRESETS } from './shape.models';
+import { CanvasShape, FRAME_PRESETS, ResizeHandlePosition } from './shape.models';
+
+interface CanvasResizeTestAccessor {
+  isResizing: boolean;
+  resizeInitialShape: CanvasShape | null;
+  resizeStartPoint: CanvasPoint;
+  activeResizeHandle: ResizeHandlePosition | null;
+  applyResize: (point: CanvasPoint, snapToGrid?: boolean) => void;
+}
 
 describe('CanvasComponent', () => {
   let component: CanvasComponent;
@@ -451,13 +459,107 @@ describe('CanvasComponent', () => {
     expect(component.selectionBox()).toBeNull();
   });
 
-  it('should delete selected shapes', () => {
+  it('should delete selected shapes and emit diagramChange', () => {
+    const emitSpy = vi.spyOn(component.diagramChange, 'emit');
     const s1 = component.createShape('rectangle', { x: 100, y: 100 });
     component.selectShape(s1.id);
     component.deleteSelectedShapes();
 
     expect(component.shapes().length).toBe(0);
     expect(component.selectedShapeIds().size).toBe(0);
+    expect(emitSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        shapes: [],
+      }),
+    );
+  });
+
+  it('should select all shapes and delete them all via Delete key', () => {
+    component.createShape('rectangle', { x: 100, y: 100 });
+    component.createShape('ellipse', { x: 200, y: 200 });
+    expect(component.shapes().length).toBe(2);
+
+    component.selectAll();
+    expect(component.selectedShapeIds().size).toBe(2);
+
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(component.shapes().length).toBe(0);
+  });
+
+  it('should select all shapes and connections via Ctrl+A shortcut', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('ellipse', { x: 300, y: 300 });
+    component.createConnection(s1.id, 'right', s2.id, 'left');
+    component.clearSelection();
+
+    expect(component.shapes().length).toBe(2);
+    expect(component.connections().length).toBe(1);
+    expect(component.selectedShapeIds().size).toBe(0);
+    expect(component.selectedConnectionIds().size).toBe(0);
+
+    const event = new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, cancelable: true });
+    component.handleKeyDown(event);
+
+    expect(component.selectedShapeIds().size).toBe(2);
+    expect(component.selectedShapeIds().has(s1.id)).toBe(true);
+    expect(component.selectedShapeIds().has(s2.id)).toBe(true);
+    expect(component.selectedConnectionIds().size).toBe(1);
+    expect(event.defaultPrevented).toBe(true);
+  });
+
+  it('should select all items via Cmd+A on macOS and delete them all via Delete', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    const s2 = component.createShape('ellipse', { x: 300, y: 300 });
+    component.createConnection(s1.id, 'right', s2.id, 'left');
+    component.clearSelection();
+
+    const metaA = new KeyboardEvent('keydown', { key: 'a', metaKey: true, cancelable: true });
+    component.handleKeyDown(metaA);
+
+    expect(component.selectedShapeIds().size).toBe(2);
+    expect(component.selectedConnectionIds().size).toBe(1);
+    expect(metaA.defaultPrevented).toBe(true);
+
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Delete' }));
+    expect(component.shapes().length).toBe(0);
+    expect(component.connections().length).toBe(0);
+  });
+
+  it('should not trigger canvas selectAll when typing inside an input or contenteditable element', () => {
+    component.createShape('rectangle', { x: 100, y: 100 });
+    component.clearSelection();
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+
+    const event = new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true });
+    Object.defineProperty(event, 'target', { value: input, writable: false });
+
+    component.handleKeyDown(event);
+    expect(component.selectedShapeIds().size).toBe(0);
+    expect(event.defaultPrevented).toBe(false);
+
+    document.body.removeChild(input);
+  });
+
+  it('should commit active text editing when selectAll() is invoked', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.startEditingShapeText(s1.id);
+    component.handleShapeTextInput(s1.id, 'Committed Content');
+
+    component.selectAll();
+
+    expect(component.shapes().find((s) => s.id === s1.id)?.text).toBe('Committed Content');
+    expect(component.selectedShapeIds().has(s1.id)).toBe(true);
+  });
+
+  it('should delete selected shapes via Cmd+Backspace on macOS', () => {
+    const s1 = component.createShape('rectangle', { x: 100, y: 100 });
+    component.selectShape(s1.id);
+
+    component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', metaKey: true }));
+    expect(component.shapes().length).toBe(0);
   });
 
   it('should move shapes with pointer drag and nudge with arrow keys', () => {
@@ -2858,6 +2960,83 @@ describe('CanvasComponent', () => {
       expect(emitSpy).toHaveBeenCalled();
     });
 
+    it('should commit typed text when clicking canvas / clearing selection', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+      expect(component.editingShapeId()).toBe(shape.id);
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      editorEl!.innerHTML = 'Persisted Text On Click Out';
+
+      // User clicks canvas which calls clearSelection
+      component.clearSelection();
+      fixture.detectChanges();
+
+      expect(component.editingShapeId()).toBeNull();
+      const updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.text).toBe('Persisted Text On Click Out');
+    });
+
+    it('should update shape text in real time with handleShapeTextInput', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      component.handleShapeTextInput(shape.id, 'Real-time text typing');
+
+      const updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.text).toBe('Real-time text typing');
+    });
+
+    it('should commit text of previous shape when clicking another shape', () => {
+      const shape1 = component.createShape('rectangle', { x: 100, y: 100 });
+      const shape2 = component.createShape('ellipse', { x: 300, y: 300 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape1.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      editorEl!.innerHTML = 'First shape text';
+
+      // User clicks shape2
+      const pointerEvent = new PointerEvent('pointerdown', {
+        button: 0,
+        clientX: 300,
+        clientY: 300,
+      });
+      component.handleShapePointerDown(pointerEvent, shape2);
+      fixture.detectChanges();
+
+      const updatedShape1 = component.shapes().find((s) => s.id === shape1.id);
+      expect(updatedShape1?.text).toBe('First shape text');
+      expect(component.selectedShapeIds().has(shape2.id)).toBe(true);
+    });
+
+    it('should commit text when Escape is pressed during inline editing', () => {
+      const shape = component.createShape('rectangle', { x: 100, y: 100 });
+      fixture.detectChanges();
+
+      component.startEditingShapeText(shape.id);
+      fixture.detectChanges();
+
+      const editorEl = component.shapeRichTextEditor()?.nativeElement;
+      expect(editorEl).toBeTruthy();
+      editorEl!.innerHTML = 'Text saved on Escape';
+
+      component.handleKeyDown(new KeyboardEvent('keydown', { key: 'Escape' }));
+      fixture.detectChanges();
+
+      expect(component.editingShapeId()).toBeNull();
+      const updated = component.shapes().find((s) => s.id === shape.id);
+      expect(updated?.text).toBe('Text saved on Escape');
+    });
+
     it('should start editing on Enter key when single shape is selected', () => {
       const shape = component.createShape('rectangle', { x: 100, y: 100 });
       component.selectShape(shape.id);
@@ -3086,7 +3265,7 @@ describe('CanvasComponent', () => {
       const shape = component.createShape('uml-class', { x: 200, y: 150 });
       expect(shape.type).toBe('uml-class');
       expect(shape.width).toBe(160);
-      expect(shape.height).toBe(120);
+      expect(shape.height).toBe(92);
       expect(shape.text).toContain('ClassName');
     });
 
@@ -3499,6 +3678,69 @@ describe('CanvasComponent', () => {
       expect(updated!.text).toContain('+ deactivate(): void');
     });
 
+    it('should not grow UML class height when typing or deleting characters within the same line in attributes', () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      const initialHeight = umlShape.height;
+      expect(initialHeight).toBe(92);
+
+      const headerEl = document.createElement('div');
+      headerEl.innerHTML = 'ClassName';
+
+      const attrEl = document.createElement('div');
+      attrEl.innerHTML = '+ attribute: type';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML = '+ method(): void';
+
+      // Type a character within the line
+      attrEl.innerHTML = '+ attribute: typed';
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+      let updated = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(updated.height).toBe(initialHeight);
+
+      // Delete characters within the line
+      attrEl.innerHTML = '+ attr';
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+      updated = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(updated.height).toBe(initialHeight);
+
+      // Add a second line - height should grow
+      attrEl.innerHTML = '+ attr: string<br>+ count: number';
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+      updated = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(updated.height).toBeGreaterThan(initialHeight);
+      const multiLineHeight = updated.height;
+
+      // Remove the second line - height should shrink back to initialHeight
+      attrEl.innerHTML = '+ attr: string';
+      component.handleUmlClassSectionInput(umlShape.id, 'attributes', headerEl, attrEl, methodEl);
+      updated = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(updated.height).toBe(initialHeight);
+      expect(updated.height).toBeLessThan(multiLineHeight);
+    });
+
+    it('should dynamically expand UML class height when Enter is pressed in header to add a newline', () => {
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      const initialHeight = umlShape.height;
+      expect(initialHeight).toBe(92);
+
+      const headerEl = document.createElement('div');
+      // Contenteditable creates <div><br></div> when Enter is pressed at the end of a line
+      headerEl.innerHTML = 'ClassName<div><br></div>';
+
+      const attrEl = document.createElement('div');
+      attrEl.innerHTML = '+ attribute: type';
+
+      const methodEl = document.createElement('div');
+      methodEl.innerHTML = '+ method(): void';
+
+      component.handleUmlClassSectionInput(umlShape.id, 'className', headerEl, attrEl, methodEl);
+
+      const updated = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(updated.height).toBeGreaterThan(initialHeight);
+      expect(updated.height).toBe(110);
+    });
+
     it('should dynamically expand UML interface height when methods are added', () => {
       const ifaceShape = component.createShape('uml-interface', { x: 100, y: 100 });
       const initialHeight = ifaceShape.height;
@@ -3517,6 +3759,56 @@ describe('CanvasComponent', () => {
       expect(updated!.height).toBeGreaterThan(initialHeight);
       expect(updated!.text).toContain('IRepository');
       expect(updated!.text).toContain('+ delete(id: string): void');
+    });
+
+    it('should disallow manual vertical resizing on UML class and interface shapes', () => {
+      const resizeAccessor = component as unknown as CanvasResizeTestAccessor;
+      const umlShape = component.createShape('uml-class', { x: 100, y: 100 });
+      component.selectShape(umlShape.id);
+      const initialHeight = umlShape.height;
+      const initialWidth = umlShape.width;
+
+      // Pointer down on South ('s') handle should be rejected
+      const downSouth = new PointerEvent('pointerdown', { button: 0, clientX: 180, clientY: 220 });
+      component.handleResizePointerDown(downSouth, 's');
+
+      // isResizing should not be activated for 's' handle on UML shapes
+      expect(resizeAccessor.isResizing).toBe(false);
+
+      // Programmatic applyResize should preserve height and Y position
+      resizeAccessor.isResizing = true;
+      resizeAccessor.resizeInitialShape = { ...umlShape };
+      resizeAccessor.resizeStartPoint = { x: 180, y: 220 };
+      resizeAccessor.activeResizeHandle = 's';
+
+      resizeAccessor.applyResize({ x: 180, y: 350 }, false);
+
+      const shapeAfterS = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(shapeAfterS.height).toBe(initialHeight);
+      expect(shapeAfterS.y).toBe(umlShape.y);
+
+      // Horizontal resizing with 'e' handle should be allowed
+      resizeAccessor.activeResizeHandle = 'e';
+      resizeAccessor.applyResize({ x: 280, y: 220 }, false);
+
+      const shapeAfterE = component.shapes().find((s) => s.id === umlShape.id)!;
+      expect(shapeAfterE.width).toBeGreaterThan(initialWidth);
+      expect(shapeAfterE.height).toBe(initialHeight);
+    });
+
+    it('should allow normal shapes like rectangle to be resized in both axes freely', () => {
+      const resizeAccessor = component as unknown as CanvasResizeTestAccessor;
+      const rect = component.createShape('rectangle', { x: 100, y: 100 });
+      component.selectShape(rect.id);
+
+      const downSouth = new PointerEvent('pointerdown', { button: 0, clientX: 150, clientY: 180 });
+      component.handleResizePointerDown(downSouth, 's');
+      expect(resizeAccessor.isResizing).toBe(true);
+
+      resizeAccessor.applyResize({ x: 150, y: 250 }, false);
+
+      const updated = component.shapes().find((s) => s.id === rect.id)!;
+      expect(updated.height).toBeGreaterThan(rect.height);
     });
 
     it('should focus the requested UML compartment and retain focus during section input', async () => {

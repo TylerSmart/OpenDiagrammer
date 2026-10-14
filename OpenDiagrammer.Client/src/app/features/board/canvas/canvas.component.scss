@@ -469,7 +469,7 @@
   .uml-editor-section {
     padding: 6px 10px;
     box-sizing: border-box;
-    overflow-y: auto;
+    overflow: hidden;
     cursor: text;
     line-height: 1.35;
     word-break: break-word;
@@ -495,7 +495,7 @@
       font-weight: 600;
       font-size: 0.875rem;
       border-bottom: 1.5px solid var(--mat-sys-outline-variant);
-      flex-shrink: 0;
+      flex: 0 0 auto;
       min-height: 32px;
     }
 
@@ -503,15 +503,15 @@
       text-align: left;
       font-size: 0.8125rem;
       border-bottom: 1.5px solid var(--mat-sys-outline-variant);
-      flex: 1 1 auto;
-      min-height: 28px;
+      flex: 0 0 auto;
+      min-height: 26px;
     }
 
     &.uml-editor-methods {
       text-align: left;
       font-size: 0.8125rem;
-      flex: 1 1 auto;
-      min-height: 28px;
+      flex: 0 0 auto;
+      min-height: 26px;
     }
   }
 }
@@ -601,6 +601,16 @@
     left: -4.5px;
     cursor: nesw-resize;
   }
+  &.handle-w {
+    top: calc(50% - 4.5px);
+    left: -4.5px;
+    cursor: ew-resize;
+  }
+  &.handle-e {
+    top: calc(50% - 4.5px);
+    right: -4.5px;
+    cursor: ew-resize;
+  }
 
   &:hover {
     background-color: var(--mat-sys-primary);
@@ -628,7 +638,7 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  padding: 0.5rem;
   background-color: var(--mat-sys-surface-container);
   border: 1px solid var(--mat-sys-outline-variant);
   border-radius: 9999px;

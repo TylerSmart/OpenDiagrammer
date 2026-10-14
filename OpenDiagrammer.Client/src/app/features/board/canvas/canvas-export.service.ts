@@ -240,12 +240,15 @@ export class CanvasExportService {
     );
 
     // Defs (Markers & Global Styles)
+    const exportFontFamily = this.themeService.fontFamilyDef
+      ? `${this.themeService.fontFamilyDef().fontFamily}, `
+      : '';
     svgParts.push(`  <defs>
     <marker id="arrow-marker" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
       <path d="M 0 1 L 10 5 L 0 9 z" fill="context-stroke" />
     </marker>
     <style>
-      text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+      text { font-family: ${exportFontFamily}-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
     </style>
   </defs>`);
 
@@ -422,8 +425,11 @@ export class CanvasExportService {
           `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${shape.height - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
         );
         const sections = parseUmlClassText(shape.text);
-        const headerH = Math.round(shape.height * 0.28);
-        const attrH = Math.round(shape.height * 0.34);
+        const lineH = Math.max(18, Math.round((shape.fontSize || 13) * 1.4));
+        const classLines = extractPlainTextLines(sections.className);
+        const attrLines = extractPlainTextLines(sections.attributes);
+        const headerH = Math.max(32, classLines.length * lineH + 14);
+        const attrH = Math.max(26, attrLines.length * lineH + 12);
 
         parts.push(
           `      <line x1="${shape.x + 1}" y1="${shape.y + headerH}" x2="${shape.x + shape.width - 1}" y2="${shape.y + headerH}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
@@ -433,7 +439,6 @@ export class CanvasExportService {
         );
 
         // Header Class Name
-        const classLines = extractPlainTextLines(sections.className);
         parts.push(
           this.renderTextLinesSvg(
             classLines,
@@ -450,7 +455,6 @@ export class CanvasExportService {
         );
 
         // Attributes
-        const attrLines = extractPlainTextLines(sections.attributes);
         parts.push(
           this.renderTextLinesSvg(
             attrLines,
@@ -488,14 +492,15 @@ export class CanvasExportService {
           `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${shape.height - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
         );
         const sections = parseUmlInterfaceText(shape.text);
-        const headerH = Math.round(shape.height * 0.38);
+        const lineH = Math.max(18, Math.round((shape.fontSize || 13) * 1.4));
+        const ifaceLines = extractPlainTextLines(sections.interfaceName);
+        const headerH = Math.max(34, ifaceLines.length * lineH + 14);
 
         parts.push(
           `      <line x1="${shape.x + 1}" y1="${shape.y + headerH}" x2="${shape.x + shape.width - 1}" y2="${shape.y + headerH}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
         );
 
         // Interface name
-        const ifaceLines = extractPlainTextLines(sections.interfaceName);
         parts.push(
           this.renderTextLinesSvg(
             ifaceLines,

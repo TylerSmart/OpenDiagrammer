@@ -1,6 +1,4 @@
 @use '@angular/material' as mat;
-@use 'sass:map';
-@use './themes/theme.production.scss';
 
 *,
 *::before,
@@ -45,9 +43,38 @@
 
   --canvas-color-purple-fill: light-dark(#faf5ff, #2e1065);
   --canvas-color-purple-stroke: light-dark(#9333ea, #c084fc);
+
+  --app-font-family: 'Roboto', sans-serif;
+  --mat-sys-body-large-font: var(--app-font-family);
+  --mat-sys-body-medium-font: var(--app-font-family);
+  --mat-sys-body-small-font: var(--app-font-family);
+  --mat-sys-display-large-font: var(--app-font-family);
+  --mat-sys-display-medium-font: var(--app-font-family);
+  --mat-sys-display-small-font: var(--app-font-family);
+  --mat-sys-headline-large-font: var(--app-font-family);
+  --mat-sys-headline-medium-font: var(--app-font-family);
+  --mat-sys-headline-small-font: var(--app-font-family);
+  --mat-sys-title-large-font: var(--app-font-family);
+  --mat-sys-title-medium-font: var(--app-font-family);
+  --mat-sys-title-small-font: var(--app-font-family);
+  --mat-sys-label-large-font: var(--app-font-family);
+  --mat-sys-label-medium-font: var(--app-font-family);
+  --mat-sys-label-small-font: var(--app-font-family);
 }
 
 html {
+  color-scheme: light dark;
+  @include mat.theme(
+    (
+      color: (
+        primary: mat.$azure-palette,
+        tertiary: mat.$magenta-palette,
+      ),
+      typography: Roboto,
+      density: 0,
+    )
+  );
+
   height: 100%;
   background-color: var(--mat-sys-surface);
   background-image: light-dark(
@@ -83,9 +110,23 @@ html[data-theme='system'] {
 body {
   color: var(--mat-sys-on-surface);
   font: var(--mat-sys-body-medium);
+  font-family: var(--app-font-family);
 
   margin: 0;
   height: 100%;
+}
+
+button,
+input,
+select,
+textarea,
+.mat-mdc-button,
+.mat-mdc-raised-button,
+.mat-mdc-outlined-button,
+.mat-mdc-unelevated-button,
+.mat-mdc-card,
+.mat-mdc-dialog-container {
+  font-family: var(--app-font-family);
 }
 
 .role-badge {
