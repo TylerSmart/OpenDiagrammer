@@ -110,13 +110,15 @@
       (click)="handleExport()"
     >
       @if (isExporting()) {
-        <mat-spinner diameter="18" class="button-spinner"></mat-spinner>
-        <span>Exporting...</span>
+        <span class="export-btn-content">
+          <mat-spinner diameter="18" class="button-spinner"></mat-spinner>
+          <span>Exporting...</span>
+        </span>
       } @else {
-        <ng-container>
-          <mat-icon>download</mat-icon>
+        <span class="export-btn-content">
+          <mat-icon class="export-btn-icon">download</mat-icon>
           <span>Export {{ selectedFormat().toUpperCase() }}</span>
-        </ng-container>
+        </span>
       }
     </button>
   </mat-dialog-actions>

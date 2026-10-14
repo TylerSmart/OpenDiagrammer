@@ -133,6 +133,12 @@ export class CanvasShapeComponent {
   readonly isUmlClass = computed(() => this.shape().type === 'uml-class');
   readonly isUmlInterface = computed(() => this.shape().type === 'uml-interface');
 
+  readonly umlHeaderFontSize = computed(() => {
+    const fs = this.shape().fontSize;
+    return fs ? Math.max(14, fs) : 14;
+  });
+  readonly umlContentFontSize = computed(() => this.shape().fontSize || 13);
+
   readonly umlClassSections = computed(() => {
     const s = this.shape();
     const parsed = parseUmlClassText(s.text);

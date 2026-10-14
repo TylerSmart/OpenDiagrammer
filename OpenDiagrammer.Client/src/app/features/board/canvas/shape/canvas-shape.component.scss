@@ -189,6 +189,7 @@
     &.uml-header {
       text-align: center;
       font-weight: 600;
+      font-size: 0.875rem;
       border-bottom: 1.5px solid var(--shape-stroke, var(--mat-sys-outline));
       flex: 0 0 auto;
       min-height: 32px;
@@ -196,6 +197,7 @@
 
     &.uml-attributes {
       text-align: left;
+      font-size: 0.8125rem;
       border-bottom: 1.5px solid var(--shape-stroke, var(--mat-sys-outline));
       flex: 0 0 auto;
       min-height: 26px;
@@ -203,6 +205,7 @@
 
     &.uml-methods {
       text-align: left;
+      font-size: 0.8125rem;
       flex: 1 1 auto;
       min-height: 26px;
     }

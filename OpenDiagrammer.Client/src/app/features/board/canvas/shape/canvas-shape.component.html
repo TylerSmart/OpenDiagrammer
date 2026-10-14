@@ -325,10 +325,12 @@
       class="uml-compartments-container"
       [style.color]="textColor()"
       [style.--shape-stroke]="shape().strokeColor"
+      [style.font-size.px]="umlContentFontSize()"
     >
       <div
         class="uml-compartment uml-header"
         data-uml-section="header"
+        [style.font-size.px]="umlHeaderFontSize()"
         [innerHTML]="umlClassSections().classNameHtml"
       ></div>
       <div
@@ -347,10 +349,12 @@
       class="uml-compartments-container"
       [style.color]="textColor()"
       [style.--shape-stroke]="shape().strokeColor"
+      [style.font-size.px]="umlContentFontSize()"
     >
       <div
         class="uml-compartment uml-header"
         data-uml-section="header"
+        [style.font-size.px]="umlHeaderFontSize()"
         [innerHTML]="umlInterfaceSections().nameHtml"
       ></div>
       <div

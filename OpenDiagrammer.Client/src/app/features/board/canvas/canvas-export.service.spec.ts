@@ -5,7 +5,9 @@ import {
   computeExportBounds,
   escapeXml,
   extractPlainTextLines,
+  getTextWidth,
   resolveCssColor,
+  wrapTextLines,
 } from './canvas-export.service';
 import { ThemeService } from '../../../core/services/theme/theme.service';
 import { CanvasShape } from './shape.models';
@@ -109,6 +111,49 @@ describe('CanvasExportService', () => {
       const lines = extractPlainTextLines(html);
       expect(lines).toContain('First Line');
       expect(lines).toContain('Second Line');
+    });
+
+    it('extractPlainTextLines should preserve line returns from div and br tags without concatenating words', () => {
+      expect(extractPlainTextLines('Class<div>Name</div>')).toEqual(['Class', 'Name']);
+      expect(extractPlainTextLines('<div>Class</div><div>Name</div>')).toEqual(['Class', 'Name']);
+      expect(
+        extractPlainTextLines('+ attribute: type<div><br></div><div>- another: type</div>'),
+      ).toEqual(['+ attribute: type', '', '- another: type']);
+      expect(extractPlainTextLines('Class\nName')).toEqual(['Class', 'Name']);
+      expect(extractPlainTextLines('+ attribute: type\n\n- another: type')).toEqual([
+        '+ attribute: type',
+        '',
+        '- another: type',
+      ]);
+    });
+
+    it('getTextWidth should compute string width proportional to text length and font size', () => {
+      expect(getTextWidth('', 14)).toBe(0);
+      const w1 = getTextWidth('Hello', 14);
+      const w2 = getTextWidth('Hello World', 14);
+      expect(w2).toBeGreaterThan(w1);
+      const wBold = getTextWidth('Hello', 14, true);
+      expect(wBold).toBeGreaterThan(w1);
+    });
+
+    it('wrapTextLines should return empty array for empty or whitespace-only input', () => {
+      expect(wrapTextLines('', 100, 14)).toEqual([]);
+      expect(wrapTextLines(null, 100, 14)).toEqual([]);
+    });
+
+    it('wrapTextLines should wrap long sentences into multiple lines', () => {
+      const longSentence =
+        'This is a very long line of text that needs to wrap properly within a confined width';
+      const lines = wrapTextLines(longSentence, 100, 14);
+      expect(lines.length).toBeGreaterThan(1);
+      expect(lines.join(' ')).toBe(longSentence);
+    });
+
+    it('wrapTextLines should break extremely long words that exceed maxWidth', () => {
+      const longWord = 'supercalifragilisticexpialidocious';
+      const lines = wrapTextLines(longWord, 50, 14);
+      expect(lines.length).toBeGreaterThan(1);
+      expect(lines.join('')).toBe(longWord);
     });
 
     it('resolveCssColor should resolve CSS variables for light and dark themes', () => {
@@ -228,6 +273,102 @@ describe('CanvasExportService', () => {
       expect(svg).toContain('User');
       expect(svg).toContain('+ id: string');
       expect(svg).toContain('+ save(): void');
+    });
+
+    it('should wrap long text in UML class shapes into multiple tspans', () => {
+      const umlShape: CanvasShape = {
+        id: 'uml-long',
+        type: 'uml-class',
+        x: 100,
+        y: 100,
+        width: 150,
+        height: 200,
+        fillColor: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 1.5,
+        text: 'ClassName\n---\n+ reallyLongAttributeNameThatWillDefinitelyWrapAcrossMultipleLines: string\n---\n+ executeLongMethodNameWithManyParameters()',
+        zIndex: 1,
+      };
+
+      const svg = service.generateSvg({
+        shapes: [umlShape],
+        connections: [],
+        background: 'theme',
+        isDark: false,
+      });
+
+      const tspanMatches = svg.match(/<tspan[^>]*>[^<]+<\/tspan>/g) || [];
+      expect(tspanMatches.length).toBeGreaterThan(3);
+      expect(svg).toContain('ClassName');
+    });
+
+    it('should wrap long text in standard shapes into multiple tspans', () => {
+      const rectShape: CanvasShape = {
+        id: 'rect-long',
+        type: 'rectangle',
+        x: 100,
+        y: 100,
+        width: 120,
+        height: 80,
+        fillColor: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 1,
+        text: 'This is a very long descriptive text inside a rectangle',
+        zIndex: 1,
+      };
+
+      const svg = service.generateSvg({
+        shapes: [rectShape],
+        connections: [],
+        background: 'transparent',
+        isDark: false,
+      });
+
+      const tspanMatches = svg.match(/<tspan[^>]*>[^<]+<\/tspan>/g) || [];
+      expect(tspanMatches.length).toBeGreaterThan(1);
+    });
+
+    it('should correctly handle manual returns and blank lines in UML class compartments without concatenating or misaligning', () => {
+      const umlShape: CanvasShape = {
+        id: 'uml-manual-returns',
+        type: 'uml-class',
+        x: 100,
+        y: 100,
+        width: 180,
+        height: 120,
+        fillColor: '#ffffff',
+        strokeColor: '#000000',
+        strokeWidth: 1.5,
+        text: 'Class\nName\n---\n+ attribute: type\n\n- another: type\n---\n+ method(): void',
+        zIndex: 1,
+      };
+
+      const svg = service.generateSvg({
+        shapes: [umlShape],
+        connections: [],
+        background: 'theme',
+        isDark: false,
+      });
+
+      // Header should have Class and Name on distinct tspans, not 'ClassName'
+      expect(svg).toContain('>Class</tspan>');
+      expect(svg).toContain('>Name</tspan>');
+      expect(svg).not.toContain('ClassName');
+
+      // Attribute section should preserve the blank line with &#160;
+      expect(svg).toContain('+ attribute: type');
+      expect(svg).toContain('&#160;</tspan>');
+      expect(svg).toContain('- another: type');
+
+      // Methods text should be rendered cleanly
+      expect(svg).toContain('+ method(): void');
+
+      // The rect height must be enlarged if needed to fit all sections
+      const rectMatch = svg.match(/<rect[^>]*height="([^"]+)"/);
+      expect(rectMatch).toBeTruthy();
+      const renderedHeight = parseFloat(rectMatch![1]);
+      // Total required height for 2 header lines + 3 attr lines + 1 method line is >= 144px
+      expect(renderedHeight).toBeGreaterThanOrEqual(144);
     });
   });
 

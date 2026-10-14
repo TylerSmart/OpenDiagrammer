@@ -999,8 +999,9 @@ export function normalizeHtmlToText(html: string | undefined | null): string {
   }
   return (
     html
-      // An empty block line like <div><br></div> or <p><br></p> represents a single newline
-      .replace(/<(?:div|p)[^>]*>\s*<br\s*\/?>\s*<\/(?:div|p)>/gi, '\n')
+      .replace(/\r\n/g, '\n')
+      // An empty block line like <div><br></div>, <div></div>, <p><br></p>, <p></p> represents a single newline
+      .replace(/<(?:div|p)[^>]*>\s*(?:<br\s*\/?>)?\s*<\/(?:div|p)>/gi, '\n')
       // Any remaining <br> represents a newline
       .replace(/<br\s*\/?>/gi, '\n')
       // Start of block elements represent a newline
@@ -1013,6 +1014,8 @@ export function normalizeHtmlToText(html: string | undefined | null): string {
       .replace(/&amp;/gi, '&')
       .replace(/&lt;/gi, '<')
       .replace(/&gt;/gi, '>')
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
       // Remove at most one leading newline if the content began with a block tag like <div>
       .replace(/^\n/, '')
   );

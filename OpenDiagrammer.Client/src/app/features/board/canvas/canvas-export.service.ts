@@ -6,6 +6,9 @@ import {
   BoundingBox,
   CanvasShape,
   computeFittingFontSize,
+  computeUmlClassRequiredHeight,
+  computeUmlInterfaceRequiredHeight,
+  normalizeHtmlToText,
   parseUmlClassText,
   parseUmlInterfaceText,
 } from './shape.models';
@@ -111,14 +114,130 @@ export function resolveCssColor(
 
 export function extractPlainTextLines(raw: string | null | undefined): string[] {
   if (!raw) return [];
-  const normalized = raw
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/p>/gi, '\n')
-    .replace(/<p[^>]*>/gi, '')
-    .replace(/<\/div>/gi, '\n')
-    .replace(/<div[^>]*>/gi, '')
-    .replace(/<[^>]+>/g, '');
+  const normalized = normalizeHtmlToText(raw);
+  if (!normalized) return [];
   return normalized.split(/\r?\n/).map((l) => l.trimEnd());
+}
+
+let cachedMeasureContext: CanvasRenderingContext2D | null | undefined = undefined;
+
+function getMeasureContext(): CanvasRenderingContext2D | null {
+  if (cachedMeasureContext !== undefined) {
+    return cachedMeasureContext;
+  }
+  if (typeof document !== 'undefined') {
+    try {
+      const canvas = document.createElement('canvas');
+      cachedMeasureContext = canvas.getContext('2d') || null;
+    } catch {
+      cachedMeasureContext = null;
+    }
+  } else {
+    cachedMeasureContext = null;
+  }
+  return cachedMeasureContext;
+}
+
+export function getTextWidth(
+  text: string,
+  fontSize: number,
+  bold = false,
+  fontFamily = 'Roboto, sans-serif',
+): number {
+  if (!text) return 0;
+  const ctx = getMeasureContext();
+  if (ctx && typeof ctx.measureText === 'function') {
+    try {
+      ctx.font = `${bold ? 'bold ' : ''}${fontSize}px ${fontFamily}`;
+      const measured = ctx.measureText(text).width;
+      if (measured > 0) {
+        return measured;
+      }
+    } catch {
+      // In headless environments without 2d context, fall through to approximation
+    }
+  }
+  const factor = bold ? 0.62 : 0.56;
+  return text.length * fontSize * factor;
+}
+
+export function wrapTextLines(
+  raw: string | null | undefined,
+  maxWidth: number,
+  fontSize: number,
+  bold = false,
+  fontFamily = 'Roboto, sans-serif',
+): string[] {
+  if (!raw) return [];
+  const rawLines = extractPlainTextLines(raw);
+  if (rawLines.length === 0) return [];
+  if (maxWidth <= 0) return rawLines;
+
+  const result: string[] = [];
+
+  for (const paragraph of rawLines) {
+    if (!paragraph) {
+      result.push('');
+      continue;
+    }
+
+    const pWidth = getTextWidth(paragraph, fontSize, bold, fontFamily);
+    if (pWidth <= maxWidth) {
+      result.push(paragraph);
+      continue;
+    }
+
+    const words = paragraph.split(' ');
+    let currentLine = '';
+
+    for (const word of words) {
+      if (!word) {
+        if (currentLine) currentLine += ' ';
+        continue;
+      }
+
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      const testWidth = getTextWidth(testLine, fontSize, bold, fontFamily);
+
+      if (testWidth <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) {
+          result.push(currentLine);
+          currentLine = '';
+        }
+
+        const wordWidth = getTextWidth(word, fontSize, bold, fontFamily);
+        if (wordWidth > maxWidth) {
+          let remaining = word;
+          while (remaining.length > 0) {
+            let chunkLen = 1;
+            while (
+              chunkLen < remaining.length &&
+              getTextWidth(remaining.slice(0, chunkLen + 1), fontSize, bold, fontFamily) <= maxWidth
+            ) {
+              chunkLen++;
+            }
+            if (chunkLen >= remaining.length) {
+              currentLine = remaining;
+              break;
+            } else {
+              result.push(remaining.slice(0, chunkLen));
+              remaining = remaining.slice(chunkLen);
+            }
+          }
+        } else {
+          currentLine = word;
+        }
+      }
+    }
+
+    if (currentLine) {
+      result.push(currentLine);
+    }
+  }
+
+  return result;
 }
 
 export function computeExportBounds(
@@ -157,10 +276,24 @@ export function computeExportBounds(
   let maxY = -Infinity;
 
   for (const s of shapes) {
+    let sHeight = s.height;
+    if (s.type === 'uml-class') {
+      const sections = parseUmlClassText(s.text);
+      sHeight = Math.max(
+        sHeight,
+        computeUmlClassRequiredHeight(sections, s.fontSize || 13, s.width),
+      );
+    } else if (s.type === 'uml-interface') {
+      const sections = parseUmlInterfaceText(s.text);
+      sHeight = Math.max(
+        sHeight,
+        computeUmlInterfaceRequiredHeight(sections, s.fontSize || 13, s.width),
+      );
+    }
     minX = Math.min(minX, s.x);
     minY = Math.min(minY, s.y);
     maxX = Math.max(maxX, s.x + s.width);
-    maxY = Math.max(maxY, s.y + s.height);
+    maxY = Math.max(maxY, s.y + sHeight);
   }
 
   for (const conn of connections) {
@@ -421,15 +554,44 @@ export class CanvasExportService {
       }
 
       case 'uml-class': {
-        parts.push(
-          `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${shape.height - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
-        );
         const sections = parseUmlClassText(shape.text);
-        const lineH = Math.max(18, Math.round((shape.fontSize || 13) * 1.4));
-        const classLines = extractPlainTextLines(sections.className);
-        const attrLines = extractPlainTextLines(sections.attributes);
-        const headerH = Math.max(32, classLines.length * lineH + 14);
+        const fontSize = shape.fontSize || 13;
+        const headerFontSize = Math.max(14, fontSize);
+        const contentFontSize = fontSize;
+        const lineH = Math.max(18, Math.round(fontSize * 1.35));
+        const availWidth = Math.max(20, shape.width - 20);
+        const fontFamily = this.themeService.fontFamilyDef?.()?.fontFamily || 'Roboto, sans-serif';
+        const classLines = wrapTextLines(
+          sections.className,
+          availWidth,
+          headerFontSize,
+          true,
+          fontFamily,
+        );
+        const attrLines = wrapTextLines(
+          sections.attributes,
+          availWidth,
+          contentFontSize,
+          false,
+          fontFamily,
+        );
+        const methodLines = wrapTextLines(
+          sections.methods,
+          availWidth,
+          contentFontSize,
+          false,
+          fontFamily,
+        );
+
+        const headerH = Math.max(32, classLines.length * lineH + 12);
         const attrH = Math.max(26, attrLines.length * lineH + 12);
+        const methodH = Math.max(26, methodLines.length * lineH + 12);
+        const minTotalH = headerH + attrH + methodH;
+        const rectH = Math.max(shape.height, minTotalH);
+
+        parts.push(
+          `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${rectH - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
+        );
 
         parts.push(
           `      <line x1="${shape.x + 1}" y1="${shape.y + headerH}" x2="${shape.x + shape.width - 1}" y2="${shape.y + headerH}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
@@ -442,11 +604,11 @@ export class CanvasExportService {
         parts.push(
           this.renderTextLinesSvg(
             classLines,
-            shape.x + 8,
+            shape.x + 10,
             shape.y + 6,
-            shape.width - 16,
-            headerH - 10,
-            14,
+            shape.width - 20,
+            headerH - 12,
+            headerFontSize,
             defaultTextColor,
             'center',
             'middle',
@@ -462,7 +624,7 @@ export class CanvasExportService {
             shape.y + headerH + 6,
             shape.width - 20,
             attrH - 12,
-            12,
+            contentFontSize,
             defaultTextColor,
             'left',
             'top',
@@ -470,15 +632,15 @@ export class CanvasExportService {
         );
 
         // Methods
-        const methodLines = extractPlainTextLines(sections.methods);
+        const methodSectionH = Math.max(methodH, rectH - (headerH + attrH));
         parts.push(
           this.renderTextLinesSvg(
             methodLines,
             shape.x + 10,
             shape.y + headerH + attrH + 6,
             shape.width - 20,
-            shape.height - (headerH + attrH) - 12,
-            12,
+            methodSectionH - 12,
+            contentFontSize,
             defaultTextColor,
             'left',
             'top',
@@ -488,13 +650,35 @@ export class CanvasExportService {
       }
 
       case 'uml-interface': {
-        parts.push(
-          `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${shape.height - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
-        );
         const sections = parseUmlInterfaceText(shape.text);
-        const lineH = Math.max(18, Math.round((shape.fontSize || 13) * 1.4));
-        const ifaceLines = extractPlainTextLines(sections.interfaceName);
-        const headerH = Math.max(34, ifaceLines.length * lineH + 14);
+        const fontSize = shape.fontSize || 13;
+        const headerFontSize = Math.max(14, fontSize);
+        const contentFontSize = fontSize;
+        const lineH = Math.max(18, Math.round(fontSize * 1.35));
+        const availWidth = Math.max(20, shape.width - 20);
+        const fontFamily = this.themeService.fontFamilyDef?.()?.fontFamily || 'Roboto, sans-serif';
+        const ifaceLines = wrapTextLines(
+          sections.interfaceName,
+          availWidth,
+          headerFontSize,
+          true,
+          fontFamily,
+        );
+        const methodLines = wrapTextLines(
+          sections.methods,
+          availWidth,
+          contentFontSize,
+          false,
+          fontFamily,
+        );
+        const headerH = Math.max(34, ifaceLines.length * lineH + 12);
+        const methodH = Math.max(26, methodLines.length * lineH + 12);
+        const minTotalH = headerH + methodH;
+        const rectH = Math.max(shape.height, minTotalH);
+
+        parts.push(
+          `      <rect x="${shape.x + 1}" y="${shape.y + 1}" width="${shape.width - 2}" height="${rectH - 2}" fill="${fill}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
+        );
 
         parts.push(
           `      <line x1="${shape.x + 1}" y1="${shape.y + headerH}" x2="${shape.x + shape.width - 1}" y2="${shape.y + headerH}" stroke="${stroke}" stroke-width="${strokeWidth}" />`,
@@ -504,11 +688,11 @@ export class CanvasExportService {
         parts.push(
           this.renderTextLinesSvg(
             ifaceLines,
-            shape.x + 8,
+            shape.x + 10,
             shape.y + 6,
-            shape.width - 16,
-            headerH - 10,
-            13,
+            shape.width - 20,
+            headerH - 12,
+            headerFontSize,
             defaultTextColor,
             'center',
             'middle',
@@ -518,15 +702,15 @@ export class CanvasExportService {
         );
 
         // Methods
-        const methodLines = extractPlainTextLines(sections.methods);
+        const methodSectionH = Math.max(methodH, rectH - headerH);
         parts.push(
           this.renderTextLinesSvg(
             methodLines,
             shape.x + 10,
             shape.y + headerH + 6,
             shape.width - 20,
-            shape.height - headerH - 12,
-            12,
+            methodSectionH - 12,
+            contentFontSize,
             defaultTextColor,
             'left',
             'top',
@@ -616,11 +800,17 @@ export class CanvasExportService {
 
     // Standard shape text rendering (excluding UML and Frames which render their own text)
     if (shape.type !== 'uml-class' && shape.type !== 'uml-interface' && shape.type !== 'frame') {
-      const lines = extractPlainTextLines(shape.text);
+      const padding = shape.type === 'sticky-note' ? 12 : 8;
+      const usableWidth = Math.max(20, shape.width - padding * 2);
+      const fontSize = computeFittingFontSize(
+        shape.text,
+        shape.width,
+        shape.height,
+        shape.fontSize || 14,
+      );
+      const fontFamily = this.themeService.fontFamilyDef?.()?.fontFamily || 'Roboto, sans-serif';
+      const lines = wrapTextLines(shape.text, usableWidth, fontSize, shape.isBold, fontFamily);
       if (lines.length > 0) {
-        const fontSize =
-          shape.fontSize || computeFittingFontSize(shape.text, shape.width, shape.height, 14);
-        const padding = shape.type === 'sticky-note' ? 12 : 8;
         parts.push(
           this.renderTextLinesSvg(
             lines,
@@ -660,7 +850,7 @@ export class CanvasExportService {
   ): string {
     if (lines.length === 0) return '';
 
-    const lineHeight = Math.round(fontSize * 1.3);
+    const lineHeight = Math.max(16, Math.round(fontSize * 1.35));
     const totalTextHeight = lines.length * lineHeight;
 
     let startY: number;
@@ -692,7 +882,7 @@ export class CanvasExportService {
     const tspans = lines
       .map(
         (line, index) =>
-          `<tspan x="${anchorX}" dy="${index === 0 ? 0 : lineHeight}">${escapeXml(line)}</tspan>`,
+          `<tspan x="${anchorX}" dy="${index === 0 ? 0 : lineHeight}">${line ? escapeXml(line) : '&#160;'}</tspan>`,
       )
       .join('');
 

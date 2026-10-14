@@ -165,10 +165,24 @@
   padding: 12px 24px 16px;
   gap: 8px;
 
-  button {
+  .export-btn-content {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    justify-content: center;
+    gap: 8px;
+    line-height: 1;
+
+    .export-btn-icon {
+      font-size: 18px;
+      width: 18px;
+      height: 18px;
+      line-height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      vertical-align: middle;
+      margin: 0;
+    }
   }
 
   .button-spinner {

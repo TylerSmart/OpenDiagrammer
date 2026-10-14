@@ -991,6 +991,9 @@
             <div
               #umlClassHeaderEditor
               class="uml-editor-section uml-editor-header"
+              [style.font-size.px]="
+                editShape.fontSize && editShape.fontSize > 14 ? editShape.fontSize : 14
+              "
               contenteditable="true"
               (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
               (input)="
@@ -1009,6 +1012,7 @@
             <div
               #umlClassAttrEditor
               class="uml-editor-section uml-editor-attributes"
+              [style.font-size.px]="editShape.fontSize || 13"
               contenteditable="true"
               (focus)="activeUmlSection = 'attributes'; saveCurrentEditorSelection()"
               (input)="
@@ -1027,6 +1031,7 @@
             <div
               #umlClassMethodEditor
               class="uml-editor-section uml-editor-methods"
+              [style.font-size.px]="editShape.fontSize || 13"
               contenteditable="true"
               (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
               (input)="
@@ -1056,6 +1061,9 @@
             <div
               #umlIfaceHeaderEditor
               class="uml-editor-section uml-editor-header"
+              [style.font-size.px]="
+                editShape.fontSize && editShape.fontSize > 14 ? editShape.fontSize : 14
+              "
               contenteditable="true"
               (focus)="activeUmlSection = 'header'; saveCurrentEditorSelection()"
               (input)="
@@ -1073,6 +1081,7 @@
             <div
               #umlIfaceMethodEditor
               class="uml-editor-section uml-editor-methods"
+              [style.font-size.px]="editShape.fontSize || 13"
               contenteditable="true"
               (focus)="activeUmlSection = 'methods'; saveCurrentEditorSelection()"
               (input)="
