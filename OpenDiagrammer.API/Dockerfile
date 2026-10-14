@@ -2,7 +2,7 @@
 FROM node:22-alpine AS client-build
 WORKDIR /src/OpenDiagrammer.Client
 COPY OpenDiagrammer.Client/package*.json ./
-RUN npm install
+RUN npm ci --ignore-scripts
 COPY OpenDiagrammer.Client/ .
 RUN npm run build:production
 
